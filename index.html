@@ -73,9 +73,10 @@ const LEAVE_T = {
 };
 
 const AVAIL = {
-  AVAILABLE:   { label:"Available",   short:"Avail",   bg:"#d1fae5", fg:"#065f46", icon:"✓" },
-  UNAVAILABLE: { label:"Unavailable", short:"Unavail", bg:"#fee2e2", fg:"#7f1d1d", icon:"✗" },
-  SL:          { label:"Study Leave", short:"SL",      bg:"#f1f5f9", fg:"#334155", icon:"SL" },
+  ANY:         { label:"Any",          short:"Any",     bg:"#dcfce7", fg:"#166534", icon:"Any" },
+  AVAILABLE:   { label:"Specific",     short:"Shifts",  bg:"#d1fae5", fg:"#065f46", icon:"✓" },
+  UNAVAILABLE: { label:"Unavailable",  short:"Unavail", bg:"#fee2e2", fg:"#7f1d1d", icon:"✗" },
+  SL:          { label:"Study Leave",  short:"SL",      bg:"#f1f5f9", fg:"#334155", icon:"SL" },
 };
 
 const INIT_STAFF = [
@@ -152,7 +153,7 @@ const normaliseAvailEntry = (entry) => {
 
   // backwards compatibility with old string format
   if (typeof entry === "string") {
-    if (entry === "AVAIL") return { base: "AVAILABLE", slots: [] };
+    if (entry === "AVAIL") return { base: "ANY", slots: [] };
     if (entry === "UNAVAIL") return { base: "UNAVAILABLE", slots: [] };
     if (entry === "SL") return { base: "SL", slots: [] };
     return null;
@@ -181,6 +182,8 @@ const isBlockedDay = (availability, init, date) => {
 
 const isSlotPreferred = (availability, init, date, slotKey) => {
   const e = getAvailEntry(availability, init, date);
+  if (!e?.base) return false;
+  if (e.base === "ANY") return true;
   if (e.base !== "AVAILABLE") return false;
   return e.slots.includes(slotKey);
 };
@@ -612,7 +615,7 @@ function AvailabilityView({
   const q = QUARTERS.find(x => x.id === selQ);
   const myAvail = availability[user.init] || {};
   const qDates = q ? getDatesInRange(q.start, q.end) : [];
-  const submittedCount = qDates.filter(d => !!myAvail[d]).length;
+  const submittedCount = qDates.filter(d => isMarkedAvailEntry(myAvail[d])).length;
   const pct = qDates.length > 0 ? Math.round((submittedCount / qDates.length) * 100) : 0;
 
   const yr = viewMonth.getFullYear();
@@ -621,17 +624,18 @@ function AvailabilityView({
   const DOW = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
   const dispInit = isAdmin && viewStaff ? viewStaff : user.init;
-  const dispAvail = availability[dispInit] || {};
 
   const getEntry = (init, date) => {
     const raw = (availability[init] || {})[date];
     if (!raw) return null;
+
     if (typeof raw === "string") {
       if (raw === "UNAVAIL") return { base: "UNAVAILABLE", slots: [] };
-      if (raw === "AVAIL") return { base: "AVAILABLE", slots: [] };
+      if (raw === "AVAIL") return { base: "ANY", slots: [] };
       if (raw === "SL") return { base: "SL", slots: [] };
       return null;
     }
+
     return {
       base: raw.base || "",
       slots: Array.isArray(raw.slots) ? raw.slots : []
@@ -715,16 +719,14 @@ function AvailabilityView({
     if (!modalDraft.base) return;
 
     if (modalDraft.base === "AVAILABLE" && modalDraft.slots.length === 0) {
-      alert("Please select at least one shift option.");
+      alert("Please select at least one shift option, or choose Any.");
       return;
     }
 
-    // If changing away from old SL, remove auto-SL leave row
     if (wasSL && !willBeSL) {
       removeAutoSLLeave(init, date);
     }
 
-    // SL before rota built -> direct onto builder
     if (willBeSL && !dateHasBuiltRota(date)) {
       setEntry(init, date, { base: "SL", slots: [] });
       addAutoSLLeave(init, date);
@@ -733,7 +735,6 @@ function AvailabilityView({
       return;
     }
 
-    // SL after rota built -> pending request instead
     if (willBeSL && dateHasBuiltRota(date)) {
       const alreadyPending = (requests || []).some(
         r =>
@@ -768,7 +769,6 @@ function AvailabilityView({
       return;
     }
 
-    // Normal AVAILABLE / UNAVAILABLE save
     setEntry(init, date, {
       base: modalDraft.base,
       slots: modalDraft.base === "AVAILABLE" ? modalDraft.slots : []
@@ -872,7 +872,7 @@ function AvailabilityView({
             <div className="cb">
               {staff.filter(s => s.role === "staff" && s.active).map(s => {
                 const av = availability[s.init] || {};
-                const cnt = qDates.filter(d => !!av[d]).length;
+                const cnt = qDates.filter(d => isMarkedAvailEntry(av[d])).length;
                 const p = qDates.length > 0 ? Math.round((cnt / qDates.length) * 100) : 0;
                 return (
                   <div
@@ -919,14 +919,15 @@ function AvailabilityView({
                 </div>
 
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
-                  <span className="chip" style={{ background: "#d1fae5", color: "#065f46", borderColor: "#065f46", borderWidth: 1, fontSize: 10.5 }}>✓ Available + choose slots</span>
+                  <span className="chip" style={{ background: "#dcfce7", color: "#166534", borderColor: "#166534", borderWidth: 1, fontSize: 10.5 }}>Any</span>
+                  <span className="chip" style={{ background: "#d1fae5", color: "#065f46", borderColor: "#065f46", borderWidth: 1, fontSize: 10.5 }}>✓ Specific shifts</span>
                   <span className="chip" style={{ background: "#fee2e2", color: "#7f1d1d", borderColor: "#7f1d1d", borderWidth: 1, fontSize: 10.5 }}>✗ Unavailable</span>
                   <span className="chip" style={{ background: "#f1f5f9", color: "#334155", borderColor: "#334155", borderWidth: 1, fontSize: 10.5 }}>SL Study Leave</span>
                   <span className="chip" style={{ background: "#f8fafc", color: "#94a3b8", borderColor: "#e2e8f0", fontSize: 10.5 }}>⬚ Not marked</span>
                 </div>
 
                 <div style={{ fontSize: 11.5, color: "#64748b" }}>
-                  Available days now require at least <strong>one shift option</strong> to be selected.
+                  Choose <strong>Any</strong>, <strong>Unavailable</strong>, <strong>SL</strong>, or pick <strong>one or more specific shifts</strong>.
                 </div>
               </div>
             </div>
@@ -961,6 +962,7 @@ function AvailabilityView({
                 const agg = isAdmin && !viewStaff ? getAggregate(date) : null;
 
                 const bg =
+                  entry?.base === "ANY" ? "#dcfce7" :
                   entry?.base === "AVAILABLE" ? "#d1fae5" :
                   entry?.base === "UNAVAILABLE" ? "#fee2e2" :
                   entry?.base === "SL" ? "#f1f5f9" :
@@ -985,15 +987,23 @@ function AvailabilityView({
                         <div>
                           <div className="av-status" style={{
                             background:
+                              entry.base === "ANY" ? "#dcfce7" :
                               entry.base === "AVAILABLE" ? "#d1fae5" :
                               entry.base === "UNAVAILABLE" ? "#fee2e2" :
                               "#f1f5f9",
                             color:
+                              entry.base === "ANY" ? "#166534" :
                               entry.base === "AVAILABLE" ? "#065f46" :
                               entry.base === "UNAVAILABLE" ? "#7f1d1d" :
                               "#334155"
                           }}>
-                            {entry.base === "AVAILABLE" ? "Avail" : entry.base === "UNAVAILABLE" ? "Unavail" : "SL"}
+                            {entry.base === "ANY"
+                              ? "Any"
+                              : entry.base === "AVAILABLE"
+                              ? "Shifts"
+                              : entry.base === "UNAVAILABLE"
+                              ? "Unavail"
+                              : "SL"}
                           </div>
 
                           {entry.base === "AVAILABLE" && entry.slots.length > 0 && (
@@ -1027,14 +1037,22 @@ function AvailabilityView({
                               key={k}
                               style={{
                                 fontSize: 8,
-                                background: k === "AVAILABLE" ? "#d1fae5" : k === "UNAVAILABLE" ? "#fee2e2" : "#f1f5f9",
-                                color: k === "AVAILABLE" ? "#065f46" : k === "UNAVAILABLE" ? "#7f1d1d" : "#334155",
+                                background:
+                                  k === "ANY" ? "#dcfce7" :
+                                  k === "AVAILABLE" ? "#d1fae5" :
+                                  k === "UNAVAILABLE" ? "#fee2e2" :
+                                  "#f1f5f9",
+                                color:
+                                  k === "ANY" ? "#166534" :
+                                  k === "AVAILABLE" ? "#065f46" :
+                                  k === "UNAVAILABLE" ? "#7f1d1d" :
+                                  "#334155",
                                 padding: "1px 3px",
                                 borderRadius: 3,
                                 fontWeight: 700
                               }}
                             >
-                              {k === "AVAILABLE" ? "✓" : k === "UNAVAILABLE" ? "✗" : "SL"}{c}
+                              {k === "ANY" ? "A" : k === "AVAILABLE" ? "✓" : k === "UNAVAILABLE" ? "✗" : "SL"}{c}
                             </span>
                           ))}
                         </div>
@@ -1053,6 +1071,7 @@ function AvailabilityView({
       {pickModal && (() => {
         const daySlots = getSlotsForDay(pickModal.date);
         const canSave =
+          modalDraft.base === "ANY" ||
           modalDraft.base === "UNAVAILABLE" ||
           modalDraft.base === "SL" ||
           (modalDraft.base === "AVAILABLE" && modalDraft.slots.length > 0);
@@ -1092,9 +1111,10 @@ function AvailabilityView({
                 Day status
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                 {[
-                  { key: "AVAILABLE", label: "Available", icon: "✓", bg: "#d1fae5", fg: "#065f46" },
+                  { key: "ANY", label: "Any", icon: "Any", bg: "#dcfce7", fg: "#166534" },
+                  { key: "AVAILABLE", label: "Specific shifts", icon: "✓", bg: "#d1fae5", fg: "#065f46" },
                   { key: "UNAVAILABLE", label: "Unavailable", icon: "✗", bg: "#fee2e2", fg: "#7f1d1d" },
                   { key: "SL", label: "Study Leave", icon: "SL", bg: "#f1f5f9", fg: "#334155" }
                 ].map(opt => {
@@ -1220,10 +1240,10 @@ function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,s
   const getAssigned=(date,slotKey)=>(rota[date]||{})[slotKey];
 
   // Get availability status of a staff member on a date
-  const getAvail=(init,date)=>(availability[init]||{})[date];
+  const getAvail = (init, date) => getAvailEntry(availability, init, date);
 
   // Warn: assigned staff is unavailable
-  const hasConflict=(init,date)=>getAvail(init,date)==="UNAVAIL";
+  const hasConflict = (init, date) => getAvail(init, date)?.base === "UNAVAILABLE";
 
   return (
     <div>
@@ -1275,9 +1295,20 @@ function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,s
                   {SLOTS.map(sl=>{
                     const applicable=dateSlots.some(s=>s.key===sl.key);
                     const init=getAssigned(date,sl.key);
-                    const av=init?getAvail(init,date):null;
-                    const conflict=init&&av==="UNAVAIL";
-                    const pref=init&&av&&av!=="UNAVAIL"&&av!=="AVAIL"?AVAIL[av]:null;
+                    const av = init ? getAvail(init, date) : null;
+                    const conflict = init && av?.base === "UNAVAILABLE";
+                    const pref =
+                      init && av?.base && av.base !== "UNAVAILABLE"
+                        ? (
+                            av.base === "ANY"
+                              ? AVAIL.ANY
+                              : av.base === "SL"
+                              ? AVAIL.SL
+                              : av.base === "AVAILABLE" && av.slots.includes(sl.key)
+                              ? AVAIL.AVAILABLE
+                              : null
+                          )
+                        : null;
                     if(!applicable) return <td key={sl.key} className="slot-cell disabled"><span style={{fontSize:9,color:"#e2e8f0"}}>—</span></td>;
                     return (
                       <td key={sl.key} className="slot-cell" style={{border:conflict?"2px solid #ef4444":"",background:init?sl.bg+"80":"white"}}
@@ -1285,7 +1316,7 @@ function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,s
                         {init?(
                           <span className="slot-chip" style={{background:sl.bg,color:conflict?"#ef4444":sl.fg,borderColor:conflict?"#ef4444":sl.bd,border:conflict?"2px solid #ef4444":"1px solid "+sl.bd}}>
                             {init.slice(0,4)}
-                            {pref&&<span className="avail-dot" style={{background:AVAIL[av]?.fg||"#94a3b8"}} title={AVAIL[av]?.label}/>}
+                            {pref && <span className="avail-dot" style={{ background: pref.fg || "#94a3b8" }} title={pref.label} />}
                           </span>
                         ):<span className="slot-empty"/>}
                       </td>
@@ -1320,13 +1351,33 @@ function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,s
             {cur&&<div className="al al-i" style={{marginBottom:12}}>Currently: <strong>{staff.find(s=>s.init===cur)?.name||cur}</strong></div>}
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7}}>
               {activeStaff.map(s=>{
-                const av=getAvail(s.init,assignModal.date);
-                const avInfo=av?AVAIL[av]:null;
-                const busy=alreadyAssigned.has(s.init)&&s.init!==cur;
-                const isSelected=s.init===cur;
+                const av = getAvail(s.init, assignModal.date);
+                const avInfo =
+                  av?.base === "ANY"
+                    ? AVAIL.ANY
+                    : av?.base === "UNAVAILABLE"
+                    ? AVAIL.UNAVAILABLE
+                    : av?.base === "SL"
+                    ? AVAIL.SL
+                    : av?.base === "AVAILABLE" && av.slots.includes(assignModal.slotKey)
+                    ? AVAIL.AVAILABLE
+                    : null;
+
+                const busy = alreadyAssigned.has(s.init) && s.init !== cur;
+                const isSelected = s.init === cur;
+                const isUnavailable = av?.base === "UNAVAILABLE";
                 return (
                   <button key={s.id} onClick={()=>!busy&&assignSlot(assignModal.date,assignModal.slotKey,s.init)}
-                    style={{padding:"9px 10px",border:`2px solid ${isSelected?"#10b981":av==="UNAVAIL"?"#ef4444":busy?"#e2e8f0":"#e2e8f0"}`,borderRadius:8,background:isSelected?"#f0fdf4":av==="UNAVAIL"?"#fff5f5":busy?"#f9f9f9":"white",cursor:busy?"not-allowed":"pointer",opacity:busy?0.5:1,textAlign:"left",transition:"all .1s"}}>
+                    style={{
+                      padding:"9px 10px",
+                      border:`2px solid ${isSelected ? "#10b981" : isUnavailable ? "#ef4444" : "#e2e8f0"}`,
+                      borderRadius:8,
+                      background:isSelected ? "#f0fdf4" : isUnavailable ? "#fff5f5" : busy ? "#f9f9f9" : "white",
+                      cursor:busy ? "not-allowed" : "pointer",
+                      opacity:busy ? 0.5 : 1,
+                      textAlign:"left",
+                      transition:"all .1s"
+                        }}
                     <div style={{fontSize:12,fontWeight:700,color:isSelected?"#065f46":"#0d1b2a"}}>{s.name.split(" ")[0]} <span style={{opacity:.6}}>{s.name.split(" ")[1]?.[0]}.</span></div>
                     <div style={{fontSize:10,color:"#64748b",marginTop:2,display:"flex",alignItems:"center",gap:5}}>
                       {s.grade}
