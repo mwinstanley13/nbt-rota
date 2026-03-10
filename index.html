@@ -21,6 +21,8 @@
 <body>
   <div id="root"></div>
   <script type="text/babel">
+// @ts-nocheck
+/* global React, ReactDOM */
 
 const { useState, useMemo, Fragment } = React;
 
@@ -1068,43 +1070,43 @@ function AvailabilityView({
         </>
       )}
 
-      {pickModal && (() => {
-        const daySlots = getSlotsForDay(pickModal.date);
-        const canSave =
-          modalDraft.base === "ANY" ||
-          modalDraft.base === "UNAVAILABLE" ||
-          modalDraft.base === "SL" ||
-          (modalDraft.base === "AVAILABLE" && modalDraft.slots.length > 0);
+      {pickModal&&(()=>{
+          const daySlots = getSlotsForDay(pickModal.date);
+          const canSave =
+            modalDraft.base === "ANY" ||
+            modalDraft.base === "UNAVAILABLE" ||
+            modalDraft.base === "SL" ||
+            (modalDraft.base === "AVAILABLE" && modalDraft.slots.length > 0);
 
-        return (
-          <Modal
-            title={`${getDayName(pickModal.date)}, ${fmtDisp(pickModal.date)}`}
-            onClose={() => setPickModal(null)}
-            footer={
-              <>
-                <button className="btn bs" onClick={() => clearStatus(pickModal.date)}>Clear</button>
-                <button className="btn bs" onClick={() => setPickModal(null)}>Cancel</button>
-                <button className="btn bp" onClick={saveModal} disabled={!canSave}>Save</button>
-              </>
-            }
-          >
-            <p style={{ fontSize: 12.5, color: "#64748b", marginBottom: 14 }}>
-              {isAdmin && viewStaff
-                ? `Marking for: ${staff.find(s => s.init === viewStaff)?.name}`
-                : "Set your availability for this day:"}
-            </p>
+          return (
+            <Modal
+              title={`${getDayName(pickModal.date)}, ${fmtDisp(pickModal.date)}`}
+              onClose={() => setPickModal(null)}
+              footer={
+                <>
+                  <button className="btn bs" onClick={() => clearStatus(pickModal.date)}>Clear</button>
+                  <button className="btn bs" onClick={() => setPickModal(null)}>Cancel</button>
+                  <button className="btn bp" onClick={saveModal} disabled={!canSave}>Save</button>
+                </>
+              }
+            >
+              <p style={{ fontSize: 12.5, color: "#64748b", marginBottom: 14 }}>
+                {isAdmin && viewStaff
+                  ? `Marking for: ${staff.find(s => s.init === viewStaff)?.name}`
+                  : "Set your availability for this day:"}
+              </p>
 
-            {BH[pickModal.date] && (
-              <div className="al al-w" style={{ marginBottom: 12 }}>
-                🎉 {BH[pickModal.date]}
-              </div>
-            )}
+              {BH[pickModal.date] && (
+                <div className="al al-w" style={{ marginBottom: 12 }}>
+                  🎉 {BH[pickModal.date]}
+                </div>
+              )}
 
-            {dateHasBuiltRota(pickModal.date) && (
-              <div className="al al-i" style={{ marginBottom: 12 }}>
-                This date already has rota/leave built. New <strong>SL</strong> on this date will be submitted as a request for approval.
-              </div>
-            )}
+              {dateHasBuiltRota(pickModal.date) && (
+                <div className="al al-i" style={{ marginBottom: 12 }}>
+                  This date already has rota/leave built. New <strong>SL</strong> on this date will be submitted as a request for approval.
+                </div>
+              )}
 
             <div style={{ marginBottom: 14 }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 8 }}>
@@ -1148,51 +1150,51 @@ function AvailabilityView({
             </div>
 
             {modalDraft.base === "AVAILABLE" && (
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 8 }}>
-                  Shift options
-                </div>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 8 }}>
+                    Shift options
+                  </div>
 
-                <div className="al al-i" style={{ marginBottom: 10 }}>
-                  Select one or more shifts. Nothing is pre-selected.
-                </div>
+                  <div className="al al-i" style={{ marginBottom: 10 }}>
+                    Select one or more shifts. Nothing is pre-selected.
+                  </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
-                  {daySlots.map(sl => {
-                    const selected = modalDraft.slots.includes(sl.key);
-                    return (
-                      <button
-                        key={sl.key}
-                        onClick={() =>
-                          setModalDraft(prev => ({
-                            ...prev,
-                            slots: selected
-                              ? prev.slots.filter(x => x !== sl.key)
-                              : [...prev.slots, sl.key]
-                          }))
-                        }
-                        style={{
-                          padding: "10px 8px",
-                          border: `2px solid ${selected ? sl.bd : "#e2e8f0"}`,
-                          borderRadius: 8,
-                          background: selected ? sl.bg : "white",
-                          color: selected ? sl.fg : "#374151",
-                          fontWeight: 700,
-                          fontSize: 11.5,
-                          cursor: "pointer"
-                        }}
-                      >
-                        <div>{sl.key}</div>
-                        <div style={{ fontSize: 9, opacity: 0.8, marginTop: 2 }}>{sl.label}</div>
-                      </button>
-                    );
-                  })}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
+                    {daySlots.map(sl => {
+                      const selected = modalDraft.slots.includes(sl.key);
+                      return (
+                        <button
+                          key={sl.key}
+                          onClick={() =>
+                            setModalDraft(prev => ({
+                              ...prev,
+                              slots: selected
+                                ? prev.slots.filter(x => x !== sl.key)
+                                : [...prev.slots, sl.key]
+                            }))
+                          }
+                          style={{
+                            padding: "10px 8px",
+                            border: `2px solid ${selected ? sl.bd : "#e2e8f0"}`,
+                            borderRadius: 8,
+                            background: selected ? sl.bg : "white",
+                            color: selected ? sl.fg : "#374151",
+                            fontWeight: 700,
+                            fontSize: 11.5,
+                            cursor: "pointer"
+                          }}
+                        >
+                          <div>{sl.key}</div>
+                          <div style={{ fontSize: 9, opacity: 0.8, marginTop: 2 }}>{sl.label}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            )}
-          </Modal>
-        );
-      })()}
+              )}
+            </Modal>
+          );
+        })()}
     </div>
   );
 }
@@ -1378,6 +1380,7 @@ function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,s
                       textAlign:"left",
                       transition:"all .1s"
                         }}
+                  >
                     <div style={{fontSize:12,fontWeight:700,color:isSelected?"#065f46":"#0d1b2a"}}>{s.name.split(" ")[0]} <span style={{opacity:.6}}>{s.name.split(" ")[1]?.[0]}.</span></div>
                     <div style={{fontSize:10,color:"#64748b",marginTop:2,display:"flex",alignItems:"center",gap:5}}>
                       {s.grade}
