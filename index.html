@@ -1,0 +1,1717 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d1b2a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="RotaHST" />
+  <title>RotaHST 2026/27</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    html,body,#root{height:100%;margin:0}
+    body{background:#f0f4f8}
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+
+const { useState, useMemo, Fragment } = React;
+
+
+// ═══════════════════════════════════════════════════════════════
+// CONSTANTS
+// ═══════════════════════════════════════════════════════════════
+
+const BH = {"2026-08-31":"Summer BH","2026-12-25":"Christmas Day","2026-12-28":"Boxing Day","2027-01-01":"New Year's Day","2027-03-26":"Good Friday","2027-03-29":"Easter Monday","2027-05-03":"May Bank Holiday","2027-05-31":"Spring Bank Holiday"};
+
+const QUARTERS = [
+  {id:"Q1",label:"Q1: Aug – Nov 2026",start:"2026-08-05",end:"2026-11-03"},
+  {id:"Q2",label:"Q2: Nov 2026 – Feb 2027",start:"2026-11-04",end:"2027-02-02"},
+  {id:"Q3",label:"Q3: Feb – May 2027",start:"2027-02-03",end:"2027-05-04"},
+  {id:"Q4",label:"Q4: May – Aug 2027",start:"2027-05-05",end:"2027-08-03"},
+];
+
+// Slot definitions — wd=weekday only, we=weekend only, both=true/true
+const SLOTS = [
+  {key:"E1", grp:"EARLY",    wd:true, we:false,label:"Early 1",    hdr:"ST EARLY",    bg:"#dcfce7",fg:"#14532d",bd:"#86efac"},
+  {key:"E2", grp:"EARLY",    wd:true, we:false,label:"Early 2",    hdr:"",            bg:"#dcfce7",fg:"#14532d",bd:"#86efac"},
+  {key:"E3", grp:"EARLY",    wd:true, we:false,label:"Early 3",    hdr:"",            bg:"#dcfce7",fg:"#14532d",bd:"#86efac"},
+  {key:"E4", grp:"EARLY",    wd:true, we:false,label:"Early 4",    hdr:"",            bg:"#dcfce7",fg:"#14532d",bd:"#86efac"},
+  {key:"M1", grp:"MID",      wd:true, we:false,label:"Mid 1",      hdr:"ST MID",      bg:"#dbeafe",fg:"#1e3a8a",bd:"#93c5fd"},
+  {key:"M2", grp:"MID",      wd:true, we:false,label:"Mid 2",      hdr:"",            bg:"#dbeafe",fg:"#1e3a8a",bd:"#93c5fd"},
+  {key:"M3", grp:"MID",      wd:true, we:false,label:"Mid 3",      hdr:"",            bg:"#dbeafe",fg:"#1e3a8a",bd:"#93c5fd"},
+  {key:"L1", grp:"LATE",     wd:true, we:false,label:"Late 1",     hdr:"ST LATE",     bg:"#fef3c7",fg:"#78350f",bd:"#fcd34d"},
+  {key:"L2", grp:"LATE",     wd:true, we:false,label:"Late 2",     hdr:"",            bg:"#fef3c7",fg:"#78350f",bd:"#fcd34d"},
+  {key:"L3", grp:"LATE",     wd:true, we:false,label:"Late 3",     hdr:"",            bg:"#fef3c7",fg:"#78350f",bd:"#fcd34d"},
+  {key:"L4", grp:"LATE",     wd:true, we:false,label:"Late 4",     hdr:"",            bg:"#fef3c7",fg:"#78350f",bd:"#fcd34d"},
+  {key:"WE1",grp:"WE_EARLY", wd:false,we:true, label:"W/E Early 1",hdr:"ST W/E EARLY",bg:"#f3e8ff",fg:"#581c87",bd:"#d8b4fe"},
+  {key:"WE2",grp:"WE_EARLY", wd:false,we:true, label:"W/E Early 2",hdr:"",            bg:"#f3e8ff",fg:"#581c87",bd:"#d8b4fe"},
+  {key:"WE3",grp:"WE_EARLY", wd:false,we:true, label:"W/E Early 3",hdr:"",            bg:"#f3e8ff",fg:"#581c87",bd:"#d8b4fe"},
+  {key:"WL1",grp:"WE_LATE",  wd:false,we:true, label:"W/E Late 1", hdr:"ST W/E LATE", bg:"#fce7f3",fg:"#831843",bd:"#f9a8d4"},
+  {key:"WL2",grp:"WE_LATE",  wd:false,we:true, label:"W/E Late 2", hdr:"",            bg:"#fce7f3",fg:"#831843",bd:"#f9a8d4"},
+  {key:"N1", grp:"NIGHT1",   wd:true, we:true, label:"SDM Night 1", hdr:"SDM 1 NIGHT", bg:"#1e1b4b",fg:"#c7d2fe",bd:"#6366f1"},
+  {key:"N2", grp:"NIGHT2",   wd:true, we:true, label:"SDM Night 2", hdr:"SDM 2 NIGHT", bg:"#312e81",fg:"#e0e7ff",bd:"#818cf8"},
+  {key:"SN", grp:"ST3_NIGHT",wd:true, we:true, label:"ST3 Night",   hdr:"ST3 NIGHT",   bg:"#0c4a6e",fg:"#bae6fd",bd:"#38bdf8"},
+  {key:"AN", grp:"ACP_NIGHT",wd:true, we:true, label:"ACP Night",   hdr:"ACP NIGHT",   bg:"#064e3b",fg:"#6ee7b7",bd:"#34d399"},
+];
+
+const LEAVE_T = {
+  AL:      {label:"Annual Leave", abbr:"AL",bg:"#fef9c3",fg:"#713f12",bd:"#fde047"},
+  SL:      {label:"Study Leave",  abbr:"SL",bg:"#f1f5f9",fg:"#334155",bd:"#94a3b8"},
+  PHEM:    {label:"PHEM",         abbr:"PH",bg:"#fff7ed",fg:"#9a3412",bd:"#fb923c"},
+  RESEARCH:{label:"Research",     abbr:"RE",bg:"#ecfdf5",fg:"#14532d",bd:"#4ade80"},
+  MILITARY:{label:"Military",     abbr:"MI",bg:"#f0fdf4",fg:"#166534",bd:"#86efac"},
+  FELLOW:  {label:"Fellow",       abbr:"FE",bg:"#fdf4ff",fg:"#701a75",bd:"#e879f9"},
+  UNAVAIL: {label:"Unavailable",  abbr:"UA",bg:"#fee2e2",fg:"#7f1d1d",bd:"#fca5a5"},
+};
+
+const AVAIL = {
+  AVAILABLE:   { label:"Available",   short:"Avail",   bg:"#d1fae5", fg:"#065f46", icon:"✓" },
+  UNAVAILABLE: { label:"Unavailable", short:"Unavail", bg:"#fee2e2", fg:"#7f1d1d", icon:"✗" },
+  SL:          { label:"Study Leave", short:"SL",      bg:"#f1f5f9", fg:"#334155", icon:"SL" },
+};
+
+const INIT_STAFF = [
+  {id:1, name:"Michael Connolly",     init:"MC",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
+  {id:2, name:"Aled Donaldson",       init:"AD",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
+  {id:3, name:"John Allison",         init:"JA",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
+  {id:4, name:"Sarah Johnson",        init:"SJ",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
+  {id:5, name:"Anthony McLaughlin",   init:"AM",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
+  {id:6, name:"Eleanor Burke",        init:"EB",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
+  {id:7, name:"Sam Copson",           init:"SC",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
+  {id:8, name:"Matthew Bankhead",     init:"MB",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
+  {id:9, name:"Mark Winstanley",      init:"MW",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
+  {id:10,name:"Lauren Bose",          init:"LB",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
+  {id:11,name:"Cal Doherty",          init:"CD",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
+  {id:12,name:"Celestine Weegenaar",  init:"CW",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
+  {id:13,name:"Maud Mccutcheon",      init:"MM",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
+  {id:14,name:"Jodie Sage",           init:"JS",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
+  {id:15,name:"Mhairi De Saint Croix",init:"MDS", grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
+  {id:16,name:"Hayley Fairbairn",     init:"HF",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
+  {id:17,name:"Vay Deshpande",        init:"VD",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
+  {id:18,name:"Sarah Ackroyd",        init:"SA",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
+  {id:19,name:"Michael Cole",         init:"MCOL",grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
+  {id:20,name:"Steven Arena",         init:"SAr", grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
+  {id:21,name:"Andy Witt",            init:"AW",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
+  {id:22,name:"Karl Smith",           init:"KS",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
+  {id:23,name:"Nat Nauman",           init:"NN",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
+  {id:24,name:"Nat Wright",           init:"NW",  grade:"ST3", hrs:41.75,pw:"rota2026",role:"staff",active:true},
+  {id:25,name:"Tom Field",            init:"TF",  grade:"ST3", hrs:41.75,pw:"rota2026",role:"staff",active:true},
+  {id:26,name:"Jaz Matthews",         init:"JM",  grade:"ST3", hrs:41.75,pw:"rota2026",role:"staff",active:true},
+  {id:27,name:"Steph Gooch",          init:"SG",  grade:"ST3", hrs:41.75,pw:"rota2026",role:"staff",active:true},
+  {id:28,name:"Emma Worgan",          init:"EW",  grade:"ST3", hrs:41.75,pw:"rota2026",role:"staff",active:true},
+  {id:29,name:"Mike Gammon",          init:"MG",  grade:"ST3", hrs:41.75,pw:"rota2026",role:"staff",active:true},
+  {id:30,name:"Harriet Jones",        init:"HJ",  grade:"ST3", hrs:41.75,pw:"rota2026",role:"staff",active:true},
+  {id:31,name:"Jack Sadler",          init:"JS2", grade:"ST3", hrs:41.75,pw:"rota2026",role:"staff",active:true},
+  {id:32,name:"Nikki Mavel",          init:"NM",  grade:"ACP", hrs:37.5, pw:"rota2026",role:"staff",active:true},
+  {id:99,name:"Rota Admin",           init:"ADM", grade:"Admin",hrs:0,   pw:"admin2026",role:"admin",active:true},
+];
+
+// ═══════════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════════
+
+const fmtISO = d => { const x=new Date(d); return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}-${String(x.getDate()).padStart(2,"0")}`; };
+const fmtDisp = s => new Date(s+"T00:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"});
+const fmtShort = s => new Date(s+"T00:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"});
+const isWeekend = d => { const dow=new Date(d+"T00:00:00").getDay(); return dow===0||dow===6; };
+const getDayName = d => new Date(d+"T00:00:00").toLocaleDateString("en-GB",{weekday:"short"});
+const getSlotsForDay = d => SLOTS.filter(s => isWeekend(d) ? s.we : s.wd);
+
+const getWeekDates = anchor => {
+  const d=new Date(anchor+"T00:00:00"), day=d.getDay(), diff=d.getDate()-day+(day===0?-6:1);
+  d.setDate(diff);
+  return Array.from({length:7},(_,i)=>{ const x=new Date(d); x.setDate(x.getDate()+i); return fmtISO(x); });
+};
+
+const getMonthDays = (yr,mo) => {
+  const days=[],first=new Date(yr,mo,1),last=new Date(yr,mo+1,0),sp=(first.getDay()+6)%7;
+  for(let i=sp;i>0;i--) days.push({date:fmtISO(new Date(yr,mo,1-i)),inMonth:false});
+  for(let d=1;d<=last.getDate();d++) days.push({date:fmtISO(new Date(yr,mo,d)),inMonth:true});
+  const ep=7-(days.length%7); if(ep<7) for(let i=1;i<=ep;i++) days.push({date:fmtISO(new Date(yr,mo+1,i)),inMonth:false});
+  return days;
+};
+
+const getDatesInRange = (start,end) => {
+  const dates=[]; let cur=new Date(start+"T00:00:00"); const last=new Date(end+"T00:00:00");
+  while(cur<=last){ dates.push(fmtISO(cur)); cur.setDate(cur.getDate()+1); }
+  return dates;
+};
+
+const getQuarterForDate = d => QUARTERS.find(q=>d>=q.start&&d<=q.end);
+
+const normaliseAvailEntry = (entry) => {
+  if (!entry) return null;
+
+  // backwards compatibility with old string format
+  if (typeof entry === "string") {
+    if (entry === "AVAIL") return { base: "AVAILABLE", slots: [] };
+    if (entry === "UNAVAIL") return { base: "UNAVAILABLE", slots: [] };
+    if (entry === "SL") return { base: "SL", slots: [] };
+    return null;
+  }
+
+  return {
+    base: entry.base || null,
+    slots: Array.isArray(entry.slots) ? entry.slots : [],
+  };
+};
+
+const isMarkedAvailEntry = (entry) => {
+  const e = normaliseAvailEntry(entry);
+  if (!e || !e.base) return false;
+  if (e.base === "AVAILABLE") return e.slots.length > 0;
+  return true;
+};
+
+const getAvailEntry = (availability, init, date) =>
+  normaliseAvailEntry((availability[init] || {})[date]) || { base: null, slots: [] };
+
+const isBlockedDay = (availability, init, date) => {
+  const e = getAvailEntry(availability, init, date);
+  return e.base === "UNAVAILABLE" || e.base === "SL";
+};
+
+const isSlotPreferred = (availability, init, date, slotKey) => {
+  const e = getAvailEntry(availability, init, date);
+  if (e.base !== "AVAILABLE") return false;
+  return e.slots.includes(slotKey);
+};
+
+const getAutoSLEntriesForDate = (availability, date, staff) => {
+  return staff
+    .filter(s => s.role === "staff" && s.active)
+    .filter(s => getAvailEntry(availability, s.init, date).base === "SL")
+    .map(s => ({
+      id: `auto-sl-${s.init}-${date}`,
+      init: s.init,
+      type: "SL",
+      note: "Auto from availability",
+      auto: true,
+    }));
+};
+
+const getMergedLeaveEntries = (date, leaveEntries, availability, staff) => {
+  const manual = leaveEntries[date] || [];
+  const manualSLInits = new Set(
+    manual.filter(x => x.type === "SL").map(x => x.init)
+  );
+  const auto = getAutoSLEntriesForDate(availability, date, staff).filter(
+    x => !manualSLInits.has(x.init)
+  );
+  return [...manual, ...auto];
+};
+
+const staffHasAnythingOnDate = (init, date, rota, leaveEntries, availability, staff) => {
+  const daySlots = rota[date] || {};
+  const onShift = Object.values(daySlots).includes(init);
+  const leave = getMergedLeaveEntries(date, leaveEntries, availability, staff).some(x => x.init === init);
+  return onShift || leave;
+};
+
+// ═══════════════════════════════════════════════════════════════
+// CSS
+// ═══════════════════════════════════════════════════════════════
+
+const CSS = `
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@500;700;800&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Sans',sans-serif;background:#f0f4f8;font-size:13px}
+::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:4px}
+.app{display:flex;height:100vh;overflow:hidden}
+.sb{width:228px;flex-shrink:0;background:linear-gradient(170deg,#0d1b2a,#1a2e45);display:flex;flex-direction:column;overflow-y:auto}
+.sb-logo{padding:20px 18px 16px;border-bottom:1px solid rgba(255,255,255,.07)}
+.sb-logo h1{font-family:'Syne',sans-serif;font-size:16px;font-weight:800;color:#e8f4f0;display:flex;align-items:center;gap:7px}
+.sb-logo p{font-size:10.5px;color:#3a5a6e;margin-top:2px}
+.sb-sec{padding:10px 8px 4px}
+.sb-lbl{font-size:9px;font-weight:700;letter-spacing:1.2px;color:#2d4a5e;text-transform:uppercase;padding:5px 8px 3px}
+.nav-btn{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:7px;cursor:pointer;color:#6a8fa5;font-size:12.5px;font-weight:500;transition:all .15s;border:none;background:none;width:100%;text-align:left;margin-bottom:1px;position:relative}
+.nav-btn:hover{background:rgba(255,255,255,.06);color:#b8d4e0}
+.nav-btn.act{background:rgba(52,211,153,.12);color:#34d399}
+.nav-btn .ni{font-size:13px;width:18px;text-align:center}
+.nb{position:absolute;right:8px;background:#ef4444;color:white;border-radius:10px;padding:1px 5px;font-size:9.5px;font-weight:700}
+.sb-user{margin-top:auto;padding:12px 14px;border-top:1px solid rgba(255,255,255,.07);display:flex;align-items:center;gap:9px}
+.u-av{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#10b981,#0284c7);display:flex;align-items:center;justify-content:center;font-size:9.5px;font-weight:800;color:white;flex-shrink:0}
+.u-info{flex:1;min-width:0}
+.u-name{font-size:11.5px;font-weight:600;color:#c0d8e4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.u-role{font-size:10px;color:#2d4a5e}
+.u-out{background:none;border:none;color:#2d4a5e;cursor:pointer;font-size:16px;transition:color .15s}
+.u-out:hover{color:#ef4444}
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.hdr{background:white;padding:14px 26px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.hdr h2{font-family:'Syne',sans-serif;font-size:19px;font-weight:700;color:#0d1b2a}
+.body{flex:1;overflow-y:auto;padding:22px 26px}
+.card{background:white;border-radius:11px;border:1px solid #e2e8f0}
+.ch{padding:13px 17px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.ct{font-family:'Syne',sans-serif;font-size:13.5px;font-weight:700;color:#0d1b2a}
+.cb{padding:16px}
+.sg{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+.sc{background:white;border-radius:11px;padding:16px;border:1px solid #e2e8f0;border-left:4px solid var(--ac)}
+.sv{font-family:'Syne',sans-serif;font-size:24px;font-weight:800;color:#0d1b2a}
+.sl{font-size:11px;color:#64748b;margin-top:2px;font-weight:500}
+.btn{padding:6px 13px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:600;border:none;transition:all .15s;display:inline-flex;align-items:center;gap:5px;font-family:'DM Sans',sans-serif}
+.bp{background:#10b981;color:white}.bp:hover{background:#059669}
+.bs{background:white;color:#374151;border:1px solid #d1d5db}.bs:hover{background:#f9fafb}
+.bd{background:#ef4444;color:white}.bd:hover{background:#dc2626}
+.bw{background:#f59e0b;color:white}.bw:hover{background:#d97706}
+.bsm{padding:3px 9px;font-size:11px}
+.badge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700}
+.b-pending{background:#fef3c7;color:#92400e}.b-approved{background:#d1fae5;color:#065f46}.b-rejected{background:#fee2e2;color:#7f1d1d}
+.b-open{background:#d1fae5;color:#065f46}.b-closed{background:#f1f5f9;color:#475569}.b-locked{background:#ede9fe;color:#4c1d95}
+.b-admin{background:#ede9fe;color:#4c1d95}.b-staff{background:#dbeafe;color:#1e40af}
+.tbl{width:100%;border-collapse:collapse}
+.tbl th{padding:8px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#64748b;background:#f8fafc;border-bottom:2px solid #e2e8f0}
+.tbl td{padding:10px 12px;border-bottom:1px solid #f1f5f9;font-size:12.5px;color:#374151;vertical-align:middle}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr:hover td{background:#fafbfc}
+.fg{margin-bottom:13px}
+.fl{display:block;font-size:11px;font-weight:600;color:#374151;margin-bottom:4px}
+.fi{width:100%;padding:7px 10px;border-radius:7px;border:1px solid #d1d5db;font-size:12.5px;color:#0d1b2a;background:white;outline:none;font-family:'DM Sans',sans-serif;transition:border-color .15s}
+.fi:focus{border-color:#10b981;box-shadow:0 0 0 3px rgba(16,185,129,.1)}
+.fta{width:100%;padding:7px 10px;border-radius:7px;border:1px solid #d1d5db;font-size:12.5px;color:#0d1b2a;resize:vertical;min-height:64px;outline:none;font-family:'DM Sans',sans-serif;transition:border-color .15s}
+.fta:focus{border-color:#10b981;box-shadow:0 0 0 3px rgba(16,185,129,.1)}
+.mbk{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;display:flex;align-items:center;justify-content:center;padding:16px}
+.mbox{background:white;border-radius:14px;width:100%;max-width:500px;box-shadow:0 24px 60px rgba(0,0,0,.25);overflow:hidden;max-height:90vh;display:flex;flex-direction:column}
+.mbox-lg{max-width:720px}
+.mh{padding:16px 20px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.mt{font-family:'Syne',sans-serif;font-size:15px;font-weight:700;color:#0d1b2a}
+.mc{background:none;border:none;font-size:20px;cursor:pointer;color:#94a3b8;line-height:1}
+.mc:hover{color:#374151}
+.mb{padding:20px;overflow-y:auto;flex:1}
+.mf{padding:12px 20px;border-top:1px solid #f1f5f9;display:flex;justify-content:flex-end;gap:8px;flex-shrink:0}
+.login-wrap{min-height:100vh;background:linear-gradient(135deg,#0d1b2a,#1a2e45 40%,#0d2137);display:flex;align-items:center;justify-content:center;padding:20px}
+.login-card{background:white;border-radius:18px;padding:36px;width:100%;max-width:380px;box-shadow:0 32px 80px rgba(0,0,0,.4)}
+.login-hed{text-align:center;margin-bottom:26px}
+.login-hed h1{font-family:'Syne',sans-serif;font-size:24px;font-weight:800;color:#0d1b2a}
+.login-hed p{color:#64748b;margin-top:4px;font-size:12.5px}
+.login-err{background:#fee2e2;color:#7f1d1d;padding:8px 12px;border-radius:7px;font-size:12px;margin-bottom:13px;border-left:3px solid #ef4444}
+.al{padding:9px 13px;border-radius:7px;font-size:12.5px;margin-bottom:11px;border-left:3px solid}
+.al-w{background:#fef9c3;border-color:#fde047;color:#713f12}
+.al-s{background:#d1fae5;border-color:#34d399;color:#065f46}
+.al-i{background:#dbeafe;border-color:#60a5fa;color:#1e40af}
+.al-e{background:#fee2e2;border-color:#fca5a5;color:#7f1d1d}
+.cal-top{display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.cal-nav{display:flex;align-items:center;gap:7px}
+.cal-nav button{background:white;border:1px solid #e2e8f0;padding:5px 10px;border-radius:7px;cursor:pointer;font-size:15px;color:#475569}
+.cal-nav button:hover{background:#f1f5f9}
+.cal-mo{font-family:'Syne',sans-serif;font-size:15px;font-weight:700;color:#0d1b2a;min-width:160px;text-align:center}
+.mtog{display:flex;background:#f1f5f9;border-radius:7px;padding:2px}
+.mtog-btn{padding:5px 12px;border-radius:5px;border:none;cursor:pointer;font-size:12px;font-weight:600;background:none;color:#64748b;transition:all .15s;font-family:'DM Sans',sans-serif}
+.mtog-btn.act{background:white;color:#0d1b2a;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.cg{display:grid;grid-template-columns:repeat(7,1fr)}
+.cdow{text-align:center;padding:8px 4px;font-size:9.5px;font-weight:700;letter-spacing:.5px;color:#64748b;text-transform:uppercase;background:#f8fafc;border-bottom:2px solid #e2e8f0}
+.cc{min-height:90px;padding:5px;border-right:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;cursor:pointer;transition:background .1s}
+.cc:hover{background:#fafbfc}
+.cc.om{background:#fafafa}.cc.td{background:#f0fdf4}.cc.bh{background:#fffbeb}.cc.we{background:#fafaff}
+.cdate{font-size:10.5px;font-weight:600;color:#374151;display:flex;align-items:center;justify-content:space-between;margin-bottom:3px}
+.cdate.om{color:#cbd5e1}
+.td-num{background:#10b981;color:white;border-radius:50%;width:19px;height:19px;display:flex;align-items:center;justify-content:center}
+.bh-tag{font-size:8px;background:#fde047;color:#713f12;padding:1px 3px;border-radius:2px;font-weight:700}
+.chip-sm{display:inline-flex;align-items:center;padding:2px 5px;border-radius:4px;font-size:9px;font-weight:700;border:1px solid;margin:1px 1px 1px 0}
+.chip{font-size:10.5px;padding:2px 7px;border-radius:4px;font-weight:600;border:1px solid;display:inline-block}
+.more{font-size:9px;color:#6366f1;font-weight:600;padding:1px 3px;cursor:pointer}
+.dg2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+
+/* ── Availability Calendar ── */
+.av-cal{display:grid;grid-template-columns:repeat(7,1fr);border-left:1px solid #e2e8f0;border-top:1px solid #e2e8f0}
+.av-dow{text-align:center;padding:7px 3px;font-size:9.5px;font-weight:700;color:#64748b;background:#f8fafc;border-right:1px solid #e2e8f0;border-bottom:2px solid #e2e8f0;text-transform:uppercase}
+.av-cell{min-height:70px;padding:4px;border-right:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;cursor:pointer;transition:all .1s;position:relative}
+.av-cell:hover{opacity:.85}
+.av-cell.om{background:#f9f9f9;cursor:default}
+.av-cell.out-range{background:#f9f9f9;cursor:default;opacity:.4}
+.av-cell.bh{border-top:2px solid #fde047}
+.av-date{font-size:10.5px;font-weight:600;color:#374151;margin-bottom:3px}
+.av-date.om{color:#c0c8d0}
+.av-status{border-radius:5px;padding:3px 5px;font-size:9.5px;font-weight:700;text-align:center}
+.av-none{background:#f8fafc;color:#94a3b8;border-radius:5px;padding:3px 5px;font-size:9px;text-align:center;border:1px dashed #e2e8f0}
+.qcard{border:1px solid #e2e8f0;border-radius:10px;padding:16px;margin-bottom:12px;display:flex;align-items:center;gap:14px}
+.qcard.open{border-color:#10b981;background:#f0fdf4}
+.prog-bar{flex:1;height:6px;background:#f1f5f9;border-radius:3px;overflow:hidden}
+.prog-fill{height:100%;border-radius:3px;background:#10b981;transition:width .4s}
+
+/* ── Slot-based Builder ── */
+.bld-wrap{overflow-x:auto}
+.bld-tbl{border-collapse:collapse;min-width:100%}
+.bld-tbl th{padding:5px 3px;font-size:9px;font-weight:700;text-align:center;border:1px solid #e2e8f0;white-space:nowrap;position:sticky;top:0;z-index:3}
+.bld-tbl td{padding:2px;border:1px solid #e8edf2;text-align:center;background:white;vertical-align:middle}
+.bld-date-col{text-align:left!important;padding:6px 10px!important;background:#fafafa!important;position:sticky;left:0;z-index:2;min-width:120px;white-space:nowrap}
+.bld-date-col.we-row{background:#fafaff!important}
+.bld-date-col.bh-row{background:#fffbeb!important}
+.bld-date-col.td-row{background:#f0fdf4!important}
+.slot-cell{min-width:44px;height:30px;cursor:pointer;transition:background .1s}
+.slot-cell:hover{opacity:.8}
+.slot-cell.disabled{background:#f8fafc!important;cursor:default;opacity:.4}
+.slot-chip{padding:2px 5px;border-radius:4px;font-size:9.5px;font-weight:800;display:inline-block;border:1px solid transparent;cursor:pointer;white-space:nowrap}
+.slot-empty{width:38px;height:22px;background:#f8fafc;border-radius:4px;display:inline-block;border:1px dashed #d1d5db;transition:all .1s}
+.slot-empty:hover{border-color:#10b981;background:#f0fdf4}
+.avail-dot{width:6px;height:6px;border-radius:50%;display:inline-block;margin-left:3px;vertical-align:middle}
+.grp-hdr{background:#f1f5f9!important;font-size:8px!important;letter-spacing:.8px!important;color:#64748b!important;font-weight:800!important;text-transform:uppercase}
+.leave-row{padding:3px 6px;border-radius:4px;font-size:10px;font-weight:700;display:inline-flex;align-items:center;gap:3px}
+
+/* ── Reports ── */
+.rbar{display:flex;align-items:center;gap:9px;margin-bottom:7px}
+.rl{font-size:11.5px;color:#374151;width:155px;flex-shrink:0;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rt{flex:1;height:6px;background:#f1f5f9;border-radius:3px;overflow:hidden}
+.rf{height:100%;border-radius:3px;transition:width .4s}
+.rv{font-size:11px;color:#64748b;width:28px;text-align:right;flex-shrink:0}
+.arow{display:flex;gap:9px;padding:9px 0;border-bottom:1px solid #f1f5f9}
+.at{font-size:10px;color:#94a3b8;width:115px;flex-shrink:0}
+.au{font-size:10.5px;font-weight:700;color:#6366f1;width:45px;flex-shrink:0}
+.aa{font-size:12px;color:#374151;flex:1}
+`;
+
+// ═══════════════════════════════════════════════════════════════
+// SMALL COMPONENTS
+// ═══════════════════════════════════════════════════════════════
+
+const Modal = ({title,onClose,children,footer,lg}) => (
+  <div className="mbk" onClick={onClose}>
+    <div className={`mbox${lg?" mbox-lg":""}`} onClick={e=>e.stopPropagation()}>
+      <div className="mh"><span className="mt">{title}</span><button className="mc" onClick={onClose}>×</button></div>
+      <div className="mb">{children}</div>
+      {footer&&<div className="mf">{footer}</div>}
+    </div>
+  </div>
+);
+
+// ═══════════════════════════════════════════════════════════════
+// LOGIN
+// ═══════════════════════════════════════════════════════════════
+
+function Login({staff,onLogin}) {
+  const [u,setU]=useState(""); const [p,setP]=useState(""); const [err,setErr]=useState("");
+  const go=()=>{const f=staff.find(s=>s.init.toLowerCase()===u.toLowerCase().trim()&&s.pw===p.trim());f?onLogin(f):setErr("Invalid username or password.");};
+  return (
+    <div className="login-wrap">
+      <div className="login-card">
+        <div className="login-hed"><div style={{fontSize:42,marginBottom:8}}>🏥</div><h1>RotaHST</h1><p>Emergency Medicine · 2026/27</p></div>
+        {err&&<div className="login-err">⚠️ {err}</div>}
+        <div className="fg"><label className="fl">Username (initials)</label><input className="fi" placeholder="e.g. MC" value={u} onChange={e=>setU(e.target.value)} onKeyDown={e=>e.key==="Enter"&&go()} autoFocus/></div>
+        <div className="fg"><label className="fl">Password</label><input type="password" className="fi" placeholder="••••••••" value={p} onChange={e=>setP(e.target.value)} onKeyDown={e=>e.key==="Enter"&&go()}/></div>
+        <button className="btn bp" style={{width:"100%",justifyContent:"center",padding:"10px"}} onClick={go}>Sign In →</button>
+        <p style={{textAlign:"center",marginTop:13,fontSize:11,color:"#94a3b8"}}>Staff: initials + <strong>rota2026</strong> &nbsp;|&nbsp; Admin: <strong>ADM / admin2026</strong></p>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SIDEBAR
+// ═══════════════════════════════════════════════════════════════
+
+function Sidebar({user,view,setView,onLogout,pendingCount,hasOpenQ}) {
+  const isAdmin=user.role==="admin";
+  const items=[
+    {id:"dashboard",icon:"📊",label:"Dashboard"},
+    {id:"calendar", icon:"📅",label:"Rota Calendar"},
+    ...(!isAdmin?[{id:"myshifts",icon:"👤",label:"My Shifts"}]:[]),
+    {id:"availability",icon:"📋",label:"Availability",badge:!isAdmin&&hasOpenQ?"!":null},
+    {id:"requests",icon:"📝",label:isAdmin?"Leave Requests":"My Requests",badge:isAdmin&&pendingCount>0?pendingCount:null},
+    ...(isAdmin?[
+      {id:"builder",icon:"🔧",label:"Rota Builder"},
+      {id:"staff",  icon:"👥",label:"Staff"},
+      {id:"reports",icon:"📈",label:"Reports"},
+      {id:"audit",  icon:"🔍",label:"Audit Log"},
+    ]:[{id:"reports",icon:"📈",label:"My Summary"}]),
+  ];
+  return (
+    <div className="sb">
+      <div className="sb-logo"><h1><span>🏥</span>RotaHST</h1><p>Rota Year 2026 / 2027</p></div>
+      <div className="sb-sec">
+        <div className="sb-lbl">Menu</div>
+        {items.map(n=>(
+          <button key={n.id} className={`nav-btn${view===n.id?" act":""}`} onClick={()=>setView(n.id)}>
+            <span className="ni">{n.icon}</span>{n.label}
+            {n.badge&&<span className="nb">{n.badge}</span>}
+          </button>
+        ))}
+      </div>
+      <div className="sb-user">
+        <div className="u-av">{user.init.slice(0,2)}</div>
+        <div className="u-info"><div className="u-name">{user.name}</div><div className="u-role">{isAdmin?"Administrator":user.grade}</div></div>
+        <button className="u-out" onClick={onLogout} title="Sign out">⏻</button>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════════════════════════════════
+
+function Dashboard({user,staff,rota,requests,dayNotes,availability,quarterStatus}) {
+  const today=fmtISO(new Date()), isAdmin=user.role==="admin";
+  const todaySlots=rota[today]||{};
+  const todayStaffInit=[...new Set(Object.values(todaySlots).filter(Boolean))];
+  const pending=requests.filter(r=>r.status==="pending");
+  const openQs=QUARTERS.filter(q=>quarterStatus[q.id]==="open");
+  const myAvail=availability[user.init]||{};
+  const myNextShift=useMemo(()=>{
+    if(isAdmin) return null;
+    return Object.keys(rota).sort().map(d=>({d,slots:Object.values(rota[d]).filter(Boolean)}))
+      .find(x=>x.d>=today&&x.slots.includes(user.init));
+  },[rota,user,today,isAdmin]);
+
+  return (
+    <div>
+      {(dayNotes[today])&&<div className="al al-w" style={{marginBottom:16}}>📌 <strong>Today:</strong> {dayNotes[today]}</div>}
+      {!isAdmin&&openQs.length>0&&<div className="al al-i" style={{marginBottom:16}}>📋 Availability open for <strong>{openQs.map(q=>q.id).join(", ")}</strong> — please submit yours.</div>}
+      <div className="sg">
+        <div className="sc" style={{"--ac":"#10b981"}}><div className="sv">{staff.filter(s=>s.role==="staff"&&s.active).length}</div><div className="sl">Active Staff</div></div>
+        <div className="sc" style={{"--ac":"#6366f1"}}><div className="sv">{todayStaffInit.length}</div><div className="sl">On Shift Today</div></div>
+        <div className="sc" style={{"--ac":"#f59e0b"}}><div className="sv">{pending.length}</div><div className="sl">Pending Requests</div></div>
+        <div className="sc" style={{"--ac":"#3b82f6"}}><div className="sv">{openQs.length}</div><div className="sl">Open Availability Q</div></div>
+      </div>
+      <div className="dg2">
+        <div className="card">
+          <div className="ch"><span className="ct">Today's Shifts</span><span style={{fontSize:10.5,color:"#94a3b8"}}>{fmtDisp(today)}</span></div>
+          <div className="cb" style={{maxHeight:280,overflowY:"auto"}}>
+            {todayStaffInit.length===0?<p style={{color:"#94a3b8",fontSize:12}}>No shifts assigned today.</p>
+              :todayStaffInit.map(init=>{
+                const s=staff.find(x=>x.init===init);
+                const mySlots=Object.entries(todaySlots).filter(([k,v])=>v===init).map(([k])=>SLOTS.find(sl=>sl.key===k)).filter(Boolean);
+                return (
+                  <div key={init} style={{display:"flex",alignItems:"center",gap:9,padding:"7px 0",borderBottom:"1px solid #f1f5f9"}}>
+                    <div style={{width:28,height:28,borderRadius:"50%",background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,color:"#374151",flexShrink:0}}>{init.slice(0,2)}</div>
+                    <div style={{flex:1}}><div style={{fontSize:12,fontWeight:600}}>{s?.name||init}</div><div style={{fontSize:10,color:"#64748b"}}>{s?.grade}</div></div>
+                    {mySlots.slice(0,2).map(sl=><span key={sl.key} className="chip" style={{background:sl.bg,color:sl.fg,borderColor:sl.bd,fontSize:10}}>{sl.label}</span>)}
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+        <div className="card">
+          <div className="ch"><span className="ct">{isAdmin?"Pending Requests":"My Overview"}</span></div>
+          <div className="cb">
+            {isAdmin?(
+              pending.length===0?<div className="al al-s">✓ No pending requests</div>
+              :pending.slice(0,5).map(r=>(
+                <div key={r.id} style={{display:"flex",alignItems:"center",gap:9,padding:"7px 0",borderBottom:"1px solid #f1f5f9"}}>
+                  <div style={{flex:1}}><div style={{fontSize:12,fontWeight:600}}>{r.staffName}</div><div style={{fontSize:10,color:"#64748b"}}>{LEAVE_T[r.type]?.label} — {fmtDisp(r.startDate)}</div></div>
+                  <span className="badge b-pending">Pending</span>
+                </div>
+              ))
+            ):(
+              <div>
+                {myNextShift?<div style={{padding:13,background:"#f0fdf4",borderRadius:8,marginBottom:13}}>
+                  <div style={{fontSize:10,color:"#64748b",marginBottom:2}}>Next assigned shift</div>
+                  <div style={{fontSize:18,fontWeight:800,fontFamily:"Syne,sans-serif"}}>{fmtDisp(myNextShift.d)}</div>
+                </div>:<div className="al al-i">No upcoming shifts assigned yet.</div>}
+                <div style={{fontSize:11.5,fontWeight:700,color:"#374151",marginBottom:7}}>My availability status</div>
+                {Object.keys(myAvail).length===0?<p style={{fontSize:12,color:"#94a3b8"}}>No availability submitted yet.</p>
+                  :<div style={{fontSize:12,color:"#64748b"}}>{Object.keys(myAvail).length} dates marked</div>}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CALENDAR VIEW (read-only, derived from rota slot data)
+// ═══════════════════════════════════════════════════════════════
+
+function CalendarView({rota,leaveEntries,dayNotes,staff,viewMonth,setViewMonth,viewMode,setViewMode}) {
+  const [fStaff,setFS]=useState(""), [dayModal,setDM]=useState(null);
+  const today=fmtISO(new Date()), yr=viewMonth.getFullYear(), mo=viewMonth.getMonth();
+  const days=useMemo(()=>getMonthDays(yr,mo),[yr,mo]);
+  const DOW=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+  const activeStaff=staff.filter(s=>s.role==="staff"&&s.active);
+
+  // Derive initials→slots for a date
+  const getDateStaff=(d)=>{
+    const result=[];
+    const slots=rota[d]||{};
+    Object.entries(slots).forEach(([sk,init])=>{if(init&&(!fStaff||init===fStaff)){const sl=SLOTS.find(s=>s.key===sk);if(sl)result.push({init,slot:sl});}});
+    (leaveEntries[d]||[]).forEach(e=>{if(!fStaff||e.init===fStaff){const lt=LEAVE_T[e.type];if(lt)result.push({init:e.init,slot:{...lt,key:e.type,label:lt.label}});}});
+    return result;
+  };
+
+  const nav=delta=>{const d=new Date(viewMonth);d.setMonth(d.getMonth()+delta);setViewMonth(d);};
+  const label=viewMonth.toLocaleDateString("en-GB",{month:"long",year:"numeric"});
+
+  return (
+    <div>
+      <div className="cal-top">
+        <div className="cal-nav"><button onClick={()=>nav(-1)}>‹</button><div className="cal-mo">{label}</div><button onClick={()=>nav(1)}>›</button></div>
+        <select className="fi" style={{width:150}} value={fStaff} onChange={e=>setFS(e.target.value)}>
+          <option value="">All Staff</option>{activeStaff.map(s=><option key={s.id} value={s.init}>{s.name}</option>)}
+        </select>
+      </div>
+      <div className="card">
+        <div className="cg">
+          {DOW.map(d=><div key={d} className="cdow">{d}</div>)}
+          {days.map(({date,inMonth})=>{
+            const isBH=!!BH[date],isToday=date===today,we=isWeekend(date),items=getDateStaff(date),note=dayNotes[date],MAX=3;
+            return (
+              <div key={date} className={`cc${!inMonth?" om":""}${isToday?" td":""}${isBH?" bh":!inMonth?"":we?" we":""}`} onClick={()=>inMonth&&setDM(date)}>
+                <div className={`cdate${!inMonth?" om":""}`}>
+                  <span className={isToday?"td-num":""}>{new Date(date+"T00:00:00").getDate()}</span>
+                  {isBH&&<span className="bh-tag">BH</span>}
+                </div>
+                {note&&<div style={{fontSize:8,color:"#92400e",background:"#fef9c3",padding:"1px 3px",borderRadius:3,marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>📌</div>}
+                {items.slice(0,MAX).map((x,i)=><span key={i} className="chip-sm" style={{background:x.slot.bg,color:x.slot.fg,borderColor:x.slot.bd}}>{x.init}</span>)}
+                {items.length>MAX&&<div className="more">+{items.length-MAX}</div>}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      {dayModal&&(
+        <Modal title={`${getDayName(dayModal)}, ${fmtDisp(dayModal)}${BH[dayModal]?" · "+BH[dayModal]:""}`} onClose={()=>setDM(null)} footer={<button className="btn bs" onClick={()=>setDM(null)}>Close</button>}>
+          {dayNotes[dayModal]&&<div className="al al-w">📌 {dayNotes[dayModal]}</div>}
+          {getDateStaff(dayModal).length===0?<p style={{color:"#94a3b8",fontSize:12}}>No shifts assigned.</p>
+            :<table className="tbl"><thead><tr><th>Staff</th><th>Grade</th><th>Shift</th></tr></thead><tbody>
+              {getDateStaff(dayModal).map((x,i)=>{const s=staff.find(st=>st.init===x.init);return(
+                <tr key={i}><td style={{fontWeight:600}}>{s?.name||x.init}</td><td style={{color:"#64748b"}}>{s?.grade||""}</td>
+                <td><span className="chip" style={{background:x.slot.bg,color:x.slot.fg,borderColor:x.slot.bd,fontSize:10.5}}>{x.slot.label}</span></td></tr>
+              );})}
+            </tbody></table>
+          }
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// AVAILABILITY
+// ═══════════════════════════════════════════════════════════════
+
+function AvailabilityView({
+  user,
+  staff,
+  availability,
+  setAvailability,
+  quarterStatus,
+  setQuarterStatus,
+  addAudit,
+  leaveEntries,
+  setLeaveEntries,
+  rota,
+  requests,
+  setRequests
+}) {
+  const isAdmin = user.role === "admin";
+
+  const [selQ, setSelQ] = useState("Q1");
+  const [viewStaff, setViewStaff] = useState(null);
+  const [pickModal, setPickModal] = useState(null); // { date }
+  const [viewMonth, setVM] = useState(new Date(2026, 7, 1));
+  const [modalDraft, setModalDraft] = useState({ base: "", slots: [] });
+
+  const q = QUARTERS.find(x => x.id === selQ);
+  const myAvail = availability[user.init] || {};
+  const qDates = q ? getDatesInRange(q.start, q.end) : [];
+  const submittedCount = qDates.filter(d => !!myAvail[d]).length;
+  const pct = qDates.length > 0 ? Math.round((submittedCount / qDates.length) * 100) : 0;
+
+  const yr = viewMonth.getFullYear();
+  const mo = viewMonth.getMonth();
+  const calDays = useMemo(() => getMonthDays(yr, mo), [yr, mo]);
+  const DOW = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+  const dispInit = isAdmin && viewStaff ? viewStaff : user.init;
+  const dispAvail = availability[dispInit] || {};
+
+  const getEntry = (init, date) => {
+    const raw = (availability[init] || {})[date];
+    if (!raw) return null;
+    if (typeof raw === "string") {
+      if (raw === "UNAVAIL") return { base: "UNAVAILABLE", slots: [] };
+      if (raw === "AVAIL") return { base: "AVAILABLE", slots: [] };
+      if (raw === "SL") return { base: "SL", slots: [] };
+      return null;
+    }
+    return {
+      base: raw.base || "",
+      slots: Array.isArray(raw.slots) ? raw.slots : []
+    };
+  };
+
+  const setEntry = (init, date, entry) => {
+    setAvailability(prev => ({
+      ...prev,
+      [init]: {
+        ...(prev[init] || {}),
+        [date]: entry
+      }
+    }));
+  };
+
+  const clearEntry = (init, date) => {
+    setAvailability(prev => {
+      const next = { ...(prev[init] || {}) };
+      delete next[date];
+      return {
+        ...prev,
+        [init]: next
+      };
+    });
+  };
+
+  const removeAutoSLLeave = (init, date) => {
+    setLeaveEntries(prev => {
+      const day = prev[date] || [];
+      const filtered = day.filter(
+        e => !(e.init === init && e.type === "SL" && e.autoFromAvailability)
+      );
+      const out = { ...prev };
+      if (filtered.length === 0) delete out[date];
+      else out[date] = filtered;
+      return out;
+    });
+  };
+
+  const addAutoSLLeave = (init, date) => {
+    setLeaveEntries(prev => {
+      const day = prev[date] || [];
+      const alreadyThere = day.some(
+        e => e.init === init && e.type === "SL" && e.autoFromAvailability
+      );
+      if (alreadyThere) return prev;
+
+      return {
+        ...prev,
+        [date]: [
+          ...day,
+          {
+            id: Date.now() + Math.random(),
+            init,
+            type: "SL",
+            note: "Auto-added from availability",
+            autoFromAvailability: true
+          }
+        ]
+      };
+    });
+  };
+
+  const dateHasBuiltRota = (date) => {
+    const rotaDay = rota?.[date] || {};
+    const hasAssignedSlots = Object.values(rotaDay).some(Boolean);
+    const hasLeaveAlready = (leaveEntries?.[date] || []).length > 0;
+    return hasAssignedSlots || hasLeaveAlready;
+  };
+
+  const saveModal = () => {
+    if (!pickModal) return;
+
+    const date = pickModal.date;
+    const init = dispInit;
+    const existing = getEntry(init, date);
+    const wasSL = existing?.base === "SL";
+    const willBeSL = modalDraft.base === "SL";
+
+    if (!modalDraft.base) return;
+
+    if (modalDraft.base === "AVAILABLE" && modalDraft.slots.length === 0) {
+      alert("Please select at least one shift option.");
+      return;
+    }
+
+    // If changing away from old SL, remove auto-SL leave row
+    if (wasSL && !willBeSL) {
+      removeAutoSLLeave(init, date);
+    }
+
+    // SL before rota built -> direct onto builder
+    if (willBeSL && !dateHasBuiltRota(date)) {
+      setEntry(init, date, { base: "SL", slots: [] });
+      addAutoSLLeave(init, date);
+      addAudit(user.init, "Availability", `${init} marked ${date}: SL (auto-added to rota builder)`);
+      setPickModal(null);
+      return;
+    }
+
+    // SL after rota built -> pending request instead
+    if (willBeSL && dateHasBuiltRota(date)) {
+      const alreadyPending = (requests || []).some(
+        r =>
+          r.staffInitials === init &&
+          r.type === "SL" &&
+          r.startDate === date &&
+          r.endDate === date &&
+          r.status === "pending"
+      );
+
+      if (!alreadyPending) {
+        setRequests(prev => [
+          ...prev,
+          {
+            id: Date.now(),
+            staffInitials: init,
+            staffName: staff.find(s => s.init === init)?.name || init,
+            type: "SL",
+            startDate: date,
+            endDate: date,
+            reason: "Submitted from Availability after rota build",
+            status: "pending",
+            adminNote: "",
+            createdAt: fmtISO(new Date())
+          }
+        ]);
+        addAudit(user.init, "SL Request", `${init} submitted SL request for ${date} (rota already built)`);
+      }
+
+      alert("This date already has rota/leave built. SL has been submitted as a request for approval.");
+      setPickModal(null);
+      return;
+    }
+
+    // Normal AVAILABLE / UNAVAILABLE save
+    setEntry(init, date, {
+      base: modalDraft.base,
+      slots: modalDraft.base === "AVAILABLE" ? modalDraft.slots : []
+    });
+
+    addAudit(
+      user.init,
+      "Availability",
+      `${init} marked ${date}: ${modalDraft.base}${modalDraft.base === "AVAILABLE" ? ` [${modalDraft.slots.join(", ")}]` : ""}`
+    );
+
+    setPickModal(null);
+  };
+
+  const clearStatus = (date) => {
+    const init = dispInit;
+    const existing = getEntry(init, date);
+
+    if (existing?.base === "SL") {
+      removeAutoSLLeave(init, date);
+    }
+
+    clearEntry(init, date);
+    addAudit(user.init, "Availability", `${init} cleared ${date}`);
+    setPickModal(null);
+  };
+
+  const toggleQStatus = (qid, status) => {
+    setQuarterStatus(prev => ({ ...prev, [qid]: status }));
+    addAudit(user.init, "Quarter Status", `${qid} set to ${status}`);
+  };
+
+  const openDateModal = (date) => {
+    const current = getEntry(dispInit, date);
+    setModalDraft(
+      current
+        ? { base: current.base || "", slots: current.slots || [] }
+        : { base: "", slots: [] }
+    );
+    setPickModal({ date });
+  };
+
+  const getAggregate = (date) => {
+    const counts = {};
+    staff
+      .filter(s => s.role === "staff" && s.active)
+      .forEach(s => {
+        const entry = getEntry(s.init, date);
+        if (entry?.base) counts[entry.base] = (counts[entry.base] || 0) + 1;
+      });
+    return counts;
+  };
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 8, marginBottom: 18, flexWrap: "wrap" }}>
+        {QUARTERS.map(qv => {
+          const st = quarterStatus[qv.id] || "closed";
+          return (
+            <button
+              key={qv.id}
+              onClick={() => setSelQ(qv.id)}
+              className={`btn${selQ === qv.id ? " bp" : " bs"}`}
+            >
+              {qv.id} <span className={`badge b-${st}`} style={{ marginLeft: 5 }}>{st}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {isAdmin ? (
+        <div>
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div className="ch">
+              <span className="ct">Quarter Management — {q?.label}</span>
+            </div>
+            <div className="cb">
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                <span style={{ fontSize: 12.5, color: "#374151", fontWeight: 600 }}>Status:</span>
+                <span className={`badge b-${quarterStatus[selQ] || "closed"}`} style={{ fontSize: 11 }}>
+                  {quarterStatus[selQ] || "closed"}
+                </span>
+                <div style={{ marginLeft: 8, display: "flex", gap: 7 }}>
+                  <button className="btn bp bsm" onClick={() => toggleQStatus(selQ, "open")} disabled={quarterStatus[selQ] === "open"}>Open for Staff</button>
+                  <button className="btn bw bsm" onClick={() => toggleQStatus(selQ, "closed")} disabled={quarterStatus[selQ] === "closed"}>Close</button>
+                  <button className="btn bd bsm" onClick={() => toggleQStatus(selQ, "locked")} disabled={quarterStatus[selQ] === "locked"}>Lock</button>
+                </div>
+              </div>
+              {quarterStatus[selQ] === "open" && (
+                <div className="al al-s" style={{ marginTop: 12, marginBottom: 0 }}>
+                  ✓ Staff can currently view and submit availability for {selQ}.
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div className="ch">
+              <span className="ct">Submission Progress — {q?.label}</span>
+            </div>
+            <div className="cb">
+              {staff.filter(s => s.role === "staff" && s.active).map(s => {
+                const av = availability[s.init] || {};
+                const cnt = qDates.filter(d => !!av[d]).length;
+                const p = qDates.length > 0 ? Math.round((cnt / qDates.length) * 100) : 0;
+                return (
+                  <div
+                    key={s.id}
+                    style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8, cursor: "pointer" }}
+                    onClick={() => setViewStaff(viewStaff === s.init ? null : s.init)}
+                  >
+                    <div style={{ fontSize: 12, fontWeight: 600, width: 170, flexShrink: 0, color: viewStaff === s.init ? "#10b981" : "#374151" }}>
+                      {s.name}
+                    </div>
+                    <div className="prog-bar"><div className="prog-fill" style={{ width: `${p}%` }} /></div>
+                    <div style={{ fontSize: 11, color: "#64748b", width: 40, textAlign: "right", flexShrink: 0 }}>
+                      {cnt}/{qDates.length}
+                    </div>
+                    {viewStaff === s.init && <span style={{ fontSize: 10, color: "#10b981", fontWeight: 700 }}>viewing ↓</span>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {viewStaff && (
+            <div className="al al-i" style={{ marginBottom: 12 }}>
+              Viewing availability for <strong>{staff.find(s => s.init === viewStaff)?.name}</strong>. Click a date to edit on their behalf.
+            </div>
+          )}
+        </div>
+      ) : (
+        quarterStatus[selQ] === "open" ? (
+          <div>
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div className="ch">
+                <span className="ct">{q?.label}</span>
+                <span style={{ fontSize: 11, color: "#64748b" }}>{fmtDisp(q?.start)} → {fmtDisp(q?.end)}</span>
+              </div>
+              <div className="cb">
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 12, color: "#374151", marginBottom: 5 }}>
+                    Your progress: <strong>{submittedCount}/{qDates.length} days</strong> marked ({pct}%)
+                  </div>
+                  <div className="prog-bar" style={{ height: 8 }}>
+                    <div className="prog-fill" style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+                  <span className="chip" style={{ background: "#d1fae5", color: "#065f46", borderColor: "#065f46", borderWidth: 1, fontSize: 10.5 }}>✓ Available + choose slots</span>
+                  <span className="chip" style={{ background: "#fee2e2", color: "#7f1d1d", borderColor: "#7f1d1d", borderWidth: 1, fontSize: 10.5 }}>✗ Unavailable</span>
+                  <span className="chip" style={{ background: "#f1f5f9", color: "#334155", borderColor: "#334155", borderWidth: 1, fontSize: 10.5 }}>SL Study Leave</span>
+                  <span className="chip" style={{ background: "#f8fafc", color: "#94a3b8", borderColor: "#e2e8f0", fontSize: 10.5 }}>⬚ Not marked</span>
+                </div>
+
+                <div style={{ fontSize: 11.5, color: "#64748b" }}>
+                  Available days now require at least <strong>one shift option</strong> to be selected.
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="al al-w">
+            ⏳ Availability for <strong>{q?.label}</strong> is not yet open. Your admin will open it when ready.
+          </div>
+        )
+      )}
+
+      {(isAdmin || quarterStatus[selQ] === "open") && (
+        <>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+            <div className="cal-nav">
+              <button onClick={() => { const d = new Date(viewMonth); d.setMonth(d.getMonth() - 1); setVM(d); }}>‹</button>
+              <div className="cal-mo">{viewMonth.toLocaleDateString("en-GB", { month: "long", year: "numeric" })}</div>
+              <button onClick={() => { const d = new Date(viewMonth); d.setMonth(d.getMonth() + 1); setVM(d); }}>›</button>
+            </div>
+            <span style={{ fontSize: 11.5, color: "#94a3b8" }}>Click a date to mark availability</span>
+          </div>
+
+          <div className="card">
+            <div className="av-cal">
+              {DOW.map(d => <div key={d} className="av-dow">{d}</div>)}
+              {calDays.map(({ date, inMonth }) => {
+                const isBH = !!BH[date];
+                const inQ = q && date >= q.start && date <= q.end;
+                const today_ = date === fmtISO(new Date());
+                const entry = getEntry(dispInit, date);
+                const clickable = inMonth && inQ;
+                const agg = isAdmin && !viewStaff ? getAggregate(date) : null;
+
+                const bg =
+                  entry?.base === "AVAILABLE" ? "#d1fae5" :
+                  entry?.base === "UNAVAILABLE" ? "#fee2e2" :
+                  entry?.base === "SL" ? "#f1f5f9" :
+                  "";
+
+                return (
+                  <div
+                    key={date}
+                    className={`av-cell${!inMonth ? " om" : ""}${!inQ && inMonth ? " out-range" : ""}${isBH ? " bh" : ""}`}
+                    style={{ background: bg, cursor: clickable ? "pointer" : "default" }}
+                    onClick={() => clickable && openDateModal(date)}
+                  >
+                    <div className={`av-date${!inMonth ? " om" : ""}`}>
+                      <span style={today_ ? { background: "#10b981", color: "white", borderRadius: "50%", width: 18, height: 18, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 9.5 } : {}}>
+                        {new Date(date + "T00:00:00").getDate()}
+                      </span>
+                      {isBH && <span style={{ fontSize: 7.5, background: "#fde047", color: "#713f12", padding: "0 2px", borderRadius: 2, marginLeft: 2 }}>BH</span>}
+                    </div>
+
+                    {clickable && (
+                      entry ? (
+                        <div>
+                          <div className="av-status" style={{
+                            background:
+                              entry.base === "AVAILABLE" ? "#d1fae5" :
+                              entry.base === "UNAVAILABLE" ? "#fee2e2" :
+                              "#f1f5f9",
+                            color:
+                              entry.base === "AVAILABLE" ? "#065f46" :
+                              entry.base === "UNAVAILABLE" ? "#7f1d1d" :
+                              "#334155"
+                          }}>
+                            {entry.base === "AVAILABLE" ? "Avail" : entry.base === "UNAVAILABLE" ? "Unavail" : "SL"}
+                          </div>
+
+                          {entry.base === "AVAILABLE" && entry.slots.length > 0 && (
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 2, marginTop: 3 }}>
+                              {entry.slots.slice(0, 3).map(sk => (
+                                <span
+                                  key={sk}
+                                  style={{
+                                    fontSize: 8,
+                                    background: "#f8fafc",
+                                    color: "#334155",
+                                    padding: "1px 3px",
+                                    borderRadius: 3,
+                                    fontWeight: 700,
+                                    border: "1px solid #cbd5e1"
+                                  }}
+                                >
+                                  {sk}
+                                </span>
+                              ))}
+                              {entry.slots.length > 3 && (
+                                <span style={{ fontSize: 8, color: "#64748b" }}>+{entry.slots.length - 3}</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ) : isAdmin && agg && Object.keys(agg).length > 0 ? (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 2 }}>
+                          {Object.entries(agg).map(([k, c]) => (
+                            <span
+                              key={k}
+                              style={{
+                                fontSize: 8,
+                                background: k === "AVAILABLE" ? "#d1fae5" : k === "UNAVAILABLE" ? "#fee2e2" : "#f1f5f9",
+                                color: k === "AVAILABLE" ? "#065f46" : k === "UNAVAILABLE" ? "#7f1d1d" : "#334155",
+                                padding: "1px 3px",
+                                borderRadius: 3,
+                                fontWeight: 700
+                              }}
+                            >
+                              {k === "AVAILABLE" ? "✓" : k === "UNAVAILABLE" ? "✗" : "SL"}{c}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="av-none">{isAdmin ? "—" : "+ mark"}</div>
+                      )
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      )}
+
+      {pickModal && (() => {
+        const daySlots = getSlotsForDay(pickModal.date);
+        const canSave =
+          modalDraft.base === "UNAVAILABLE" ||
+          modalDraft.base === "SL" ||
+          (modalDraft.base === "AVAILABLE" && modalDraft.slots.length > 0);
+
+        return (
+          <Modal
+            title={`${getDayName(pickModal.date)}, ${fmtDisp(pickModal.date)}`}
+            onClose={() => setPickModal(null)}
+            footer={
+              <>
+                <button className="btn bs" onClick={() => clearStatus(pickModal.date)}>Clear</button>
+                <button className="btn bs" onClick={() => setPickModal(null)}>Cancel</button>
+                <button className="btn bp" onClick={saveModal} disabled={!canSave}>Save</button>
+              </>
+            }
+          >
+            <p style={{ fontSize: 12.5, color: "#64748b", marginBottom: 14 }}>
+              {isAdmin && viewStaff
+                ? `Marking for: ${staff.find(s => s.init === viewStaff)?.name}`
+                : "Set your availability for this day:"}
+            </p>
+
+            {BH[pickModal.date] && (
+              <div className="al al-w" style={{ marginBottom: 12 }}>
+                🎉 {BH[pickModal.date]}
+              </div>
+            )}
+
+            {dateHasBuiltRota(pickModal.date) && (
+              <div className="al al-i" style={{ marginBottom: 12 }}>
+                This date already has rota/leave built. New <strong>SL</strong> on this date will be submitted as a request for approval.
+              </div>
+            )}
+
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 8 }}>
+                Day status
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+                {[
+                  { key: "AVAILABLE", label: "Available", icon: "✓", bg: "#d1fae5", fg: "#065f46" },
+                  { key: "UNAVAILABLE", label: "Unavailable", icon: "✗", bg: "#fee2e2", fg: "#7f1d1d" },
+                  { key: "SL", label: "Study Leave", icon: "SL", bg: "#f1f5f9", fg: "#334155" }
+                ].map(opt => {
+                  const cur = modalDraft.base === opt.key;
+                  return (
+                    <button
+                      key={opt.key}
+                      onClick={() => setModalDraft({ base: opt.key, slots: [] })}
+                      style={{
+                        padding: "12px 8px",
+                        border: `2px solid ${cur ? opt.fg : opt.fg + "44"}`,
+                        borderRadius: 9,
+                        background: opt.bg,
+                        color: opt.fg,
+                        fontWeight: 700,
+                        fontSize: 12.5,
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 8,
+                        boxShadow: cur ? `0 0 0 3px ${opt.fg}33` : "none"
+                      }}
+                    >
+                      <span style={{ fontSize: 16 }}>{opt.icon}</span>
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {modalDraft.base === "AVAILABLE" && (
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 8 }}>
+                  Shift options
+                </div>
+
+                <div className="al al-i" style={{ marginBottom: 10 }}>
+                  Select one or more shifts. Nothing is pre-selected.
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
+                  {daySlots.map(sl => {
+                    const selected = modalDraft.slots.includes(sl.key);
+                    return (
+                      <button
+                        key={sl.key}
+                        onClick={() =>
+                          setModalDraft(prev => ({
+                            ...prev,
+                            slots: selected
+                              ? prev.slots.filter(x => x !== sl.key)
+                              : [...prev.slots, sl.key]
+                          }))
+                        }
+                        style={{
+                          padding: "10px 8px",
+                          border: `2px solid ${selected ? sl.bd : "#e2e8f0"}`,
+                          borderRadius: 8,
+                          background: selected ? sl.bg : "white",
+                          color: selected ? sl.fg : "#374151",
+                          fontWeight: 700,
+                          fontSize: 11.5,
+                          cursor: "pointer"
+                        }}
+                      >
+                        <div>{sl.key}</div>
+                        <div style={{ fontSize: 9, opacity: 0.8, marginTop: 2 }}>{sl.label}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </Modal>
+        );
+      })()}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ROTA BUILDER — slot-based, rows=dates
+// ═══════════════════════════════════════════════════════════════
+
+function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,setDayNotes,availability,addAudit,currentUser}) {
+  const [weekAnchor,setWA]=useState("2026-08-10");
+  const [assignModal,setAM]=useState(null); // {date, slotKey}
+  const [leaveModal,setLM]=useState(null);  // {date}
+  const [noteModal,setNM]=useState(null);
+  const [noteText,setNT]=useState("");
+  const [leaveForm,setLF]=useState({init:"",type:"AL",note:""});
+  const today=fmtISO(new Date());
+
+  const weekDates=useMemo(()=>getWeekDates(weekAnchor),[weekAnchor]);
+  const activeStaff=staff.filter(s=>s.role==="staff"&&s.active);
+
+  const navWeek=delta=>{const d=new Date(weekAnchor+"T00:00:00");d.setDate(d.getDate()+delta*7);setWA(fmtISO(d));};
+
+  const assignSlot=(date,slotKey,init)=>{
+    setRota(p=>({...p,[date]:{...(p[date]||{}),[slotKey]:init||null}}));
+    addAudit(currentUser.init,"Slot Assigned",`${slotKey} on ${date} → ${init||"cleared"}`);
+    setAM(null);
+  };
+
+  const addLeave=()=>{
+    if(!leaveForm.init||!leaveForm.type) return;
+    setLeaveEntries(p=>({...p,[leaveModal.date]:[...(p[leaveModal.date]||[]),{...leaveForm,id:Date.now()}]}));
+    addAudit(currentUser.init,"Leave Added",`${leaveForm.init} ${LEAVE_T[leaveForm.type]?.label} on ${leaveModal.date}`);
+    setLM(null); setLF({init:"",type:"AL",note:""});
+  };
+  const removeLeave=(date,id)=>{
+    setLeaveEntries(p=>({...p,[date]:(p[date]||[]).filter(x=>x.id!==id)}));
+  };
+
+  const saveNote=()=>{
+    noteText.trim()?setDayNotes(p=>({...p,[noteModal]:noteText.trim()})):setDayNotes(p=>{const n={...p};delete n[noteModal];return n;});
+    setNM(null);
+  };
+
+  // For a given date+slot, get assigned staff
+  const getAssigned=(date,slotKey)=>(rota[date]||{})[slotKey];
+
+  // Get availability status of a staff member on a date
+  const getAvail=(init,date)=>(availability[init]||{})[date];
+
+  // Warn: assigned staff is unavailable
+  const hasConflict=(init,date)=>getAvail(init,date)==="UNAVAIL";
+
+  return (
+    <div>
+      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:16,flexWrap:"wrap"}}>
+        <div className="cal-nav">
+          <button onClick={()=>navWeek(-1)}>‹ Prev</button>
+          <div className="cal-mo" style={{minWidth:"auto",padding:"0 8px"}}>
+            Week of {fmtShort(weekDates[0])} – {fmtShort(weekDates[6])}
+          </div>
+          <button onClick={()=>navWeek(1)}>Next ›</button>
+        </div>
+        <div className="al al-i" style={{margin:0,padding:"6px 11px",fontSize:11.5}}>
+          💡 Click a slot cell to assign · Click a date header to add a note · <strong>Red border</strong> = availability conflict
+        </div>
+      </div>
+
+      <div className="bld-wrap">
+        <table className="bld-tbl">
+          <thead>
+            <tr>
+              <th className="bld-date-col" style={{background:"#f8fafc",position:"sticky",left:0,zIndex:5}}>Date</th>
+              {/* Group headers */}
+              {SLOTS.map(sl=>(
+                <th key={sl.key} style={{background:sl.bg,color:sl.fg,borderColor:sl.bd,padding:"4px 3px",minWidth:44}}>
+                  <div style={{fontSize:8.5,fontWeight:800}}>{sl.key}</div>
+                  {sl.hdr&&<div style={{fontSize:7,opacity:.8,marginTop:1}}>{sl.hdr}</div>}
+                </th>
+              ))}
+              <th style={{background:"#fef9c3",color:"#713f12",fontSize:9,fontWeight:700,minWidth:120,padding:"4px 6px"}}>Leave / Away</th>
+            </tr>
+          </thead>
+          <tbody>
+            {weekDates.map(date=>{
+              const we=isWeekend(date),isBH=!!BH[date],isToday=date===today;
+              const dateSlots=getSlotsForDay(date);
+              const dayLeave=leaveEntries[date]||[];
+              const note=dayNotes[date];
+              const conflicts=SLOTS.map(sl=>{const init=getAssigned(date,sl.key);return init&&hasConflict(init,date)?init:null;}).filter(Boolean);
+              return (
+                <tr key={date}>
+                  <td className={`bld-date-col${we?" we-row":""}${isBH?" bh-row":""}${isToday?" td-row":""}`}
+                    style={{cursor:"pointer"}} onClick={()=>{setNM(date);setNT(dayNotes[date]||"");}}>
+                    <div style={{fontSize:12,fontWeight:700,color:isToday?"#065f46":we?"#6d28d9":"#0d1b2a"}}>{getDayName(date)} {new Date(date+"T00:00:00").getDate()}</div>
+                    <div style={{fontSize:9.5,color:"#94a3b8"}}>{new Date(date+"T00:00:00").toLocaleDateString("en-GB",{month:"short",year:"numeric"})}</div>
+                    {isBH&&<div style={{fontSize:8,background:"#fde047",color:"#713f12",padding:"1px 4px",borderRadius:2,marginTop:2}}>{BH[date]}</div>}
+                    {note&&<div style={{fontSize:8,color:"#92400e",marginTop:2}}>📌 {note.slice(0,20)}</div>}
+                    {conflicts.length>0&&<div style={{fontSize:8,color:"#ef4444",fontWeight:700,marginTop:2}}>⚠️ Conflict</div>}
+                  </td>
+                  {SLOTS.map(sl=>{
+                    const applicable=dateSlots.some(s=>s.key===sl.key);
+                    const init=getAssigned(date,sl.key);
+                    const av=init?getAvail(init,date):null;
+                    const conflict=init&&av==="UNAVAIL";
+                    const pref=init&&av&&av!=="UNAVAIL"&&av!=="AVAIL"?AVAIL[av]:null;
+                    if(!applicable) return <td key={sl.key} className="slot-cell disabled"><span style={{fontSize:9,color:"#e2e8f0"}}>—</span></td>;
+                    return (
+                      <td key={sl.key} className="slot-cell" style={{border:conflict?"2px solid #ef4444":"",background:init?sl.bg+"80":"white"}}
+                        onClick={()=>setAM({date,slotKey:sl.key})}>
+                        {init?(
+                          <span className="slot-chip" style={{background:sl.bg,color:conflict?"#ef4444":sl.fg,borderColor:conflict?"#ef4444":sl.bd,border:conflict?"2px solid #ef4444":"1px solid "+sl.bd}}>
+                            {init.slice(0,4)}
+                            {pref&&<span className="avail-dot" style={{background:AVAIL[av]?.fg||"#94a3b8"}} title={AVAIL[av]?.label}/>}
+                          </span>
+                        ):<span className="slot-empty"/>}
+                      </td>
+                    );
+                  })}
+                  <td style={{padding:"4px 6px",minWidth:120,verticalAlign:"top"}}>
+                    {dayLeave.map(e=>{const lt=LEAVE_T[e.type];return lt?(
+                      <div key={e.id} className="leave-row" style={{background:lt.bg,color:lt.fg,marginBottom:2}}>
+                        <span>{e.init}</span><span style={{fontSize:8.5}}>{lt.abbr}</span>
+                        <span style={{cursor:"pointer",fontSize:10,opacity:.7}} onClick={()=>removeLeave(date,e.id)}>×</span>
+                      </div>
+                    ):null;})}
+                    <button className="btn bs bsm" style={{fontSize:9.5,padding:"2px 7px",marginTop:dayLeave.length>0?3:0}} onClick={()=>{setLM({date});setLF({init:"",type:"AL",note:""});}}>+ Leave</button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Assign slot modal */}
+      {assignModal&&(()=>{
+        const sl=SLOTS.find(s=>s.key===assignModal.slotKey);
+        const cur=getAssigned(assignModal.date,assignModal.slotKey);
+        const daySlots=getSlotsForDay(assignModal.date);
+        const alreadyAssigned=new Set(Object.values(rota[assignModal.date]||{}).filter(Boolean));
+        return (
+          <Modal title={`Assign — ${sl?.label} · ${getDayName(assignModal.date)} ${fmtDisp(assignModal.date)}`} onClose={()=>setAM(null)}
+            footer={<><button className="btn bs" onClick={()=>setAM(null)}>Cancel</button>{cur&&<button className="btn bd" onClick={()=>assignSlot(assignModal.date,assignModal.slotKey,null)}>Clear</button>}</>}>
+            {BH[assignModal.date]&&<div className="al al-w" style={{marginBottom:12}}>🎉 Bank Holiday: {BH[assignModal.date]}</div>}
+            {cur&&<div className="al al-i" style={{marginBottom:12}}>Currently: <strong>{staff.find(s=>s.init===cur)?.name||cur}</strong></div>}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7}}>
+              {activeStaff.map(s=>{
+                const av=getAvail(s.init,assignModal.date);
+                const avInfo=av?AVAIL[av]:null;
+                const busy=alreadyAssigned.has(s.init)&&s.init!==cur;
+                const isSelected=s.init===cur;
+                return (
+                  <button key={s.id} onClick={()=>!busy&&assignSlot(assignModal.date,assignModal.slotKey,s.init)}
+                    style={{padding:"9px 10px",border:`2px solid ${isSelected?"#10b981":av==="UNAVAIL"?"#ef4444":busy?"#e2e8f0":"#e2e8f0"}`,borderRadius:8,background:isSelected?"#f0fdf4":av==="UNAVAIL"?"#fff5f5":busy?"#f9f9f9":"white",cursor:busy?"not-allowed":"pointer",opacity:busy?0.5:1,textAlign:"left",transition:"all .1s"}}>
+                    <div style={{fontSize:12,fontWeight:700,color:isSelected?"#065f46":"#0d1b2a"}}>{s.name.split(" ")[0]} <span style={{opacity:.6}}>{s.name.split(" ")[1]?.[0]}.</span></div>
+                    <div style={{fontSize:10,color:"#64748b",marginTop:2,display:"flex",alignItems:"center",gap:5}}>
+                      {s.grade}
+                      {avInfo&&<span style={{padding:"1px 5px",borderRadius:3,background:avInfo.bg,color:avInfo.fg,fontWeight:700,fontSize:9}}>{avInfo.icon} {avInfo.short}</span>}
+                      {busy&&<span style={{fontSize:9,color:"#94a3b8"}}>already assigned</span>}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </Modal>
+        );
+      })()}
+
+      {/* Leave modal */}
+      {leaveModal&&(
+        <Modal title={`Add Leave — ${getDayName(leaveModal.date)} ${fmtDisp(leaveModal.date)}`} onClose={()=>setLM(null)}
+          footer={<><button className="btn bs" onClick={()=>setLM(null)}>Cancel</button><button className="btn bp" onClick={addLeave}>Add</button></>}>
+          <div className="fg"><label className="fl">Staff Member</label>
+            <select className="fi" value={leaveForm.init} onChange={e=>setLF(f=>({...f,init:e.target.value}))}>
+              <option value="">Select staff...</option>{activeStaff.map(s=><option key={s.id} value={s.init}>{s.name}</option>)}
+            </select>
+          </div>
+          <div className="fg"><label className="fl">Leave Type</label>
+            <select className="fi" value={leaveForm.type} onChange={e=>setLF(f=>({...f,type:e.target.value}))}>
+              {Object.entries(LEAVE_T).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+            </select>
+          </div>
+          <div className="fg" style={{marginBottom:0}}><label className="fl">Note (optional)</label><input className="fi" value={leaveForm.note} onChange={e=>setLF(f=>({...f,note:e.target.value}))}/></div>
+        </Modal>
+      )}
+
+      {/* Note modal */}
+      {noteModal&&(
+        <Modal title={`📌 Day Note — ${fmtDisp(noteModal)}`} onClose={()=>setNM(null)}
+          footer={<><button className="btn bs" onClick={()=>setNM(null)}>Cancel</button><button className="btn bp" onClick={saveNote}>Save</button></>}>
+          <textarea className="fta" value={noteText} onChange={e=>setNT(e.target.value)} placeholder="e.g. Short staffed — cover needed" style={{minHeight:80}}/>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MY SHIFTS
+// ═══════════════════════════════════════════════════════════════
+
+function MyShifts({user,rota,leaveEntries,dayNotes}) {
+  const today=fmtISO(new Date());
+  const mySlots=useMemo(()=>{
+    const res=[];
+    Object.entries(rota).forEach(([d,slots])=>{
+      Object.entries(slots).forEach(([sk,init])=>{if(init===user.init){const sl=SLOTS.find(s=>s.key===sk);if(sl)res.push({date:d,slot:sl});}});
+    });
+    Object.entries(leaveEntries).forEach(([d,entries])=>{
+      entries.forEach(e=>{if(e.init===user.init){const lt=LEAVE_T[e.type];if(lt)res.push({date:d,slot:{...lt,key:e.type}});}});
+    });
+    return res.sort((a,b)=>a.date.localeCompare(b.date));
+  },[rota,leaveEntries,user]);
+
+  const upcoming=mySlots.filter(x=>x.date>=today), past=mySlots.filter(x=>x.date<today);
+  const counts=mySlots.reduce((a,x)=>{a[x.slot.key]=(a[x.slot.key]||0)+1;return a;},{});
+
+  return (
+    <div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:13,marginBottom:18}}>
+        <div className="sc" style={{"--ac":"#10b981"}}><div className="sv">{mySlots.length}</div><div className="sl">Total Shifts</div></div>
+        <div className="sc" style={{"--ac":"#6366f1"}}><div className="sv">{upcoming.length}</div><div className="sl">Upcoming</div></div>
+        <div className="sc" style={{"--ac":"#f59e0b"}}><div className="sv">{past.length}</div><div className="sl">Completed</div></div>
+      </div>
+      <div className="dg2">
+        <div className="card">
+          <div className="ch"><span className="ct">Upcoming Shifts</span></div>
+          <div className="cb" style={{maxHeight:380,overflowY:"auto"}}>
+            {upcoming.length===0?<p style={{color:"#94a3b8",fontSize:12}}>No upcoming shifts assigned.</p>
+              :upcoming.map((x,i)=>{const dt=new Date(x.date+"T00:00:00"),note=dayNotes[x.date];return(
+                <div key={i} style={{display:"flex",alignItems:"center",gap:11,padding:"8px 0",borderBottom:"1px solid #f1f5f9"}}>
+                  <div style={{textAlign:"center",width:36,flexShrink:0}}>
+                    <div style={{fontSize:17,fontWeight:800,fontFamily:"Syne,sans-serif",color:"#0d1b2a"}}>{dt.getDate()}</div>
+                    <div style={{fontSize:9,color:"#64748b"}}>{dt.toLocaleDateString("en-GB",{month:"short"})}</div>
+                  </div>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:12,fontWeight:600}}>{dt.toLocaleDateString("en-GB",{weekday:"long"})}</div>
+                    <span className="chip" style={{background:x.slot.bg,color:x.slot.fg,borderColor:x.slot.bd,fontSize:10.5}}>{x.slot.label}</span>
+                    {note&&<div style={{fontSize:10,color:"#92400e",marginTop:2}}>📌 {note}</div>}
+                  </div>
+                </div>
+              );})}
+          </div>
+        </div>
+        <div className="card">
+          <div className="ch"><span className="ct">Shift Breakdown</span></div>
+          <div className="cb">
+            {mySlots.length===0?<p style={{color:"#94a3b8",fontSize:12}}>No shifts assigned yet.</p>
+              :Object.entries(counts).map(([k,c])=>{const sl=SLOTS.find(s=>s.key===k)||LEAVE_T[k];if(!sl)return null;const tot=mySlots.length;return(
+                <div key={k} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:"1px solid #f1f5f9"}}>
+                  <span className="chip" style={{background:sl.bg,color:sl.fg,borderColor:sl.bd,fontSize:10,width:85,textAlign:"center"}}>{sl.label||k}</span>
+                  <div className="rt"><div className="rf" style={{width:`${(c/tot)*100}%`,background:sl.fg}}/></div>
+                  <span style={{fontSize:11,color:"#64748b",width:22,textAlign:"right"}}>{c}</span>
+                </div>
+              );})}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// REQUESTS
+// ═══════════════════════════════════════════════════════════════
+
+function RequestsView({user,requests,setRequests,addAudit}) {
+  const isAdmin=user.role==="admin";
+  const [showForm,setSF]=useState(false);
+  const [form,setForm]=useState({type:"AL",startDate:"",endDate:"",reason:""});
+  const [actM,setActM]=useState(null); const [note,setNote]=useState("");
+  const [filter,setFilter]=useState("all");
+
+  const submit=()=>{
+    if(!form.startDate||!form.endDate) return;
+    const r={id:Date.now(),staffInitials:user.init,staffName:user.name,type:form.type,startDate:form.startDate,endDate:form.endDate,reason:form.reason,status:"pending",adminNote:"",createdAt:fmtISO(new Date())};
+    setRequests(p=>[...p,r]);addAudit(user.init,"Leave Request",`${user.name} submitted ${LEAVE_T[form.type]?.label}`);
+    setForm({type:"AL",startDate:"",endDate:"",reason:""});setSF(false);
+  };
+  const act=action=>{setRequests(p=>p.map(r=>r.id===actM.id?{...r,status:action,adminNote:note}:r));addAudit(user.init,`Request ${action}`,`${LEAVE_T[actM.type]?.label} for ${actM.staffName}`);setActM(null);setNote("");};
+
+  const visible=(isAdmin?requests:requests.filter(r=>r.staffInitials===user.init)).filter(r=>filter==="all"||r.status===filter);
+
+  return (
+    <div>
+      {!isAdmin&&<div style={{marginBottom:14}}><button className="btn bp" onClick={()=>setSF(!showForm)}>{showForm?"✕ Cancel":"＋ New Request"}</button></div>}
+      {showForm&&(
+        <div className="card" style={{marginBottom:16}}>
+          <div className="ch"><span className="ct">Submit Request</span></div>
+          <div className="cb">
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
+              <div className="fg" style={{marginBottom:0}}><label className="fl">Type</label>
+                <select className="fi" value={form.type} onChange={e=>setForm(f=>({...f,type:e.target.value}))}>
+                  {Object.entries(LEAVE_T).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+                </select>
+              </div>
+              <div className="fg" style={{marginBottom:0}}><label className="fl">Start</label><input type="date" className="fi" value={form.startDate} onChange={e=>setForm(f=>({...f,startDate:e.target.value}))}/></div>
+              <div className="fg" style={{marginBottom:0}}><label className="fl">End</label><input type="date" className="fi" value={form.endDate} onChange={e=>setForm(f=>({...f,endDate:e.target.value}))}/></div>
+            </div>
+            <div className="fg" style={{marginTop:12,marginBottom:0}}><label className="fl">Notes</label><textarea className="fta" value={form.reason} onChange={e=>setForm(f=>({...f,reason:e.target.value}))}/></div>
+            <div style={{marginTop:12}}><button className="btn bp" onClick={submit}>Submit</button></div>
+          </div>
+        </div>
+      )}
+      <div className="card">
+        <div className="ch">
+          <span className="ct">{isAdmin?"All Leave Requests":"My Requests"}</span>
+          <div style={{display:"flex",gap:5}}>
+            {["all","pending","approved","rejected"].map(f=><button key={f} className={`btn bsm${filter===f?" bp":""}`} onClick={()=>setFilter(f)} style={{textTransform:"capitalize"}}>{f}</button>)}
+          </div>
+        </div>
+        <table className="tbl">
+          <thead><tr>{isAdmin&&<th>Staff</th>}<th>Type</th><th>From</th><th>To</th><th>Reason</th><th>Status</th>{isAdmin&&<th>Actions</th>}</tr></thead>
+          <tbody>
+            {visible.length===0?<tr><td colSpan={isAdmin?7:6} style={{textAlign:"center",color:"#94a3b8",padding:24}}>No requests found.</td></tr>
+              :visible.map(r=>{const lt=LEAVE_T[r.type];return(
+                <tr key={r.id}>
+                  {isAdmin&&<td style={{fontWeight:600}}>{r.staffName}</td>}
+                  <td>{lt&&<span className="chip" style={{background:lt.bg,color:lt.fg,borderColor:lt.bd,fontSize:10.5}}>{lt.label}</span>}</td>
+                  <td>{fmtDisp(r.startDate)}</td><td>{fmtDisp(r.endDate)}</td>
+                  <td style={{maxWidth:140,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"#64748b"}}>{r.reason||"—"}</td>
+                  <td><span className={`badge b-${r.status}`}>{r.status}</span></td>
+                  {isAdmin&&<td>{r.status==="pending"?<div style={{display:"flex",gap:5}}><button className="btn bp bsm" onClick={()=>{setActM(r);setNote("");}}>✓</button><button className="btn bd bsm" onClick={()=>{setActM({...r,_rej:true});setNote("");}}>✗</button></div>:<span style={{fontSize:11,color:"#94a3b8"}}>{r.adminNote||"—"}</span>}</td>}
+                </tr>
+              );})}
+          </tbody>
+        </table>
+      </div>
+      {actM&&(
+        <Modal title={actM._rej?"Reject Request":"Approve Request"} onClose={()=>setActM(null)}
+          footer={<><button className="btn bs" onClick={()=>setActM(null)}>Cancel</button><button className={`btn ${actM._rej?"bd":"bp"}`} onClick={()=>act(actM._rej?"rejected":"approved")}>{actM._rej?"Reject":"Approve"}</button></>}>
+          <p style={{fontSize:12.5,color:"#374151",marginBottom:13}}><strong>{actM.staffName}</strong> — {LEAVE_T[actM.type]?.label} ({fmtDisp(actM.startDate)} → {fmtDisp(actM.endDate)})</p>
+          <div className="fg" style={{marginBottom:0}}><label className="fl">Note for staff</label><textarea className="fta" value={note} onChange={e=>setNote(e.target.value)} placeholder="Optional note..."/></div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// STAFF MANAGEMENT
+// ═══════════════════════════════════════════════════════════════
+
+function StaffMgmt({staff,setStaff,addAudit,currentUser}) {
+  const [modal,setModal]=useState(null); const [form,setForm]=useState({});
+  const [pwModal,setPwM]=useState(null); const [newPw,setNPw]=useState("");
+  const save=()=>{modal==="add"?setStaff(p=>[...p,{...form,id:Date.now()}]):setStaff(p=>p.map(s=>s.id===modal.id?{...s,...form}:s));addAudit(currentUser.init,"Staff",`${form.name} ${modal==="add"?"added":"updated"}`);setModal(null);};
+  const show=staff.filter(s=>s.role!=="admin");
+  return (
+    <div>
+      <div style={{display:"flex",gap:10,marginBottom:14}}><button className="btn bp" onClick={()=>{setForm({name:"",init:"",grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true});setModal("add");}}>＋ Add Staff</button></div>
+      <div className="card">
+        <table className="tbl">
+          <thead><tr><th>Name</th><th>Init</th><th>Grade</th><th>Hrs</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody>{show.map(s=>(
+            <tr key={s.id}>
+              <td style={{fontWeight:600}}>{s.name}</td>
+              <td><code style={{background:"#f1f5f9",padding:"1px 5px",borderRadius:4,fontSize:11}}>{s.init}</code></td>
+              <td>{s.grade}</td><td>{s.hrs}</td>
+              <td><span className={`badge ${s.active?"b-approved":"b-rejected"}`}>{s.active?"Active":"Inactive"}</span></td>
+              <td><div style={{display:"flex",gap:5}}>
+                <button className="btn bs bsm" onClick={()=>{setForm({...s});setModal(s);}}>Edit</button>
+                <button className="btn bs bsm" onClick={()=>{setPwM(s);setNPw("");}}>🔑</button>
+                <button className={`btn bsm ${s.active?"bd":"bp"}`} onClick={()=>{setStaff(p=>p.map(x=>x.id===s.id?{...x,active:!x.active}:x));addAudit(currentUser.init,"Staff",`${s.name} ${s.active?"deactivated":"activated"}`);}}>
+                  {s.active?"Deactivate":"Activate"}
+                </button>
+              </div></td>
+            </tr>
+          ))}</tbody>
+        </table>
+      </div>
+      {modal&&<Modal title={modal==="add"?"Add Staff":"Edit Staff"} onClose={()=>setModal(null)}
+        footer={<><button className="btn bs" onClick={()=>setModal(null)}>Cancel</button><button className="btn bp" onClick={save}>Save</button></>}>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          <div className="fg"><label className="fl">Full Name</label><input className="fi" value={form.name||""} onChange={e=>setForm(f=>({...f,name:e.target.value}))}/></div>
+          <div className="fg"><label className="fl">Initials</label><input className="fi" value={form.init||""} onChange={e=>setForm(f=>({...f,init:e.target.value.toUpperCase()}))}/></div>
+          <div className="fg"><label className="fl">Grade</label><select className="fi" value={form.grade||"ST4+"} onChange={e=>setForm(f=>({...f,grade:e.target.value}))}>
+            <option>ST4+</option><option>ST3</option><option>ACP</option><option>PHEM Fellow</option><option>Research Fellow</option><option>Military</option>
+          </select></div>
+          <div className="fg"><label className="fl">Hours/Week</label><input type="number" className="fi" value={form.hrs||45.25} onChange={e=>setForm(f=>({...f,hrs:parseFloat(e.target.value)||0}))}/></div>
+          {modal==="add"&&<div className="fg"><label className="fl">Password</label><input className="fi" value={form.pw||"rota2026"} onChange={e=>setForm(f=>({...f,pw:e.target.value}))}/></div>}
+        </div>
+      </Modal>}
+      {pwModal&&<Modal title={`Reset Password — ${pwModal.name}`} onClose={()=>setPwM(null)}
+        footer={<><button className="btn bs" onClick={()=>setPwM(null)}>Cancel</button><button className="btn bp" disabled={!newPw} onClick={()=>{setStaff(p=>p.map(s=>s.id===pwModal.id?{...s,pw:newPw}:s));addAudit(currentUser.init,"Password Reset",pwModal.name);setPwM(null);}}>Reset</button></>}>
+        <div className="fg" style={{marginBottom:0}}><label className="fl">New Password</label><input className="fi" value={newPw} onChange={e=>setNPw(e.target.value)} placeholder="Enter new password"/></div>
+      </Modal>}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// REPORTS
+// ═══════════════════════════════════════════════════════════════
+
+function Reports({user,staff,rota,leaveEntries}) {
+  const isAdmin=user.role==="admin";
+  const target=isAdmin?staff.filter(s=>s.role==="staff"&&s.active):staff.filter(s=>s.init===user.init);
+  const stats=useMemo(()=>target.map(s=>{
+    const mySlots=Object.entries(rota).flatMap(([d,slots])=>Object.entries(slots).filter(([,i])=>i===s.init).map(([sk])=>({d,sk})));
+    const myLeave=Object.entries(leaveEntries).flatMap(([d,es])=>es.filter(e=>e.init===s.init).map(e=>({d,type:e.type})));
+    const nights=mySlots.filter(x=>["N1","N2","SN","AN"].includes(x.sk)).length;
+    const wknd=mySlots.filter(x=>["WE1","WE2","WE3","WL1","WL2"].includes(x.sk)).length;
+    const al=myLeave.filter(x=>x.type==="AL").length;
+    return{...s,total:mySlots.length,nights,wknd,al,leave:myLeave.length};
+  }),[target,rota,leaveEntries]);
+  const maxT=Math.max(...stats.map(s=>s.total),1);
+  return (
+    <div>
+      <div className="dg2" style={{marginBottom:16}}>
+        <div className="card">
+          <div className="ch"><span className="ct">Total Shifts</span></div>
+          <div className="cb" style={{maxHeight:380,overflowY:"auto"}}>
+            {stats.map(s=><div key={s.id} className="rbar"><div className="rl" title={s.name}>{s.name.split(" ")[0]} {s.name.split(" ")[1]?.[0]}.</div><div className="rt"><div className="rf" style={{width:`${(s.total/maxT)*100}%`,background:"#10b981"}}/></div><div className="rv">{s.total}</div></div>)}
+          </div>
+        </div>
+        <div className="card">
+          <div className="ch"><span className="ct">Night Shifts</span></div>
+          <div className="cb" style={{maxHeight:380,overflowY:"auto"}}>
+            {stats.map(s=><div key={s.id} className="rbar"><div className="rl" title={s.name}>{s.name.split(" ")[0]} {s.name.split(" ")[1]?.[0]}.</div><div className="rt"><div className="rf" style={{width:s.total>0?`${(s.nights/s.total)*100}%`:"0%",background:"#6366f1"}}/></div><div className="rv">{s.nights}</div></div>)}
+          </div>
+        </div>
+      </div>
+      <div className="card">
+        <div className="ch"><span className="ct">Weekend Frequency Summary</span></div>
+        <table className="tbl">
+          <thead><tr><th>Staff</th><th>Grade</th><th>Total Shifts</th><th>W/E Shifts</th><th>Frequency</th><th>Nights</th><th>Annual Leave</th></tr></thead>
+          <tbody>{stats.map(s=>{const ratio=s.wknd>0?(s.total/s.wknd).toFixed(1):"—";const ok=s.wknd===0||parseFloat(ratio)>=2.5;return(
+            <tr key={s.id}><td style={{fontWeight:600}}>{s.name}</td><td>{s.grade}</td><td>{s.total}</td><td>{s.wknd}</td>
+            <td><span style={{padding:"2px 7px",borderRadius:4,background:ok?"#d1fae5":"#fee2e2",color:ok?"#065f46":"#7f1d1d",fontWeight:700,fontSize:11}}>1:{ratio}</span></td>
+            <td>{s.nights}</td><td>{s.al} days</td></tr>
+          );})}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// AUDIT LOG
+// ═══════════════════════════════════════════════════════════════
+
+function AuditLog({log}) {
+  return (
+    <div className="card">
+      <div className="ch"><span className="ct">Audit Log</span><span style={{fontSize:11,color:"#94a3b8"}}>{log.length} entries</span></div>
+      <div className="cb" style={{maxHeight:600,overflowY:"auto"}}>
+        {[...log].reverse().map(e=><div key={e.id} className="arow"><div className="at">{e.ts}</div><div className="au">{e.user}</div><div className="aa"><strong>{e.action}</strong> — {e.details}</div></div>)}
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MAIN APP
+// ═══════════════════════════════════════════════════════════════
+
+function App() {
+  const [user,setUser]         = useState(null);
+  const [staff,setStaff]       = useState(INIT_STAFF);
+  const [rota,setRota]         = useState({});  // {date: {slotKey: initials}}
+  const [leaveEntries,setLE]   = useState({});  // {date: [{init,type,note,id}]}
+  const [availability,setAvail]= useState({});  // {initials: {date: status}}
+  const [quarterStatus,setQS]  = useState({Q1:"open",Q2:"closed",Q3:"closed",Q4:"closed"});
+  const [requests,setReqs]     = useState([
+    {id:1,staffInitials:"MC",staffName:"Michael Connolly",type:"AL",startDate:"2026-09-01",endDate:"2026-09-05",reason:"Family holiday",status:"pending",adminNote:"",createdAt:"2026-08-05"},
+    {id:2,staffInitials:"NW",staffName:"Nat Wright",      type:"SL",startDate:"2026-08-20",endDate:"2026-08-21",reason:"Conference",   status:"approved",adminNote:"Approved",createdAt:"2026-08-03"},
+  ]);
+  const [dayNotes,setNotes]    = useState({});
+  const [auditLog,setAudit]    = useState([{id:1,ts:"2026-08-05 09:00",user:"ADM",action:"System Init",details:"RotaHST 2026/27 initialised"}]);
+  const [view,setView]         = useState("dashboard");
+  const [viewMonth,setVM]      = useState(new Date(2026,7,1));
+
+  const addAudit=(u,action,details)=>{
+    const now=new Date(), ts=`${now.toLocaleDateString("en-GB")} ${now.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}`;
+    setAudit(p=>[...p,{id:Date.now(),ts,user:u,action,details}]);
+  };
+
+  const pendingCount=requests.filter(r=>r.status==="pending").length;
+  const hasOpenQ=QUARTERS.some(q=>quarterStatus[q.id]==="open");
+  const isAdmin=user?.role==="admin";
+
+  const titles={dashboard:"Dashboard",calendar:"Rota Calendar",myshifts:"My Shifts",availability:"Availability",requests:isAdmin?"Leave Requests":"My Requests",builder:"Rota Builder",staff:"Staff Management",reports:isAdmin?"Reports":"My Summary",audit:"Audit Log"};
+
+  if(!user) return <><style>{CSS}</style><Login staff={staff} onLogin={setUser}/></>;
+
+  return (
+    <>
+      <style>{CSS}</style>
+      <div className="app">
+        <Sidebar user={user} view={view} setView={setView} onLogout={()=>setUser(null)} pendingCount={pendingCount} hasOpenQ={hasOpenQ}/>
+        <div className="main">
+          <div className="hdr">
+            <h2>{titles[view]||""}</h2>
+            <div style={{display:"flex",gap:7,alignItems:"center"}}>
+              {isAdmin&&<span className="badge b-admin">Admin</span>}
+              <span style={{fontSize:11.5,color:"#94a3b8"}}>2026/27</span>
+            </div>
+          </div>
+          <div className="body">
+            {view==="dashboard"  &&<Dashboard user={user} staff={staff} rota={rota} requests={requests} dayNotes={dayNotes} availability={availability} quarterStatus={quarterStatus}/>}
+            {view==="calendar"   &&<CalendarView rota={rota} leaveEntries={leaveEntries} dayNotes={dayNotes} staff={staff} viewMonth={viewMonth} setViewMonth={setVM} viewMode="month" setViewMode={()=>{}}/>}
+            {view==="myshifts"   &&!isAdmin&&<MyShifts user={user} rota={rota} leaveEntries={leaveEntries} dayNotes={dayNotes}/>}
+            {view==="availability"&&(<AvailabilityView
+                  user={user}
+                  staff={staff}
+                  availability={availability}
+                  setAvailability={setAvail}
+                  quarterStatus={quarterStatus}
+                  setQuarterStatus={setQS}
+                  addAudit={addAudit}
+                  leaveEntries={leaveEntries}
+                  setLeaveEntries={setLE}
+                  rota={rota}
+                  requests={requests}
+                  setRequests={setReqs}
+                />
+              )}
+            {view==="requests"   &&<RequestsView user={user} requests={requests} setRequests={setReqs} addAudit={addAudit}/>}
+            {view==="builder"    &&isAdmin&&<RotaBuilder rota={rota} setRota={setRota} leaveEntries={leaveEntries} setLeaveEntries={setLE} staff={staff} dayNotes={dayNotes} setDayNotes={setNotes} availability={availability} addAudit={addAudit} currentUser={user}/>}
+            {view==="staff"      &&isAdmin&&<StaffMgmt staff={staff} setStaff={setStaff} addAudit={addAudit} currentUser={user}/>}
+            {view==="reports"    &&<Reports user={user} staff={staff} rota={rota} leaveEntries={leaveEntries}/>}
+            {view==="audit"      &&isAdmin&&<AuditLog log={auditLog}/>}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(<App />);
+  </script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+    }
+  </script>
+</body>
+</html>
