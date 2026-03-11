@@ -211,7 +211,8 @@ const getSlotKeysForAvailBase = (base, grade, date) => {
 const isSlotPreferred = (availability, init, date, slotKey, grade) => {
   const e = getAvailEntry(availability, init, date);
   if (!e?.base) return false;
-  const keys = getSlotKeysForAvailBase(e.base, grade, date);
+  const bases = e.base.split(",");
+  const keys = bases.flatMap(b => getSlotKeysForAvailBase(b, grade, date));
   return keys.includes(slotKey);
 };
 
@@ -831,7 +832,7 @@ function AvailabilityView({
       .filter(s => s.role === "staff" && s.active)
       .forEach(s => {
         const entry = getEntry(s.init, date);
-        if (entry?.base) counts[entry.base] = (counts[entry.base] || 0) + 1;
+        if (entry?.base) entry.base.split(",").forEach(b => { counts[b] = (counts[b] || 0) + 1; });
       });
     return counts;
   };
@@ -975,7 +976,8 @@ function AvailabilityView({
                 const clickable = inMonth && inQ;
                 const agg = isAdmin && !viewStaff ? getAggregate(date) : null;
 
-                const bg = entry?.base ? (AVAIL[entry.base]?.bg || "#f1f5f9") : "";
+                const entryBases = entry?.base ? entry.base.split(",") : [];
+                const bg = entryBases.length === 1 ? (AVAIL[entryBases[0]]?.bg || "#f1f5f9") : entryBases.length > 1 ? "#e0e7ff" : "";
 
                 return (
                   <div
@@ -994,14 +996,21 @@ function AvailabilityView({
                     {clickable && (
                       entry ? (
                         <div>
-                          {(() => {
-                            const av = AVAIL[entry.base] || { bg:"#f1f5f9", fg:"#334155", short: entry.base };
+                          {entryBases.length === 1 ? (() => {
+                            const av = AVAIL[entryBases[0]] || { bg:"#f1f5f9", fg:"#334155", short: entryBases[0] };
                             return (
                               <div className="av-status" style={{ background: av.bg, color: av.fg }}>
                                 {av.short}
                               </div>
                             );
-                          })()}
+                          })() : (
+                            <div style={{ display:"flex", flexWrap:"wrap", gap:1, justifyContent:"center" }}>
+                              {entryBases.map(b => {
+                                const av = AVAIL[b] || { bg:"#f1f5f9", fg:"#334155", icon:b[0] };
+                                return <span key={b} style={{ fontSize:7, background:av.bg, color:av.fg, borderRadius:2, padding:"0 2px", fontWeight:700 }}>{av.icon || av.short}</span>;
+                              })}
+                            </div>
+                          )}
                         </div>
                       ) : isAdmin && agg && Object.keys(agg).length > 0 ? (
                         <div style={{ display: "flex", flexWrap: "wrap", gap: 2 }}>
@@ -1074,33 +1083,50 @@ function AvailabilityView({
                 </div>
               )}
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                {availOpts.map(opt => {
-                  const cur = modalDraft.base === opt.key;
-                  return (
-                    <button
-                      key={opt.key}
-                      onClick={() => setModalDraft({ base: opt.key, slots: [] })}
-                      style={{
-                        padding: "11px 8px",
-                        border: `2px solid ${cur ? opt.fg : opt.fg + "40"}`,
-                        borderRadius: 9,
-                        background: cur ? opt.bg : "white",
-                        color: opt.fg,
-                        fontWeight: 700,
-                        fontSize: 12,
-                        cursor: "pointer",
-                        textAlign: "left",
-                        boxShadow: cur ? `0 0 0 3px ${opt.fg}25` : "none",
-                        transition: "all .1s"
-                      }}
-                    >
-                      <div>{opt.label}</div>
-                      <div style={{ fontSize: 9.5, fontWeight: 500, opacity: 0.75, marginTop: 2 }}>{opt.sub}</div>
-                    </button>
-                  );
-                })}
-              </div>
+              {(() => {
+                const SINGLE = ["ANY","UNAVAILABLE","SL","AL"];
+                const SHIFT = ["EARLY","MID","LATE","NIGHT"];
+                const draftBases = modalDraft.base ? modalDraft.base.split(",") : [];
+                const handleClick = (key) => {
+                  if (SINGLE.includes(key)) {
+                    setModalDraft({ base: key, slots: [] });
+                  } else {
+                    // Toggle shift option; clear any single-select base first
+                    const prev = draftBases.filter(b => SHIFT.includes(b));
+                    const next = prev.includes(key) ? prev.filter(b => b !== key) : [...prev, key];
+                    setModalDraft({ base: next.join(","), slots: [] });
+                  }
+                };
+                return (
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                    {availOpts.map(opt => {
+                      const cur = draftBases.includes(opt.key);
+                      return (
+                        <button
+                          key={opt.key}
+                          onClick={() => handleClick(opt.key)}
+                          style={{
+                            padding: "11px 8px",
+                            border: `2px solid ${cur ? opt.fg : opt.fg + "40"}`,
+                            borderRadius: 9,
+                            background: cur ? opt.bg : "white",
+                            color: opt.fg,
+                            fontWeight: 700,
+                            fontSize: 12,
+                            cursor: "pointer",
+                            textAlign: "left",
+                            boxShadow: cur ? `0 0 0 3px ${opt.fg}25` : "none",
+                            transition: "all .1s"
+                          }}
+                        >
+                          <div>{opt.label}</div>
+                          <div style={{ fontSize: 9.5, fontWeight: 500, opacity: 0.75, marginTop: 2 }}>{opt.sub}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
             </Modal>
           );
         })()}
