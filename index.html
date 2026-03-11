@@ -75,10 +75,22 @@ const LEAVE_T = {
 };
 
 const AVAIL = {
-  ANY:         { label:"Any",          short:"Any",     bg:"#dcfce7", fg:"#166534", icon:"Any" },
-  AVAILABLE:   { label:"Specific",     short:"Shifts",  bg:"#d1fae5", fg:"#065f46", icon:"✓" },
-  UNAVAILABLE: { label:"Unavailable",  short:"Unavail", bg:"#fee2e2", fg:"#7f1d1d", icon:"✗" },
-  SL:          { label:"Study Leave",  short:"SL",      bg:"#f1f5f9", fg:"#334155", icon:"SL" },
+  ANY:         { label:"Any",           short:"Any",    bg:"#dcfce7", fg:"#166534", icon:"Any" },
+  UNAVAILABLE: { label:"Unavailable",   short:"Unavail",bg:"#fee2e2", fg:"#7f1d1d", icon:"✗" },
+  SL:          { label:"Study Leave",   short:"SL",     bg:"#f1f5f9", fg:"#334155", icon:"SL" },
+  AL:          { label:"Annual Leave",  short:"AL",     bg:"#fef9c3", fg:"#713f12", icon:"AL" },
+  EARLY:       { label:"Early shifts",  short:"Early",  bg:"#dcfce7", fg:"#14532d", icon:"E"  },
+  MID:         { label:"Mid shifts",    short:"Mid",    bg:"#dbeafe", fg:"#1e3a8a", icon:"M"  },
+  LATE:        { label:"Late shifts",   short:"Late",   bg:"#fef3c7", fg:"#78350f", icon:"L"  },
+  NIGHT:       { label:"Night shifts",  short:"Night",  bg:"#1e1b4b", fg:"#c7d2fe", icon:"N"  },
+};
+
+// FTE reference targets per grade per quarter (admin can edit in Rota Config view)
+const INIT_WTE_CONFIG = {
+  "ST4+": { hoursPerWeek:45.25, Q1:{nights:13,weekends:6,earlies:20,mids:16,lates:20}, Q2:{nights:13,weekends:6,earlies:20,mids:16,lates:20}, Q3:{nights:13,weekends:6,earlies:20,mids:16,lates:20}, Q4:{nights:13,weekends:6,earlies:20,mids:16,lates:20} },
+  "ST3":  { hoursPerWeek:41.75, Q1:{nights:10,weekends:5,earlies:18,mids:14,lates:18}, Q2:{nights:10,weekends:5,earlies:18,mids:14,lates:18}, Q3:{nights:10,weekends:5,earlies:18,mids:14,lates:18}, Q4:{nights:10,weekends:5,earlies:18,mids:14,lates:18} },
+  "ACP":  { hoursPerWeek:37.5,  Q1:{nights:8, weekends:4,earlies:15,mids:12,lates:15}, Q2:{nights:8, weekends:4,earlies:15,mids:12,lates:15}, Q3:{nights:8, weekends:4,earlies:15,mids:12,lates:15}, Q4:{nights:8, weekends:4,earlies:15,mids:12,lates:15} },
+  "tACP": { hoursPerWeek:37.5,  Q1:{nights:6, weekends:4,earlies:15,mids:12,lates:15}, Q2:{nights:6, weekends:4,earlies:15,mids:12,lates:15}, Q3:{nights:6, weekends:4,earlies:15,mids:12,lates:15}, Q4:{nights:6, weekends:4,earlies:15,mids:12,lates:15} },
 };
 
 const INIT_STAFF = [
@@ -161,17 +173,14 @@ const normaliseAvailEntry = (entry) => {
     return null;
   }
 
-  return {
-    base: entry.base || null,
-    slots: Array.isArray(entry.slots) ? entry.slots : [],
-  };
+  // old AVAILABLE base (manual slot checkboxes) → treat as ANY for backward compat
+  const base = entry.base === "AVAILABLE" ? "ANY" : (entry.base || null);
+  return { base, slots: Array.isArray(entry.slots) ? entry.slots : [] };
 };
 
 const isMarkedAvailEntry = (entry) => {
   const e = normaliseAvailEntry(entry);
-  if (!e || !e.base) return false;
-  if (e.base === "AVAILABLE") return e.slots.length > 0;
-  return true;
+  return !!(e && e.base);
 };
 
 const getAvailEntry = (availability, init, date) =>
@@ -179,15 +188,31 @@ const getAvailEntry = (availability, init, date) =>
 
 const isBlockedDay = (availability, init, date) => {
   const e = getAvailEntry(availability, init, date);
-  return e.base === "UNAVAILABLE" || e.base === "SL";
+  return e.base === "UNAVAILABLE" || e.base === "SL" || e.base === "AL";
 };
 
-const isSlotPreferred = (availability, init, date, slotKey) => {
+// Maps an availability base + grade + date to the slot keys it covers
+const getSlotKeysForAvailBase = (base, grade, date) => {
+  const we = isWeekend(date);
+  switch (base) {
+    case "ANY": return getSlotsForDay(date).map(s => s.key);
+    case "EARLY": return we ? ["WE1","WE2","WE3"] : ["E1","E2","E3","E4"];
+    case "MID":   return we ? [] : ["M1","M2","M3"];
+    case "LATE":  return we ? ["WL1","WL2"] : ["L1","L2","L3","L4"];
+    case "NIGHT":
+      if (grade === "tACP") return ["AN"];
+      if (grade === "ACP")  return ["N2","AN"];
+      if (grade === "ST3")  return ["SN"];
+      return ["N1","N2"]; // ST4+ default
+    default: return [];
+  }
+};
+
+const isSlotPreferred = (availability, init, date, slotKey, grade) => {
   const e = getAvailEntry(availability, init, date);
   if (!e?.base) return false;
-  if (e.base === "ANY") return true;
-  if (e.base !== "AVAILABLE") return false;
-  return e.slots.includes(slotKey);
+  const keys = getSlotKeysForAvailBase(e.base, grade, date);
+  return keys.includes(slotKey);
 };
 
 const getAutoSLEntriesForDate = (availability, date, staff) => {
@@ -421,9 +446,10 @@ function Sidebar({user,view,setView,onLogout,pendingCount,hasOpenQ}) {
     {id:"requests",icon:"📝",label:isAdmin?"Leave Requests":"My Requests",badge:isAdmin&&pendingCount>0?pendingCount:null},
     ...(isAdmin?[
       {id:"builder",icon:"🔧",label:"Rota Builder"},
-      {id:"staff",  icon:"👥",label:"Staff"},
-      {id:"reports",icon:"📈",label:"Reports"},
-      {id:"audit",  icon:"🔍",label:"Audit Log"},
+      {id:"staff",     icon:"👥",label:"Staff"},
+      {id:"reports",   icon:"📈",label:"Reports"},
+      {id:"rotaconfig",icon:"⚙️",label:"Rota Config"},
+      {id:"audit",     icon:"🔍",label:"Audit Log"},
     ]:[{id:"reports",icon:"📈",label:"My Summary"}]),
   ];
   return (
@@ -627,22 +653,7 @@ function AvailabilityView({
 
   const dispInit = isAdmin && viewStaff ? viewStaff : user.init;
 
-  const getEntry = (init, date) => {
-    const raw = (availability[init] || {})[date];
-    if (!raw) return null;
-
-    if (typeof raw === "string") {
-      if (raw === "UNAVAIL") return { base: "UNAVAILABLE", slots: [] };
-      if (raw === "AVAIL") return { base: "ANY", slots: [] };
-      if (raw === "SL") return { base: "SL", slots: [] };
-      return null;
-    }
-
-    return {
-      base: raw.base || "",
-      slots: Array.isArray(raw.slots) ? raw.slots : []
-    };
-  };
+  const getEntry = (init, date) => normaliseAvailEntry((availability[init] || {})[date]);
 
   const setEntry = (init, date, entry) => {
     setAvailability(prev => ({
@@ -715,33 +726,41 @@ function AvailabilityView({
     const date = pickModal.date;
     const init = dispInit;
     const existing = getEntry(init, date);
-    const wasSL = existing?.base === "SL";
+    const wasLeaveBase = existing?.base === "SL" || existing?.base === "AL";
     const willBeSL = modalDraft.base === "SL";
+    const willBeAL = modalDraft.base === "AL";
+    const willBeLeave = willBeSL || willBeAL;
+    const leaveType = willBeSL ? "SL" : "AL";
 
     if (!modalDraft.base) return;
 
-    if (modalDraft.base === "AVAILABLE" && modalDraft.slots.length === 0) {
-      alert("Please select at least one shift option, or choose Any.");
-      return;
-    }
-
-    if (wasSL && !willBeSL) {
+    // Remove old auto-leave if switching away from a leave base
+    if (wasLeaveBase && !willBeLeave) {
       removeAutoSLLeave(init, date);
     }
 
-    if (willBeSL && !dateHasBuiltRota(date)) {
-      setEntry(init, date, { base: "SL", slots: [] });
-      addAutoSLLeave(init, date);
-      addAudit(user.init, "Availability", `${init} marked ${date}: SL (auto-added to rota builder)`);
+    if (willBeLeave && !dateHasBuiltRota(date)) {
+      setEntry(init, date, { base: modalDraft.base, slots: [] });
+      // Add auto leave entry directly (supports both SL and AL)
+      setLeaveEntries(prev => {
+        const day = prev[date] || [];
+        const alreadyThere = day.some(e => e.init === init && e.type === leaveType && e.autoFromAvailability);
+        if (alreadyThere) return prev;
+        return {
+          ...prev,
+          [date]: [...day, { id: Date.now() + Math.random(), init, type: leaveType, note: "Auto-added from availability", autoFromAvailability: true }]
+        };
+      });
+      addAudit(user.init, "Availability", `${init} marked ${date}: ${leaveType} (auto-added to rota builder)`);
       setPickModal(null);
       return;
     }
 
-    if (willBeSL && dateHasBuiltRota(date)) {
+    if (willBeLeave && dateHasBuiltRota(date)) {
       const alreadyPending = (requests || []).some(
         r =>
           r.staffInitials === init &&
-          r.type === "SL" &&
+          r.type === leaveType &&
           r.startDate === date &&
           r.endDate === date &&
           r.status === "pending"
@@ -754,7 +773,7 @@ function AvailabilityView({
             id: Date.now(),
             staffInitials: init,
             staffName: staff.find(s => s.init === init)?.name || init,
-            type: "SL",
+            type: leaveType,
             startDate: date,
             endDate: date,
             reason: "Submitted from Availability after rota build",
@@ -763,24 +782,17 @@ function AvailabilityView({
             createdAt: fmtISO(new Date())
           }
         ]);
-        addAudit(user.init, "SL Request", `${init} submitted SL request for ${date} (rota already built)`);
+        addAudit(user.init, `${leaveType} Request`, `${init} submitted ${leaveType} request for ${date} (rota already built)`);
       }
 
-      alert("This date already has rota/leave built. SL has been submitted as a request for approval.");
+      alert(`This date already has rota/leave built. ${leaveType} has been submitted as a request for approval.`);
       setPickModal(null);
       return;
     }
 
-    setEntry(init, date, {
-      base: modalDraft.base,
-      slots: modalDraft.base === "AVAILABLE" ? modalDraft.slots : []
-    });
+    setEntry(init, date, { base: modalDraft.base, slots: [] });
 
-    addAudit(
-      user.init,
-      "Availability",
-      `${init} marked ${date}: ${modalDraft.base}${modalDraft.base === "AVAILABLE" ? ` [${modalDraft.slots.join(", ")}]` : ""}`
-    );
+    addAudit(user.init, "Availability", `${init} marked ${date}: ${modalDraft.base}`);
 
     setPickModal(null);
   };
@@ -789,7 +801,7 @@ function AvailabilityView({
     const init = dispInit;
     const existing = getEntry(init, date);
 
-    if (existing?.base === "SL") {
+    if (existing?.base === "SL" || existing?.base === "AL") {
       removeAutoSLLeave(init, date);
     }
 
@@ -963,12 +975,7 @@ function AvailabilityView({
                 const clickable = inMonth && inQ;
                 const agg = isAdmin && !viewStaff ? getAggregate(date) : null;
 
-                const bg =
-                  entry?.base === "ANY" ? "#dcfce7" :
-                  entry?.base === "AVAILABLE" ? "#d1fae5" :
-                  entry?.base === "UNAVAILABLE" ? "#fee2e2" :
-                  entry?.base === "SL" ? "#f1f5f9" :
-                  "";
+                const bg = entry?.base ? (AVAIL[entry.base]?.bg || "#f1f5f9") : "";
 
                 return (
                   <div
@@ -987,76 +994,25 @@ function AvailabilityView({
                     {clickable && (
                       entry ? (
                         <div>
-                          <div className="av-status" style={{
-                            background:
-                              entry.base === "ANY" ? "#dcfce7" :
-                              entry.base === "AVAILABLE" ? "#d1fae5" :
-                              entry.base === "UNAVAILABLE" ? "#fee2e2" :
-                              "#f1f5f9",
-                            color:
-                              entry.base === "ANY" ? "#166534" :
-                              entry.base === "AVAILABLE" ? "#065f46" :
-                              entry.base === "UNAVAILABLE" ? "#7f1d1d" :
-                              "#334155"
-                          }}>
-                            {entry.base === "ANY"
-                              ? "Any"
-                              : entry.base === "AVAILABLE"
-                              ? "Shifts"
-                              : entry.base === "UNAVAILABLE"
-                              ? "Unavail"
-                              : "SL"}
-                          </div>
-
-                          {entry.base === "AVAILABLE" && entry.slots.length > 0 && (
-                            <div style={{ display: "flex", flexWrap: "wrap", gap: 2, marginTop: 3 }}>
-                              {entry.slots.slice(0, 3).map(sk => (
-                                <span
-                                  key={sk}
-                                  style={{
-                                    fontSize: 8,
-                                    background: "#f8fafc",
-                                    color: "#334155",
-                                    padding: "1px 3px",
-                                    borderRadius: 3,
-                                    fontWeight: 700,
-                                    border: "1px solid #cbd5e1"
-                                  }}
-                                >
-                                  {sk}
-                                </span>
-                              ))}
-                              {entry.slots.length > 3 && (
-                                <span style={{ fontSize: 8, color: "#64748b" }}>+{entry.slots.length - 3}</span>
-                              )}
-                            </div>
-                          )}
+                          {(() => {
+                            const av = AVAIL[entry.base] || { bg:"#f1f5f9", fg:"#334155", short: entry.base };
+                            return (
+                              <div className="av-status" style={{ background: av.bg, color: av.fg }}>
+                                {av.short}
+                              </div>
+                            );
+                          })()}
                         </div>
                       ) : isAdmin && agg && Object.keys(agg).length > 0 ? (
                         <div style={{ display: "flex", flexWrap: "wrap", gap: 2 }}>
-                          {Object.entries(agg).map(([k, c]) => (
-                            <span
-                              key={k}
-                              style={{
-                                fontSize: 8,
-                                background:
-                                  k === "ANY" ? "#dcfce7" :
-                                  k === "AVAILABLE" ? "#d1fae5" :
-                                  k === "UNAVAILABLE" ? "#fee2e2" :
-                                  "#f1f5f9",
-                                color:
-                                  k === "ANY" ? "#166534" :
-                                  k === "AVAILABLE" ? "#065f46" :
-                                  k === "UNAVAILABLE" ? "#7f1d1d" :
-                                  "#334155",
-                                padding: "1px 3px",
-                                borderRadius: 3,
-                                fontWeight: 700
-                              }}
-                            >
-                              {k === "ANY" ? "A" : k === "AVAILABLE" ? "✓" : k === "UNAVAILABLE" ? "✗" : "SL"}{c}
-                            </span>
-                          ))}
+                          {Object.entries(agg).map(([k, c]) => {
+                            const av = AVAIL[k] || { bg:"#f1f5f9", fg:"#334155", icon:k.slice(0,1) };
+                            return (
+                              <span key={k} style={{ fontSize: 8, background: av.bg, color: av.fg, padding: "1px 3px", borderRadius: 3, fontWeight: 700 }}>
+                                {av.icon}{c}
+                              </span>
+                            );
+                          })}
                         </div>
                       ) : (
                         <div className="av-none">{isAdmin ? "—" : "+ mark"}</div>
@@ -1071,12 +1027,24 @@ function AvailabilityView({
       )}
 
       {pickModal&&(()=>{
-          const daySlots = getSlotsForDay(pickModal.date);
-          const canSave =
-            modalDraft.base === "ANY" ||
-            modalDraft.base === "UNAVAILABLE" ||
-            modalDraft.base === "SL" ||
-            (modalDraft.base === "AVAILABLE" && modalDraft.slots.length > 0);
+          const we = isWeekend(pickModal.date);
+          const dispGrade = staff.find(s => s.init === dispInit)?.grade || "ST4+";
+          const nightLabel =
+            dispGrade === "tACP" ? "ACP Night only" :
+            dispGrade === "ACP"  ? "SDM N2 + ACP Night" :
+            dispGrade === "ST3"  ? "ST3 Night" :
+            "SDM Night 1 & 2";
+
+          const availOpts = [
+            { key:"ANY",         label:"Any",          sub:"All shifts",       bg:AVAIL.ANY.bg,         fg:AVAIL.ANY.fg },
+            { key:"UNAVAILABLE", label:"Unavailable",  sub:"Day off",          bg:AVAIL.UNAVAILABLE.bg, fg:AVAIL.UNAVAILABLE.fg },
+            { key:"SL",          label:"Study Leave",  sub:"SL",               bg:AVAIL.SL.bg,          fg:AVAIL.SL.fg },
+            { key:"AL",          label:"Annual Leave", sub:"AL",               bg:AVAIL.AL.bg,          fg:AVAIL.AL.fg },
+            { key:"EARLY",       label:"Early",        sub:we?"WE Early":"E1–E4",  bg:AVAIL.EARLY.bg, fg:AVAIL.EARLY.fg },
+            ...(!we ? [{ key:"MID", label:"Mid", sub:"M1–M3", bg:AVAIL.MID.bg, fg:AVAIL.MID.fg }] : []),
+            { key:"LATE",        label:"Late",         sub:we?"WE Late":"L1–L4",   bg:AVAIL.LATE.bg,  fg:AVAIL.LATE.fg },
+            { key:"NIGHT",       label:"Night",        sub:nightLabel,         bg:AVAIL.NIGHT.bg,       fg:AVAIL.NIGHT.fg },
+          ];
 
           return (
             <Modal
@@ -1086,7 +1054,7 @@ function AvailabilityView({
                 <>
                   <button className="btn bs" onClick={() => clearStatus(pickModal.date)}>Clear</button>
                   <button className="btn bs" onClick={() => setPickModal(null)}>Cancel</button>
-                  <button className="btn bp" onClick={saveModal} disabled={!canSave}>Save</button>
+                  <button className="btn bp" onClick={saveModal} disabled={!modalDraft.base}>Save</button>
                 </>
               }
             >
@@ -1097,101 +1065,42 @@ function AvailabilityView({
               </p>
 
               {BH[pickModal.date] && (
-                <div className="al al-w" style={{ marginBottom: 12 }}>
-                  🎉 {BH[pickModal.date]}
-                </div>
+                <div className="al al-w" style={{ marginBottom: 12 }}>🎉 {BH[pickModal.date]}</div>
               )}
 
               {dateHasBuiltRota(pickModal.date) && (
                 <div className="al al-i" style={{ marginBottom: 12 }}>
-                  This date already has rota/leave built. New <strong>SL</strong> on this date will be submitted as a request for approval.
+                  This date already has rota/leave built. SL or AL on this date will be submitted as a request for approval.
                 </div>
               )}
 
-            <div style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 8 }}>
-                Day status
-              </div>
-
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                {[
-                  { key: "ANY", label: "Any", icon: "Any", bg: "#dcfce7", fg: "#166534" },
-                  { key: "AVAILABLE", label: "Specific shifts", icon: "✓", bg: "#d1fae5", fg: "#065f46" },
-                  { key: "UNAVAILABLE", label: "Unavailable", icon: "✗", bg: "#fee2e2", fg: "#7f1d1d" },
-                  { key: "SL", label: "Study Leave", icon: "SL", bg: "#f1f5f9", fg: "#334155" }
-                ].map(opt => {
+                {availOpts.map(opt => {
                   const cur = modalDraft.base === opt.key;
                   return (
                     <button
                       key={opt.key}
                       onClick={() => setModalDraft({ base: opt.key, slots: [] })}
                       style={{
-                        padding: "12px 8px",
-                        border: `2px solid ${cur ? opt.fg : opt.fg + "44"}`,
+                        padding: "11px 8px",
+                        border: `2px solid ${cur ? opt.fg : opt.fg + "40"}`,
                         borderRadius: 9,
-                        background: opt.bg,
+                        background: cur ? opt.bg : "white",
                         color: opt.fg,
                         fontWeight: 700,
-                        fontSize: 12.5,
+                        fontSize: 12,
                         cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: 8,
-                        boxShadow: cur ? `0 0 0 3px ${opt.fg}33` : "none"
+                        textAlign: "left",
+                        boxShadow: cur ? `0 0 0 3px ${opt.fg}25` : "none",
+                        transition: "all .1s"
                       }}
                     >
-                      <span style={{ fontSize: 16 }}>{opt.icon}</span>
-                      {opt.label}
+                      <div>{opt.label}</div>
+                      <div style={{ fontSize: 9.5, fontWeight: 500, opacity: 0.75, marginTop: 2 }}>{opt.sub}</div>
                     </button>
                   );
                 })}
               </div>
-            </div>
-
-            {modalDraft.base === "AVAILABLE" && (
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 8 }}>
-                    Shift options
-                  </div>
-
-                  <div className="al al-i" style={{ marginBottom: 10 }}>
-                    Select one or more shifts. Nothing is pre-selected.
-                  </div>
-
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
-                    {daySlots.map(sl => {
-                      const selected = modalDraft.slots.includes(sl.key);
-                      return (
-                        <button
-                          key={sl.key}
-                          onClick={() =>
-                            setModalDraft(prev => ({
-                              ...prev,
-                              slots: selected
-                                ? prev.slots.filter(x => x !== sl.key)
-                                : [...prev.slots, sl.key]
-                            }))
-                          }
-                          style={{
-                            padding: "10px 8px",
-                            border: `2px solid ${selected ? sl.bd : "#e2e8f0"}`,
-                            borderRadius: 8,
-                            background: selected ? sl.bg : "white",
-                            color: selected ? sl.fg : "#374151",
-                            fontWeight: 700,
-                            fontSize: 11.5,
-                            cursor: "pointer"
-                          }}
-                        >
-                          <div>{sl.key}</div>
-                          <div style={{ fontSize: 9, opacity: 0.8, marginTop: 2 }}>{sl.label}</div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
             </Modal>
           );
         })()}
@@ -1200,10 +1109,133 @@ function AvailabilityView({
 }
 
 // ═══════════════════════════════════════════════════════════════
+// STAFF STATS SIDEBAR (used inside RotaBuilder)
+// ═══════════════════════════════════════════════════════════════
+
+const NIGHT_SLOTS  = new Set(["N1","N2","SN","AN"]);
+const WE_SLOTS     = new Set(["WE1","WE2","WE3","WL1","WL2"]);
+const EARLY_SLOTS  = new Set(["E1","E2","E3","E4"]);
+const MID_SLOTS    = new Set(["M1","M2","M3"]);
+const LATE_SLOTS   = new Set(["L1","L2","L3","L4"]);
+
+function countShifts(init, dates, rota) {
+  let nights=0, weekends=0, earlies=0, mids=0, lates=0;
+  dates.forEach(d => {
+    const day = rota[d] || {};
+    Object.entries(day).forEach(([sk, v]) => {
+      if (v !== init) return;
+      if (NIGHT_SLOTS.has(sk))  nights++;
+      if (WE_SLOTS.has(sk))     weekends++;
+      if (EARLY_SLOTS.has(sk))  earlies++;
+      if (MID_SLOTS.has(sk))    mids++;
+      if (LATE_SLOTS.has(sk))   lates++;
+    });
+  });
+  return {nights, weekends, earlies, mids, lates};
+}
+
+function getWTE(staffWTE, init, qid) {
+  return (staffWTE[init] && staffWTE[init][qid] != null) ? staffWTE[init][qid] : 1.0;
+}
+
+function getTarget(wteConfig, grade, qid, field, wte) {
+  const cfg = (wteConfig[grade] || wteConfig["ST4+"] || {})[qid] || {};
+  return Math.round((cfg[field] || 0) * wte * 10) / 10;
+}
+
+function StatCell({done, target}) {
+  const color = target === 0 ? "#94a3b8" : done > target ? "#ef4444" : done >= target - 1 ? "#f59e0b" : "#94a3b8";
+  return (
+    <td style={{padding:"3px 5px",textAlign:"center",fontSize:10,fontWeight:600,color,whiteSpace:"nowrap"}}>
+      {done}<span style={{color:"#cbd5e1",fontWeight:400}}>/{target}</span>
+    </td>
+  );
+}
+
+function StaffStatsSidebar({staff, rota, wteConfig, staffWTE, weekAnchor}) {
+  const [mode, setMode] = useState("quarter"); // "quarter" | "year"
+
+  const currentQ = useMemo(() => getQuarterForDate(weekAnchor), [weekAnchor]);
+  const qDates   = useMemo(() => currentQ ? getDatesInRange(currentQ.start, currentQ.end) : [], [currentQ]);
+  const allDates  = useMemo(() => {
+    const ds = new Set();
+    Object.keys(rota).forEach(d => ds.add(d));
+    return Array.from(ds);
+  }, [rota]);
+
+  const dates = mode === "quarter" ? qDates : allDates;
+  const qid = currentQ?.id || "Q1";
+
+  // Pre-compute all counts outside map (no hooks in loops)
+  const allCounts = useMemo(() => {
+    const result = {};
+    staff.forEach(s => { result[s.init] = countShifts(s.init, dates, rota); });
+    return result;
+  }, [staff, dates, rota]);
+
+  return (
+    <div style={{width:300,flexShrink:0,background:"white",borderRadius:11,border:"1px solid #e2e8f0",overflow:"hidden",position:"sticky",top:0,maxHeight:"calc(100vh - 120px)",display:"flex",flexDirection:"column"}}>
+      <div style={{padding:"10px 14px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
+        <span style={{fontFamily:"Syne,sans-serif",fontSize:12,fontWeight:700,color:"#0d1b2a"}}>Shift Counts</span>
+        <div style={{display:"flex",background:"#f1f5f9",borderRadius:6,padding:2,gap:1}}>
+          {[["quarter","Q: "+(currentQ?.id||"—")],["year","Year"]].map(([k,lbl])=>(
+            <button key={k} onClick={()=>setMode(k)}
+              style={{padding:"3px 8px",border:"none",borderRadius:4,cursor:"pointer",fontSize:10,fontWeight:600,
+                background:mode===k?"white":"none",color:mode===k?"#0d1b2a":"#64748b",
+                boxShadow:mode===k?"0 1px 2px rgba(0,0,0,.08)":"none",transition:"all .1s"}}>
+              {lbl}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div style={{overflowY:"auto",flex:1}}>
+        <table style={{width:"100%",borderCollapse:"collapse"}}>
+          <thead>
+            <tr style={{background:"#f8fafc"}}>
+              <th style={{padding:"4px 8px",textAlign:"left",fontSize:9,fontWeight:700,color:"#64748b",borderBottom:"1px solid #e2e8f0"}}>Name</th>
+              <th style={{padding:"4px 4px",textAlign:"center",fontSize:9,fontWeight:700,color:"#1e1b4b",borderBottom:"1px solid #e2e8f0"}}>Ngt</th>
+              <th style={{padding:"4px 4px",textAlign:"center",fontSize:9,fontWeight:700,color:"#6d28d9",borderBottom:"1px solid #e2e8f0"}}>W/E</th>
+              <th style={{padding:"4px 4px",textAlign:"center",fontSize:9,fontWeight:700,color:"#14532d",borderBottom:"1px solid #e2e8f0"}}>Ear</th>
+              <th style={{padding:"4px 4px",textAlign:"center",fontSize:9,fontWeight:700,color:"#1e3a8a",borderBottom:"1px solid #e2e8f0"}}>Mid</th>
+              <th style={{padding:"4px 4px",textAlign:"center",fontSize:9,fontWeight:700,color:"#78350f",borderBottom:"1px solid #e2e8f0"}}>Lat</th>
+            </tr>
+          </thead>
+          <tbody>
+            {staff.map(s => {
+              const wte = getWTE(staffWTE, s.init, qid);
+              const counts = allCounts[s.init] || {nights:0,weekends:0,earlies:0,mids:0,lates:0};
+              const tN = mode==="quarter" ? getTarget(wteConfig,s.grade,qid,"nights",  wte) : QUARTERS.reduce((a,q)=>a+getTarget(wteConfig,s.grade,q.id,"nights",  getWTE(staffWTE,s.init,q.id)),0);
+              const tW = mode==="quarter" ? getTarget(wteConfig,s.grade,qid,"weekends",wte) : QUARTERS.reduce((a,q)=>a+getTarget(wteConfig,s.grade,q.id,"weekends",getWTE(staffWTE,s.init,q.id)),0);
+              const tE = mode==="quarter" ? getTarget(wteConfig,s.grade,qid,"earlies", wte) : QUARTERS.reduce((a,q)=>a+getTarget(wteConfig,s.grade,q.id,"earlies", getWTE(staffWTE,s.init,q.id)),0);
+              const tM = mode==="quarter" ? getTarget(wteConfig,s.grade,qid,"mids",    wte) : QUARTERS.reduce((a,q)=>a+getTarget(wteConfig,s.grade,q.id,"mids",    getWTE(staffWTE,s.init,q.id)),0);
+              const tL = mode==="quarter" ? getTarget(wteConfig,s.grade,qid,"lates",   wte) : QUARTERS.reduce((a,q)=>a+getTarget(wteConfig,s.grade,q.id,"lates",   getWTE(staffWTE,s.init,q.id)),0);
+              return (
+                <tr key={s.id} style={{borderBottom:"1px solid #f8fafc"}}>
+                  <td style={{padding:"4px 8px",fontSize:10,fontWeight:600,color:"#374151",maxWidth:90,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}
+                    title={s.name}>{s.name.split(" ")[0]} {s.name.split(" ")[1]?.[0]}.</td>
+                  <StatCell done={counts.nights}   target={tN}/>
+                  <StatCell done={counts.weekends}  target={tW}/>
+                  <StatCell done={counts.earlies}   target={tE}/>
+                  <StatCell done={counts.mids}      target={tM}/>
+                  <StatCell done={counts.lates}     target={tL}/>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div style={{padding:"6px 10px",borderTop:"1px solid #f1f5f9",fontSize:9,color:"#94a3b8",flexShrink:0}}>
+        done/target · red=over · amber=near
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
 // ROTA BUILDER — slot-based, rows=dates
 // ═══════════════════════════════════════════════════════════════
 
-function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,setDayNotes,availability,addAudit,currentUser}) {
+function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,setDayNotes,availability,addAudit,currentUser,wteConfig,staffWTE}) {
   const [weekAnchor,setWA]=useState("2026-08-10");
   const [assignModal,setAM]=useState(null); // {date, slotKey}
   const [leaveModal,setLM]=useState(null);  // {date}
@@ -1262,7 +1294,8 @@ function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,s
         </div>
       </div>
 
-      <div className="bld-wrap">
+      <div style={{display:"flex",gap:12,alignItems:"flex-start"}}>
+      <div className="bld-wrap" style={{flex:1,minWidth:0}}>
         <table className="bld-tbl">
           <thead>
             <tr>
@@ -1298,19 +1331,11 @@ function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,s
                     const applicable=dateSlots.some(s=>s.key===sl.key);
                     const init=getAssigned(date,sl.key);
                     const av = init ? getAvail(init, date) : null;
-                    const conflict = init && av?.base === "UNAVAILABLE";
-                    const pref =
-                      init && av?.base && av.base !== "UNAVAILABLE"
-                        ? (
-                            av.base === "ANY"
-                              ? AVAIL.ANY
-                              : av.base === "SL"
-                              ? AVAIL.SL
-                              : av.base === "AVAILABLE" && av.slots.includes(sl.key)
-                              ? AVAIL.AVAILABLE
-                              : null
-                          )
-                        : null;
+                    const conflict = init && (av?.base === "UNAVAILABLE" || av?.base === "SL" || av?.base === "AL");
+                    const staffMember = init ? activeStaff.find(s=>s.init===init) : null;
+                    const pref = init && av?.base && !conflict
+                      ? isSlotPreferred(availability, init, date, sl.key, staffMember?.grade)
+                      : false;
                     if(!applicable) return <td key={sl.key} className="slot-cell disabled"><span style={{fontSize:9,color:"#e2e8f0"}}>—</span></td>;
                     return (
                       <td key={sl.key} className="slot-cell" style={{border:conflict?"2px solid #ef4444":"",background:init?sl.bg+"80":"white"}}
@@ -1318,7 +1343,7 @@ function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,s
                         {init?(
                           <span className="slot-chip" style={{background:sl.bg,color:conflict?"#ef4444":sl.fg,borderColor:conflict?"#ef4444":sl.bd,border:conflict?"2px solid #ef4444":"1px solid "+sl.bd}}>
                             {init.slice(0,4)}
-                            {pref && <span className="avail-dot" style={{ background: pref.fg || "#94a3b8" }} title={pref.label} />}
+                            {pref && <span className="avail-dot" style={{ background: sl.fg || "#94a3b8" }} title="preferred" />}
                           </span>
                         ):<span className="slot-empty"/>}
                       </td>
@@ -1339,6 +1364,14 @@ function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,s
           </tbody>
         </table>
       </div>
+      <StaffStatsSidebar
+        staff={activeStaff}
+        rota={rota}
+        wteConfig={wteConfig}
+        staffWTE={staffWTE}
+        weekAnchor={weekAnchor}
+      />
+      </div>
 
       {/* Assign slot modal */}
       {assignModal&&(()=>{
@@ -1354,20 +1387,15 @@ function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,s
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7}}>
               {activeStaff.map(s=>{
                 const av = getAvail(s.init, assignModal.date);
-                const avInfo =
-                  av?.base === "ANY"
-                    ? AVAIL.ANY
-                    : av?.base === "UNAVAILABLE"
-                    ? AVAIL.UNAVAILABLE
-                    : av?.base === "SL"
-                    ? AVAIL.SL
-                    : av?.base === "AVAILABLE" && av.slots.includes(assignModal.slotKey)
-                    ? AVAIL.AVAILABLE
-                    : null;
+                const avBase = av?.base;
+                const isPreferred = avBase && avBase !== "UNAVAILABLE" && avBase !== "SL" && avBase !== "AL"
+                  && isSlotPreferred(availability, s.init, assignModal.date, assignModal.slotKey, s.grade);
+                const avInfo = avBase ? (AVAIL[avBase] || null) : null;
+                const showAvInfo = avInfo && (avBase !== "EARLY" && avBase !== "MID" && avBase !== "LATE" && avBase !== "NIGHT" || isPreferred);
 
                 const busy = alreadyAssigned.has(s.init) && s.init !== cur;
                 const isSelected = s.init === cur;
-                const isUnavailable = av?.base === "UNAVAILABLE";
+                const isUnavailable = avBase === "UNAVAILABLE" || avBase === "SL" || avBase === "AL";
                 return (
                   <button key={s.id} onClick={()=>!busy&&assignSlot(assignModal.date,assignModal.slotKey,s.init)}
                     style={{
@@ -1384,8 +1412,9 @@ function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,s
                     <div style={{fontSize:12,fontWeight:700,color:isSelected?"#065f46":"#0d1b2a"}}>{s.name.split(" ")[0]} <span style={{opacity:.6}}>{s.name.split(" ")[1]?.[0]}.</span></div>
                     <div style={{fontSize:10,color:"#64748b",marginTop:2,display:"flex",alignItems:"center",gap:5}}>
                       {s.grade}
-                      {avInfo&&<span style={{padding:"1px 5px",borderRadius:3,background:avInfo.bg,color:avInfo.fg,fontWeight:700,fontSize:9}}>{avInfo.icon} {avInfo.short}</span>}
-                      {busy&&<span style={{fontSize:9,color:"#94a3b8"}}>already assigned</span>}
+                      {showAvInfo&&avInfo&&<span style={{padding:"1px 5px",borderRadius:3,background:avInfo.bg,color:avInfo.fg,fontWeight:700,fontSize:9}}>{avInfo.short}</span>}
+                      {isPreferred&&!["ANY","UNAVAILABLE","SL","AL"].includes(avBase)&&<span style={{padding:"1px 4px",borderRadius:3,background:"#d1fae5",color:"#065f46",fontWeight:700,fontSize:9}}>✓pref</span>}
+                      {busy&&<span style={{fontSize:9,color:"#94a3b8"}}>assigned</span>}
                     </div>
                   </button>
                 );
@@ -1667,6 +1696,160 @@ function Reports({user,staff,rota,leaveEntries}) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// ROTA CONFIG — FTE references + per-staff WTE
+// ═══════════════════════════════════════════════════════════════
+
+const GRADE_KEYS = ["ST4+","ST3","ACP","tACP"];
+const SHIFT_FIELDS = [
+  {key:"nights",   label:"Nights"},
+  {key:"weekends", label:"Weekends"},
+  {key:"earlies",  label:"Earlies"},
+  {key:"mids",     label:"Mids"},
+  {key:"lates",    label:"Lates"},
+];
+
+function RotaConfig({wteConfig, setWteConfig, staffWTE, setStaffWTE, staff, addAudit}) {
+  const [tab, setTab] = useState("fte"); // "fte" | "wte"
+  const activeStaff = staff.filter(s => s.role==="staff" && s.active);
+
+  const setFTE = (grade, qid, field, val) => {
+    const num = parseFloat(val);
+    if (isNaN(num) || num < 0) return;
+    setWteConfig(prev => ({
+      ...prev,
+      [grade]: {
+        ...prev[grade],
+        [qid]: { ...(prev[grade]?.[qid] || {}), [field]: num }
+      }
+    }));
+  };
+
+  const setFTEHours = (grade, val) => {
+    const num = parseFloat(val);
+    if (isNaN(num) || num <= 0) return;
+    setWteConfig(prev => ({ ...prev, [grade]: { ...(prev[grade]||{}), hoursPerWeek: num } }));
+  };
+
+  const setWTE = (init, qid, val) => {
+    const num = parseFloat(val);
+    if (isNaN(num) || num < 0 || num > 2) return;
+    setStaffWTE(prev => ({
+      ...prev,
+      [init]: { Q1:1, Q2:1, Q3:1, Q4:1, ...(prev[init]||{}), [qid]: num }
+    }));
+    addAudit("ADM", "WTE Change", `${init} ${qid} WTE → ${num}`);
+  };
+
+  return (
+    <div>
+      <div style={{display:"flex",gap:7,marginBottom:18}}>
+        {[["fte","FTE Reference Targets"],["wte","Per-Staff WTE by Quarter"]].map(([k,lbl])=>(
+          <button key={k} className={`btn${tab===k?" bp":" bs"}`} onClick={()=>setTab(k)}>{lbl}</button>
+        ))}
+      </div>
+
+      {tab==="fte"&&(
+        <div>
+          <div className="al al-i" style={{marginBottom:14}}>
+            Set the <strong>full-time equivalent</strong> targets per quarter for each grade. Individual targets are scaled by each person's WTE.
+          </div>
+          {GRADE_KEYS.map(grade=>{
+            const cfg = wteConfig[grade] || {};
+            return (
+              <div key={grade} className="card" style={{marginBottom:14}}>
+                <div className="ch">
+                  <span className="ct">{grade}</span>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <label style={{fontSize:11,color:"#64748b"}}>FTE hrs/wk</label>
+                    <input type="number" className="fi" style={{width:70,padding:"4px 7px"}}
+                      value={cfg.hoursPerWeek||""}
+                      onChange={e=>setFTEHours(grade,e.target.value)}
+                      step="0.25" min="0"/>
+                  </div>
+                </div>
+                <div className="cb" style={{overflowX:"auto"}}>
+                  <table className="tbl" style={{minWidth:500}}>
+                    <thead>
+                      <tr>
+                        <th>Field</th>
+                        {QUARTERS.map(q=><th key={q.id}>{q.id}</th>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {SHIFT_FIELDS.map(f=>(
+                        <tr key={f.key}>
+                          <td style={{fontWeight:600,fontSize:12}}>{f.label}</td>
+                          {QUARTERS.map(q=>(
+                            <td key={q.id} style={{padding:"5px 8px"}}>
+                              <input type="number" className="fi" style={{width:60,padding:"4px 7px",textAlign:"center"}}
+                                value={(cfg[q.id]||{})[f.key]||""}
+                                onChange={e=>setFTE(grade,q.id,f.key,e.target.value)}
+                                min="0" step="1"/>
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {tab==="wte"&&(
+        <div>
+          <div className="al al-i" style={{marginBottom:14}}>
+            Set each person's WTE per quarter (1.0 = full time). Changing a quarter's WTE only affects future target calculations — past rota assignments are unaffected.
+          </div>
+          <div className="card">
+            <div style={{overflowX:"auto"}}>
+              <table className="tbl">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Grade</th>
+                    {QUARTERS.map(q=><th key={q.id}>{q.id} WTE</th>)}
+                    {QUARTERS.map(q=><th key={q.id+"t"} style={{color:"#6366f1"}}>{q.id} Nights target</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {activeStaff.map(s=>{
+                    const sw = staffWTE[s.init] || {};
+                    return (
+                      <tr key={s.id}>
+                        <td style={{fontWeight:600}}>{s.name}</td>
+                        <td style={{color:"#64748b"}}>{s.grade}</td>
+                        {QUARTERS.map(q=>{
+                          const wte = sw[q.id] != null ? sw[q.id] : 1.0;
+                          return (
+                            <td key={q.id} style={{padding:"5px 8px"}}>
+                              <input type="number" className="fi" style={{width:60,padding:"4px 7px",textAlign:"center"}}
+                                value={wte} step="0.1" min="0.1" max="2"
+                                onChange={e=>setWTE(s.init,q.id,e.target.value)}/>
+                            </td>
+                          );
+                        })}
+                        {QUARTERS.map(q=>{
+                          const wte = (sw[q.id] != null ? sw[q.id] : 1.0);
+                          const t = getTarget(wteConfig, s.grade, q.id, "nights", wte);
+                          return <td key={q.id+"t"} style={{textAlign:"center",fontSize:12,color:"#6366f1",fontWeight:600}}>{t}</td>;
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
 // AUDIT LOG
 // ═══════════════════════════════════════════════════════════════
 
@@ -1700,6 +1883,8 @@ function App() {
   const [auditLog,setAudit]    = useState([{id:1,ts:"2026-08-05 09:00",user:"ADM",action:"System Init",details:"RotaHST 2026/27 initialised"}]);
   const [view,setView]         = useState("dashboard");
   const [viewMonth,setVM]      = useState(new Date(2026,7,1));
+  const [wteConfig,setWteConfig]= useState(INIT_WTE_CONFIG);
+  const [staffWTE,setStaffWTE] = useState({});  // {init: {Q1:1.0, ...}}
 
   const addAudit=(u,action,details)=>{
     const now=new Date(), ts=`${now.toLocaleDateString("en-GB")} ${now.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}`;
@@ -1710,7 +1895,7 @@ function App() {
   const hasOpenQ=QUARTERS.some(q=>quarterStatus[q.id]==="open");
   const isAdmin=user?.role==="admin";
 
-  const titles={dashboard:"Dashboard",calendar:"Rota Calendar",myshifts:"My Shifts",availability:"Availability",requests:isAdmin?"Leave Requests":"My Requests",builder:"Rota Builder",staff:"Staff Management",reports:isAdmin?"Reports":"My Summary",audit:"Audit Log"};
+  const titles={dashboard:"Dashboard",calendar:"Rota Calendar",myshifts:"My Shifts",availability:"Availability",requests:isAdmin?"Leave Requests":"My Requests",builder:"Rota Builder",staff:"Staff Management",reports:isAdmin?"Reports":"My Summary",rotaconfig:"Rota Config",audit:"Audit Log"};
 
   if(!user) return <><style>{CSS}</style><Login staff={staff} onLogin={setUser}/></>;
 
@@ -1747,9 +1932,10 @@ function App() {
                 />
               )}
             {view==="requests"   &&<RequestsView user={user} requests={requests} setRequests={setReqs} addAudit={addAudit}/>}
-            {view==="builder"    &&isAdmin&&<RotaBuilder rota={rota} setRota={setRota} leaveEntries={leaveEntries} setLeaveEntries={setLE} staff={staff} dayNotes={dayNotes} setDayNotes={setNotes} availability={availability} addAudit={addAudit} currentUser={user}/>}
+            {view==="builder"    &&isAdmin&&<RotaBuilder rota={rota} setRota={setRota} leaveEntries={leaveEntries} setLeaveEntries={setLE} staff={staff} dayNotes={dayNotes} setDayNotes={setNotes} availability={availability} addAudit={addAudit} currentUser={user} wteConfig={wteConfig} staffWTE={staffWTE}/>}
             {view==="staff"      &&isAdmin&&<StaffMgmt staff={staff} setStaff={setStaff} addAudit={addAudit} currentUser={user}/>}
             {view==="reports"    &&<Reports user={user} staff={staff} rota={rota} leaveEntries={leaveEntries}/>}
+            {view==="rotaconfig" &&isAdmin&&<RotaConfig wteConfig={wteConfig} setWteConfig={setWteConfig} staffWTE={staffWTE} setStaffWTE={setStaffWTE} staff={staff} addAudit={addAudit}/>}
             {view==="audit"      &&isAdmin&&<AuditLog log={auditLog}/>}
           </div>
         </div>
