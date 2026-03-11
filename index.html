@@ -82,7 +82,7 @@ const AVAIL = {
   EARLY:       { label:"Early shifts",  short:"Early",  bg:"#dcfce7", fg:"#14532d", icon:"E"  },
   MID:         { label:"Mid shifts",    short:"Mid",    bg:"#dbeafe", fg:"#1e3a8a", icon:"M"  },
   LATE:        { label:"Late shifts",   short:"Late",   bg:"#fef3c7", fg:"#78350f", icon:"L"  },
-  NIGHT:       { label:"Night shifts",  short:"Night",  bg:"#1e1b4b", fg:"#c7d2fe", icon:"N"  },
+  NIGHT:       { label:"Night shifts",  short:"Night",  bg:"#ddd6fe", fg:"#4c1d95", icon:"N"  },
 };
 
 // FTE reference targets per grade per quarter (admin can edit in Rota Config view)
@@ -92,6 +92,19 @@ const INIT_WTE_CONFIG = {
   "ACP":  { hoursPerWeek:37.5,  Q1:{nights:8, weekends:4,earlies:15,mids:12,lates:15}, Q2:{nights:8, weekends:4,earlies:15,mids:12,lates:15}, Q3:{nights:8, weekends:4,earlies:15,mids:12,lates:15}, Q4:{nights:8, weekends:4,earlies:15,mids:12,lates:15} },
   "tACP": { hoursPerWeek:37.5,  Q1:{nights:6, weekends:4,earlies:15,mids:12,lates:15}, Q2:{nights:6, weekends:4,earlies:15,mids:12,lates:15}, Q3:{nights:6, weekends:4,earlies:15,mids:12,lates:15}, Q4:{nights:6, weekends:4,earlies:15,mids:12,lates:15} },
 };
+
+// Hours per shift by slot key — doc = ST4+/ST3, acp = ACP/tACP
+const SLOT_HOURS = {
+  E1:{doc:8.5,acp:10}, E2:{doc:8.5,acp:10}, E3:{doc:8.5,acp:10}, E4:{doc:8.5,acp:10},
+  M1:{doc:9,  acp:10}, M2:{doc:9,  acp:10}, M3:{doc:9,  acp:10},
+  L1:{doc:8,  acp:10}, L2:{doc:8,  acp:10}, L3:{doc:8,  acp:10}, L4:{doc:8,  acp:10},
+  WE1:{doc:10,acp:10}, WE2:{doc:10,acp:10}, WE3:{doc:10,acp:10},
+  WL1:{doc:10.5,acp:10.5}, WL2:{doc:10.5,acp:10.5},
+  N1:{doc:10.5,acp:10.5},  N2:{doc:10.5,acp:10.5},
+  SN:{doc:10.5,acp:10.5},  AN:{doc:10.5,acp:10.5},
+};
+const isACPGrade = grade => grade==="ACP"||grade==="tACP";
+const getSlotHours = (slotKey, grade) => { const h=SLOT_HOURS[slotKey]||{doc:0,acp:0}; return isACPGrade(grade)?h.acp:h.doc; };
 
 const INIT_STAFF = [
   {id:1, name:"Michael Connolly",     init:"MC",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
@@ -247,6 +260,51 @@ const staffHasAnythingOnDate = (init, date, rota, leaveEntries, availability, st
   return onShift || leave;
 };
 
+// Quarterly hours budget = hoursPerWeek × WTE × 13 weeks
+const getQuarterlyBudget = (wteConfig, grade, wte) => {
+  const hpw = (wteConfig[grade] || wteConfig["ST4+"] || {}).hoursPerWeek || 0;
+  return Math.round(hpw * wte * 13 * 10) / 10;
+};
+
+// Sum shift hours for a person across given dates
+const getShiftHoursUsed = (init, grade, dates, rota) => {
+  let total = 0;
+  dates.forEach(d => {
+    const day = rota[d] || {};
+    Object.entries(day).forEach(([sk, v]) => {
+      if (v === init) total += getSlotHours(sk, grade);
+    });
+  });
+  return Math.round(total * 10) / 10;
+};
+
+// SL deduction: 8hrs per SL leave day in the given dates
+const getSLHoursDeducted = (init, leaveEntries, dates) => {
+  let total = 0;
+  dates.forEach(d => {
+    const entries = leaveEntries[d] || [];
+    if (entries.some(e => e.init === init && e.type === "SL")) total += 8;
+  });
+  return total;
+};
+
+// Sum of manual hours corrections for a person + quarter
+const getCorrectionsTotal = (init, qid, hoursCorrections) =>
+  (hoursCorrections || []).filter(c => c.init === init && c.qid === qid).reduce((a, c) => a + c.amount, 0);
+
+// Hours remaining for a person in a quarter
+const getHoursRemaining = (init, grade, qid, wteConfig, staffWTE, rota, leaveEntries, hoursCorrections) => {
+  const wte = (staffWTE[init] && staffWTE[init][qid] != null) ? staffWTE[init][qid] : 1.0;
+  const q = QUARTERS.find(x => x.id === qid);
+  if (!q) return null;
+  const dates = getDatesInRange(q.start, q.end);
+  const budget = getQuarterlyBudget(wteConfig, grade, wte);
+  const used = getShiftHoursUsed(init, grade, dates, rota);
+  const slDeduct = getSLHoursDeducted(init, leaveEntries, dates);
+  const corrections = getCorrectionsTotal(init, qid, hoursCorrections);
+  return Math.round((budget - used - slDeduct + corrections) * 10) / 10;
+};
+
 // ═══════════════════════════════════════════════════════════════
 // CSS
 // ═══════════════════════════════════════════════════════════════
@@ -373,7 +431,8 @@ body{font-family:'DM Sans',sans-serif;background:#f0f4f8;font-size:13px}
 .bld-tbl th{padding:5px 3px;font-size:9px;font-weight:700;text-align:center;border:1px solid #e2e8f0;white-space:nowrap;position:sticky;top:0;z-index:3}
 .bld-tbl td{padding:2px;border:1px solid #e8edf2;text-align:center;background:white;vertical-align:middle}
 .bld-date-col{text-align:left!important;padding:6px 10px!important;background:#fafafa!important;position:sticky;left:0;z-index:2;min-width:120px;white-space:nowrap}
-.bld-date-col.we-row{background:#fafaff!important}
+.bld-date-col.we-row{background:#dcfce7!important}
+.bld-tbl tr.we-row td{background:#f0fdf4}
 .bld-date-col.bh-row{background:#fffbeb!important}
 .bld-date-col.td-row{background:#f0fdf4!important}
 .slot-cell{min-width:44px;height:30px;cursor:pointer;transition:background .1s}
@@ -1135,6 +1194,86 @@ function AvailabilityView({
 }
 
 // ═══════════════════════════════════════════════════════════════
+// HOURS CORRECTIONS MODAL
+// ═══════════════════════════════════════════════════════════════
+
+function HoursCorrectModal({staffMember, hoursCorrections, setHoursCorrections, addAudit, currentUser, wteConfig, staffWTE, rota, leaveEntries, onClose}) {
+  const [qid, setQid] = useState("Q1");
+  const [amount, setAmount] = useState("");
+  const [reason, setReason] = useState("");
+
+  const existing = (hoursCorrections || []).filter(c => c.init === staffMember.init);
+
+  const save = () => {
+    const num = parseFloat(amount);
+    if (isNaN(num) || !reason.trim()) return;
+    const entry = {id:Date.now(), init:staffMember.init, qid, amount:num, reason:reason.trim(), createdBy:currentUser.init, createdAt:fmtISO(new Date())};
+    setHoursCorrections(p => [...p, entry]);
+    addAudit(currentUser.init, "Hours Correction", `${staffMember.init} ${qid} ${num>0?"+":""}${num}h — ${reason.trim()}`);
+    setAmount(""); setReason(""); setQid("Q1");
+  };
+
+  return (
+    <Modal title={`Hours Corrections — ${staffMember.name}`} onClose={onClose}
+      footer={<button className="btn bs" onClick={onClose}>Close</button>}>
+      <div style={{marginBottom:14}}>
+        <div style={{fontSize:11.5,fontWeight:700,color:"#374151",marginBottom:8}}>Current balances</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:14}}>
+          {QUARTERS.map(q=>{
+            const rem = getHoursRemaining(staffMember.init, staffMember.grade, q.id, wteConfig, staffWTE, rota, leaveEntries, hoursCorrections);
+            const col = rem==null?"#94a3b8":rem>=10?"#16a34a":rem>=0?"#d97706":"#ef4444";
+            return (
+              <div key={q.id} style={{background:"#f8fafc",borderRadius:7,padding:"8px 10px",textAlign:"center",border:`1px solid ${col}30`}}>
+                <div style={{fontSize:9,color:"#64748b",fontWeight:700}}>{q.id}</div>
+                <div style={{fontSize:14,fontWeight:800,color:col}}>{rem!=null?rem:"—"}</div>
+                <div style={{fontSize:8,color:"#94a3b8"}}>hrs left</div>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{fontSize:11.5,fontWeight:700,color:"#374151",marginBottom:8}}>Add correction</div>
+        <div style={{display:"grid",gridTemplateColumns:"80px 90px 1fr",gap:8,alignItems:"flex-end",marginBottom:10}}>
+          <div className="fg" style={{marginBottom:0}}>
+            <label className="fl">Quarter</label>
+            <select className="fi" value={qid} onChange={e=>setQid(e.target.value)}>
+              {QUARTERS.map(q=><option key={q.id} value={q.id}>{q.id}</option>)}
+            </select>
+          </div>
+          <div className="fg" style={{marginBottom:0}}>
+            <label className="fl">Hours (+/-)</label>
+            <input type="number" className="fi" value={amount} onChange={e=>setAmount(e.target.value)} step="0.5" placeholder="e.g. -8"/>
+          </div>
+          <div className="fg" style={{marginBottom:0}}>
+            <label className="fl">Reason</label>
+            <input className="fi" value={reason} onChange={e=>setReason(e.target.value)} placeholder="e.g. Bank holiday"/>
+          </div>
+        </div>
+        <button className="btn bp bsm" onClick={save} disabled={!amount||!reason.trim()}>Add correction</button>
+      </div>
+      {existing.length>0&&(
+        <div>
+          <div style={{fontSize:11.5,fontWeight:700,color:"#374151",marginBottom:8}}>Existing corrections</div>
+          <table className="tbl" style={{fontSize:11}}>
+            <thead><tr><th>Q</th><th>Amount</th><th>Reason</th><th>By</th><th>Date</th></tr></thead>
+            <tbody>
+              {existing.map(c=>(
+                <tr key={c.id}>
+                  <td><span className="badge b-staff">{c.qid}</span></td>
+                  <td style={{fontWeight:700,color:c.amount>=0?"#16a34a":"#ef4444"}}>{c.amount>=0?"+":""}{c.amount}h</td>
+                  <td>{c.reason}</td>
+                  <td style={{color:"#64748b"}}>{c.createdBy}</td>
+                  <td style={{color:"#94a3b8",fontSize:10}}>{c.createdAt}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
 // STAFF STATS SIDEBAR (used inside RotaBuilder)
 // ═══════════════════════════════════════════════════════════════
 
@@ -1178,10 +1317,11 @@ function StatCell({done, target}) {
   );
 }
 
-function StaffStatsSidebar({staff, rota, wteConfig, staffWTE, weekAnchor}) {
+function StaffStatsSidebar({staff, rota, wteConfig, staffWTE, selQ, leaveEntries, hoursCorrections, setHoursCorrections, addAudit, currentUser, availability}) {
   const [mode, setMode] = useState("quarter"); // "quarter" | "year"
+  const [corrModal, setCorrModal] = useState(null); // {init, name, grade}
 
-  const currentQ = useMemo(() => getQuarterForDate(weekAnchor), [weekAnchor]);
+  const currentQ = useMemo(() => QUARTERS.find(q=>q.id===selQ) || QUARTERS[0], [selQ]);
   const qDates   = useMemo(() => currentQ ? getDatesInRange(currentQ.start, currentQ.end) : [], [currentQ]);
   const allDates  = useMemo(() => {
     const ds = new Set();
@@ -1224,6 +1364,7 @@ function StaffStatsSidebar({staff, rota, wteConfig, staffWTE, weekAnchor}) {
               <th style={{padding:"4px 4px",textAlign:"center",fontSize:9,fontWeight:700,color:"#14532d",borderBottom:"1px solid #e2e8f0"}}>Ear</th>
               <th style={{padding:"4px 4px",textAlign:"center",fontSize:9,fontWeight:700,color:"#1e3a8a",borderBottom:"1px solid #e2e8f0"}}>Mid</th>
               <th style={{padding:"4px 4px",textAlign:"center",fontSize:9,fontWeight:700,color:"#78350f",borderBottom:"1px solid #e2e8f0"}}>Lat</th>
+              <th style={{padding:"4px 4px",textAlign:"center",fontSize:9,fontWeight:700,color:"#0f766e",borderBottom:"1px solid #e2e8f0"}}>Hrs</th>
             </tr>
           </thead>
           <tbody>
@@ -1235,15 +1376,28 @@ function StaffStatsSidebar({staff, rota, wteConfig, staffWTE, weekAnchor}) {
               const tE = mode==="quarter" ? getTarget(wteConfig,s.grade,qid,"earlies", wte) : QUARTERS.reduce((a,q)=>a+getTarget(wteConfig,s.grade,q.id,"earlies", getWTE(staffWTE,s.init,q.id)),0);
               const tM = mode==="quarter" ? getTarget(wteConfig,s.grade,qid,"mids",    wte) : QUARTERS.reduce((a,q)=>a+getTarget(wteConfig,s.grade,q.id,"mids",    getWTE(staffWTE,s.init,q.id)),0);
               const tL = mode==="quarter" ? getTarget(wteConfig,s.grade,qid,"lates",   wte) : QUARTERS.reduce((a,q)=>a+getTarget(wteConfig,s.grade,q.id,"lates",   getWTE(staffWTE,s.init,q.id)),0);
+              const hrs = mode==="quarter"
+                ? getHoursRemaining(s.init, s.grade, qid, wteConfig, staffWTE, rota, leaveEntries, hoursCorrections)
+                : QUARTERS.reduce((a,q)=>a+(getHoursRemaining(s.init,s.grade,q.id,wteConfig,staffWTE,rota,leaveEntries,hoursCorrections)||0),0);
+              const hrsCol = hrs==null?"#94a3b8":hrs>=10?"#16a34a":hrs>=0?"#d97706":"#ef4444";
               return (
                 <tr key={s.id} style={{borderBottom:"1px solid #f8fafc"}}>
-                  <td style={{padding:"4px 8px",fontSize:10,fontWeight:600,color:"#374151",maxWidth:90,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}
-                    title={s.name}>{s.name.split(" ")[0]} {s.name.split(" ")[1]?.[0]}.</td>
+                  <td style={{padding:"4px 8px",fontSize:10,fontWeight:600,color:"#374151",maxWidth:80,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}
+                    title={s.name}>
+                    <div style={{display:"flex",alignItems:"center",gap:3}}>
+                      <span>{s.name.split(" ")[0]} {s.name.split(" ")[1]?.[0]}.</span>
+                      <button onClick={()=>setCorrModal(s)} title="Hours corrections"
+                        style={{background:"none",border:"1px solid #d1d5db",borderRadius:3,cursor:"pointer",fontSize:8,padding:"0 3px",color:"#6366f1",lineHeight:"14px",flexShrink:0}}>⊕</button>
+                    </div>
+                  </td>
                   <StatCell done={counts.nights}   target={tN}/>
                   <StatCell done={counts.weekends}  target={tW}/>
                   <StatCell done={counts.earlies}   target={tE}/>
                   <StatCell done={counts.mids}      target={tM}/>
                   <StatCell done={counts.lates}     target={tL}/>
+                  <td style={{padding:"3px 5px",textAlign:"center",fontSize:10,fontWeight:700,color:hrsCol,whiteSpace:"nowrap"}}>
+                    {hrs!=null?hrs:"—"}
+                  </td>
                 </tr>
               );
             })}
@@ -1251,8 +1405,22 @@ function StaffStatsSidebar({staff, rota, wteConfig, staffWTE, weekAnchor}) {
         </table>
       </div>
       <div style={{padding:"6px 10px",borderTop:"1px solid #f1f5f9",fontSize:9,color:"#94a3b8",flexShrink:0}}>
-        done/target · red=over · amber=near
+        done/target · red=over · amber=near · Hrs=remaining
       </div>
+      {corrModal&&(
+        <HoursCorrectModal
+          staffMember={corrModal}
+          hoursCorrections={hoursCorrections}
+          setHoursCorrections={setHoursCorrections}
+          addAudit={addAudit}
+          currentUser={currentUser}
+          wteConfig={wteConfig}
+          staffWTE={staffWTE}
+          rota={rota}
+          leaveEntries={leaveEntries}
+          onClose={()=>setCorrModal(null)}
+        />
+      )}
     </div>
   );
 }
@@ -1261,8 +1429,8 @@ function StaffStatsSidebar({staff, rota, wteConfig, staffWTE, weekAnchor}) {
 // ROTA BUILDER — slot-based, rows=dates
 // ═══════════════════════════════════════════════════════════════
 
-function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,setDayNotes,availability,addAudit,currentUser,wteConfig,staffWTE}) {
-  const [weekAnchor,setWA]=useState("2026-08-10");
+function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,setDayNotes,availability,addAudit,currentUser,wteConfig,staffWTE,hoursCorrections,setHoursCorrections}) {
+  const [selQ,setSelQ]=useState("Q1");
   const [assignModal,setAM]=useState(null); // {date, slotKey}
   const [leaveModal,setLM]=useState(null);  // {date}
   const [noteModal,setNM]=useState(null);
@@ -1270,10 +1438,9 @@ function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,s
   const [leaveForm,setLF]=useState({init:"",type:"AL",note:""});
   const today=fmtISO(new Date());
 
-  const weekDates=useMemo(()=>getWeekDates(weekAnchor),[weekAnchor]);
+  const q=QUARTERS.find(x=>x.id===selQ)||QUARTERS[0];
+  const quarterDates=useMemo(()=>getDatesInRange(q.start,q.end),[q.start,q.end]);
   const activeStaff=staff.filter(s=>s.role==="staff"&&s.active);
-
-  const navWeek=delta=>{const d=new Date(weekAnchor+"T00:00:00");d.setDate(d.getDate()+delta*7);setWA(fmtISO(d));};
 
   const assignSlot=(date,slotKey,init)=>{
     setRota(p=>({...p,[date]:{...(p[date]||{}),[slotKey]:init||null}}));
@@ -1307,21 +1474,22 @@ function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,s
 
   return (
     <div>
-      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:16,flexWrap:"wrap"}}>
-        <div className="cal-nav">
-          <button onClick={()=>navWeek(-1)}>‹ Prev</button>
-          <div className="cal-mo" style={{minWidth:"auto",padding:"0 8px"}}>
-            Week of {fmtShort(weekDates[0])} – {fmtShort(weekDates[6])}
-          </div>
-          <button onClick={()=>navWeek(1)}>Next ›</button>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16,flexWrap:"wrap"}}>
+        <div style={{display:"flex",gap:6}}>
+          {QUARTERS.map(qv=>(
+            <button key={qv.id} onClick={()=>setSelQ(qv.id)}
+              className={`btn${selQ===qv.id?" bp":" bs"}`} style={{fontSize:12,padding:"5px 12px"}}>
+              {qv.id}: {qv.label.split(" ")[0]}–{qv.label.split(" ")[2]?.slice(0,3)}
+            </button>
+          ))}
         </div>
         <div className="al al-i" style={{margin:0,padding:"6px 11px",fontSize:11.5}}>
-          💡 Click a slot cell to assign · Click a date header to add a note · <strong>Red border</strong> = availability conflict
+          💡 Click a slot cell to assign · Click a date to add a note · <strong>Red border</strong> = conflict · 🟢 = available
         </div>
       </div>
 
       <div style={{display:"flex",gap:12,alignItems:"flex-start"}}>
-      <div className="bld-wrap" style={{flex:1,minWidth:0}}>
+      <div className="bld-wrap" style={{flex:1,minWidth:0,overflowY:"auto",maxHeight:"calc(100vh - 180px)"}}>
         <table className="bld-tbl">
           <thead>
             <tr>
@@ -1337,14 +1505,14 @@ function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,s
             </tr>
           </thead>
           <tbody>
-            {weekDates.map(date=>{
+            {quarterDates.map(date=>{
               const we=isWeekend(date),isBH=!!BH[date],isToday=date===today;
               const dateSlots=getSlotsForDay(date);
               const dayLeave=leaveEntries[date]||[];
               const note=dayNotes[date];
               const conflicts=SLOTS.map(sl=>{const init=getAssigned(date,sl.key);return init&&hasConflict(init,date)?init:null;}).filter(Boolean);
               return (
-                <tr key={date}>
+                <tr key={date} className={we?"we-row":""}>
                   <td className={`bld-date-col${we?" we-row":""}${isBH?" bh-row":""}${isToday?" td-row":""}`}
                     style={{cursor:"pointer"}} onClick={()=>{setNM(date);setNT(dayNotes[date]||"");}}>
                     <div style={{fontSize:12,fontWeight:700,color:isToday?"#065f46":we?"#6d28d9":"#0d1b2a"}}>{getDayName(date)} {new Date(date+"T00:00:00").getDate()}</div>
@@ -1362,6 +1530,7 @@ function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,s
                     const pref = init && av?.base && !conflict
                       ? isSlotPreferred(availability, init, date, sl.key, staffMember?.grade)
                       : false;
+                    const availCount = applicable ? activeStaff.filter(s=>isSlotPreferred(availability,s.init,date,sl.key,s.grade)).length : 0;
                     if(!applicable) return <td key={sl.key} className="slot-cell disabled"><span style={{fontSize:9,color:"#e2e8f0"}}>—</span></td>;
                     return (
                       <td key={sl.key} className="slot-cell" style={{border:conflict?"2px solid #ef4444":"",background:init?sl.bg+"80":"white"}}
@@ -1372,6 +1541,7 @@ function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,s
                             {pref && <span className="avail-dot" style={{ background: sl.fg || "#94a3b8" }} title="preferred" />}
                           </span>
                         ):<span className="slot-empty"/>}
+                        {availCount>0&&<div style={{fontSize:8,background:"#dcfce7",color:"#14532d",borderRadius:8,padding:"0 3px",marginTop:1,lineHeight:"12px"}}>{availCount}✓</div>}
                       </td>
                     );
                   })}
@@ -1395,7 +1565,13 @@ function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,s
         rota={rota}
         wteConfig={wteConfig}
         staffWTE={staffWTE}
-        weekAnchor={weekAnchor}
+        selQ={selQ}
+        leaveEntries={leaveEntries}
+        hoursCorrections={hoursCorrections}
+        setHoursCorrections={setHoursCorrections}
+        addAudit={addAudit}
+        currentUser={currentUser}
+        availability={availability}
       />
       </div>
 
@@ -1410,42 +1586,66 @@ function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,s
             footer={<><button className="btn bs" onClick={()=>setAM(null)}>Cancel</button>{cur&&<button className="btn bd" onClick={()=>assignSlot(assignModal.date,assignModal.slotKey,null)}>Clear</button>}</>}>
             {BH[assignModal.date]&&<div className="al al-w" style={{marginBottom:12}}>🎉 Bank Holiday: {BH[assignModal.date]}</div>}
             {cur&&<div className="al al-i" style={{marginBottom:12}}>Currently: <strong>{staff.find(s=>s.init===cur)?.name||cur}</strong></div>}
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7}}>
-              {activeStaff.map(s=>{
+            {(()=>{
+              const groups={avail:[],none:[],blocked:[]};
+              activeStaff.forEach(s=>{
                 const av = getAvail(s.init, assignModal.date);
                 const avBase = av?.base;
-                const isPreferred = avBase && avBase !== "UNAVAILABLE" && avBase !== "SL" && avBase !== "AL"
-                  && isSlotPreferred(availability, s.init, assignModal.date, assignModal.slotKey, s.grade);
-                const avInfo = avBase ? (AVAIL[avBase] || null) : null;
-                const showAvInfo = avInfo && (avBase !== "EARLY" && avBase !== "MID" && avBase !== "LATE" && avBase !== "NIGHT" || isPreferred);
-
-                const busy = alreadyAssigned.has(s.init) && s.init !== cur;
-                const isSelected = s.init === cur;
-                const isUnavailable = avBase === "UNAVAILABLE" || avBase === "SL" || avBase === "AL";
+                const isBlocked = avBase==="UNAVAILABLE"||avBase==="SL"||avBase==="AL";
+                const isPreferred = !isBlocked && isSlotPreferred(availability, s.init, assignModal.date, assignModal.slotKey, s.grade);
+                if(isPreferred) groups.avail.push(s);
+                else if(isBlocked) groups.blocked.push(s);
+                else groups.none.push(s);
+              });
+              const sort=arr=>[...arr].sort((a,b)=>a.name.localeCompare(b.name));
+              const renderStaff=(arr,groupLabel)=>{
+                if(arr.length===0) return null;
                 return (
-                  <button key={s.id} onClick={()=>!busy&&assignSlot(assignModal.date,assignModal.slotKey,s.init)}
-                    style={{
-                      padding:"9px 10px",
-                      border:`2px solid ${isSelected ? "#10b981" : isUnavailable ? "#ef4444" : "#e2e8f0"}`,
-                      borderRadius:8,
-                      background:isSelected ? "#f0fdf4" : isUnavailable ? "#fff5f5" : busy ? "#f9f9f9" : "white",
-                      cursor:busy ? "not-allowed" : "pointer",
-                      opacity:busy ? 0.5 : 1,
-                      textAlign:"left",
-                      transition:"all .1s"
-                        }}
-                  >
-                    <div style={{fontSize:12,fontWeight:700,color:isSelected?"#065f46":"#0d1b2a"}}>{s.name.split(" ")[0]} <span style={{opacity:.6}}>{s.name.split(" ")[1]?.[0]}.</span></div>
-                    <div style={{fontSize:10,color:"#64748b",marginTop:2,display:"flex",alignItems:"center",gap:5}}>
-                      {s.grade}
-                      {showAvInfo&&avInfo&&<span style={{padding:"1px 5px",borderRadius:3,background:avInfo.bg,color:avInfo.fg,fontWeight:700,fontSize:9}}>{avInfo.short}</span>}
-                      {isPreferred&&!["ANY","UNAVAILABLE","SL","AL"].includes(avBase)&&<span style={{padding:"1px 4px",borderRadius:3,background:"#d1fae5",color:"#065f46",fontWeight:700,fontSize:9}}>✓pref</span>}
-                      {busy&&<span style={{fontSize:9,color:"#94a3b8"}}>assigned</span>}
+                  <div style={{marginBottom:10}}>
+                    <div style={{fontSize:9,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"#94a3b8",marginBottom:5}}>{groupLabel}</div>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5}}>
+                      {arr.map(s=>{
+                        const av = getAvail(s.init, assignModal.date);
+                        const avBase = av?.base;
+                        const isBlocked = avBase==="UNAVAILABLE"||avBase==="SL"||avBase==="AL";
+                        const isPreferred = !isBlocked && isSlotPreferred(availability, s.init, assignModal.date, assignModal.slotKey, s.grade);
+                        const busy = alreadyAssigned.has(s.init) && s.init !== cur;
+                        const isSelected = s.init === cur;
+                        return (
+                          <button key={s.id} onClick={()=>!busy&&assignSlot(assignModal.date,assignModal.slotKey,s.init)}
+                            style={{
+                              padding:"8px 10px",
+                              border:`2px solid ${isSelected?"#10b981":isPreferred?"#86efac":isBlocked?"#fca5a5":"#e2e8f0"}`,
+                              borderLeft:`4px solid ${isSelected?"#10b981":isPreferred?"#22c55e":isBlocked?"#ef4444":"#e2e8f0"}`,
+                              borderRadius:8,
+                              background:isSelected?"#f0fdf4":isPreferred?"#f0fdf4":isBlocked?"#fff5f5":busy?"#f9f9f9":"white",
+                              cursor:busy?"not-allowed":"pointer",
+                              opacity:isBlocked?0.65:busy?0.5:1,
+                              textAlign:"left",
+                              transition:"all .1s"
+                            }}>
+                            <div style={{fontSize:11.5,fontWeight:700,color:isSelected?"#065f46":"#0d1b2a"}}>{s.name.split(" ")[0]} <span style={{opacity:.6,fontSize:10}}>{s.name.split(" ")[1]?.[0]}.</span></div>
+                            <div style={{fontSize:10,color:"#64748b",marginTop:2,display:"flex",alignItems:"center",gap:4,flexWrap:"wrap"}}>
+                              {s.grade}
+                              {isPreferred&&<span style={{padding:"1px 4px",borderRadius:3,background:"#d1fae5",color:"#065f46",fontWeight:700,fontSize:9}}>✓ avail</span>}
+                              {isBlocked&&avBase&&<span style={{padding:"1px 4px",borderRadius:3,background:"#fee2e2",color:"#7f1d1d",fontWeight:700,fontSize:9}}>{avBase}</span>}
+                              {busy&&<span style={{fontSize:9,color:"#94a3b8"}}>on shift</span>}
+                            </div>
+                          </button>
+                        );
+                      })}
                     </div>
-                  </button>
+                  </div>
                 );
-              })}
-            </div>
+              };
+              return (
+                <div>
+                  {renderStaff(sort(groups.avail),"✓ Available for this slot")}
+                  {renderStaff(sort(groups.none),"No preference set")}
+                  {renderStaff(sort(groups.blocked),"Unavailable / Leave")}
+                </div>
+              );
+            })()}
           </Modal>
         );
       })()}
@@ -1911,6 +2111,7 @@ function App() {
   const [viewMonth,setVM]      = useState(new Date(2026,7,1));
   const [wteConfig,setWteConfig]= useState(INIT_WTE_CONFIG);
   const [staffWTE,setStaffWTE] = useState({});  // {init: {Q1:1.0, ...}}
+  const [hoursCorrections,setHoursCorrections] = useState([]);  // [{id,init,qid,amount,reason,createdBy,createdAt}]
 
   const addAudit=(u,action,details)=>{
     const now=new Date(), ts=`${now.toLocaleDateString("en-GB")} ${now.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}`;
@@ -1958,7 +2159,7 @@ function App() {
                 />
               )}
             {view==="requests"   &&<RequestsView user={user} requests={requests} setRequests={setReqs} addAudit={addAudit}/>}
-            {view==="builder"    &&isAdmin&&<RotaBuilder rota={rota} setRota={setRota} leaveEntries={leaveEntries} setLeaveEntries={setLE} staff={staff} dayNotes={dayNotes} setDayNotes={setNotes} availability={availability} addAudit={addAudit} currentUser={user} wteConfig={wteConfig} staffWTE={staffWTE}/>}
+            {view==="builder"    &&isAdmin&&<RotaBuilder rota={rota} setRota={setRota} leaveEntries={leaveEntries} setLeaveEntries={setLE} staff={staff} dayNotes={dayNotes} setDayNotes={setNotes} availability={availability} addAudit={addAudit} currentUser={user} wteConfig={wteConfig} staffWTE={staffWTE} hoursCorrections={hoursCorrections} setHoursCorrections={setHoursCorrections}/>}
             {view==="staff"      &&isAdmin&&<StaffMgmt staff={staff} setStaff={setStaff} addAudit={addAudit} currentUser={user}/>}
             {view==="reports"    &&<Reports user={user} staff={staff} rota={rota} leaveEntries={leaveEntries}/>}
             {view==="rotaconfig" &&isAdmin&&<RotaConfig wteConfig={wteConfig} setWteConfig={setWteConfig} staffWTE={staffWTE} setStaffWTE={setStaffWTE} staff={staff} addAudit={addAudit}/>}
