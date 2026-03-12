@@ -93,6 +93,14 @@ const INIT_WTE_CONFIG = {
   "tACP": { hoursPerWeek:37.5,  nights:6,  weekends:4, earlies:15, mids:12, lates:15 },
 };
 
+// localStorage helpers — safe read/write with JSON (de)serialisation
+const lsGet = (key, fallback) => { try { const v=localStorage.getItem(key); return v!=null?JSON.parse(v):fallback; } catch{return fallback;} };
+const lsSave = (key, val) => { try { localStorage.setItem(key, JSON.stringify(val)); } catch{} };
+
+// Friendly calendar label for a slot object (used when filtering by person)
+const GRP_SHORT = {EARLY:"Early",MID:"Mid",LATE:"Late",WE_EARLY:"W/E",WE_LATE:"W/E Late",NIGHT1:"Night",NIGHT2:"Night",ST3_NIGHT:"Night",ACP_NIGHT:"Night"};
+const slotCalLabel = sl => sl.grp ? (GRP_SHORT[sl.grp] || sl.key) : sl.key;
+
 // Hours per shift by slot key — doc = ST4+/ST3, acp = ACP/tACP
 const SLOT_HOURS = {
   E1:{doc:8.5,acp:10}, E2:{doc:8.5,acp:10}, E3:{doc:8.5,acp:10}, E4:{doc:8.5,acp:10},
@@ -651,7 +659,7 @@ function CalendarView({rota,leaveEntries,dayNotes,staff,viewMonth,setViewMonth,v
                   {isBH&&<span className="bh-tag">BH</span>}
                 </div>
                 {note&&<div style={{fontSize:8,color:"#92400e",background:"#fef9c3",padding:"1px 3px",borderRadius:3,marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>📌</div>}
-                {items.slice(0,MAX).map((x,i)=><span key={i} className="chip-sm" style={{background:x.slot.bg,color:x.slot.fg,borderColor:x.slot.bd}}>{fStaff ? x.slot.key : x.init}</span>)}
+                {items.slice(0,MAX).map((x,i)=><span key={i} className="chip-sm" style={{background:x.slot.bg,color:x.slot.fg,borderColor:x.slot.bd}}>{fStaff ? slotCalLabel(x.slot) : x.init}</span>)}
                 {items.length>MAX&&<div className="more">+{items.length-MAX}</div>}
               </div>
             );
@@ -2095,22 +2103,35 @@ function AuditLog({log}) {
 
 function App() {
   const [user,setUser]         = useState(null);
-  const [staff,setStaff]       = useState(INIT_STAFF);
-  const [rota,setRota]         = useState({});  // {date: {slotKey: initials}}
-  const [leaveEntries,setLE]   = useState({});  // {date: [{init,type,note,id}]}
-  const [availability,setAvail]= useState({});  // {initials: {date: status}}
-  const [quarterStatus,setQS]  = useState({Q1:"open",Q2:"closed",Q3:"closed",Q4:"closed"});
-  const [requests,setReqs]     = useState([
+  const [staff,setStaff]       = useState(()=>lsGet('rhs_staff',INIT_STAFF));
+  const [rota,setRota]         = useState(()=>lsGet('rhs_rota',{}));
+  const [leaveEntries,setLE]   = useState(()=>lsGet('rhs_leave',{}));
+  const [availability,setAvail]= useState(()=>lsGet('rhs_avail',{}));
+  const [quarterStatus,setQS]  = useState(()=>lsGet('rhs_qstatus',{Q1:"open",Q2:"closed",Q3:"closed",Q4:"closed"}));
+  const [requests,setReqs]     = useState(()=>lsGet('rhs_requests',[
     {id:1,staffInitials:"MC",staffName:"Michael Connolly",type:"AL",startDate:"2026-09-01",endDate:"2026-09-05",reason:"Family holiday",status:"pending",adminNote:"",createdAt:"2026-08-05"},
     {id:2,staffInitials:"NW",staffName:"Nat Wright",      type:"SL",startDate:"2026-08-20",endDate:"2026-08-21",reason:"Conference",   status:"approved",adminNote:"Approved",createdAt:"2026-08-03"},
-  ]);
-  const [dayNotes,setNotes]    = useState({});
-  const [auditLog,setAudit]    = useState([{id:1,ts:"2026-08-05 09:00",user:"ADM",action:"System Init",details:"RotaHST 2026/27 initialised"}]);
+  ]));
+  const [dayNotes,setNotes]    = useState(()=>lsGet('rhs_notes',{}));
+  const [auditLog,setAudit]    = useState(()=>lsGet('rhs_audit',[{id:1,ts:"2026-08-05 09:00",user:"ADM",action:"System Init",details:"RotaHST 2026/27 initialised"}]));
   const [view,setView]         = useState("dashboard");
   const [viewMonth,setVM]      = useState(new Date(2026,7,1));
-  const [wteConfig,setWteConfig]= useState(INIT_WTE_CONFIG);
-  const [staffHours,setStaffHours] = useState({});  // {init: {Q1: null|hours, ...}} null=use grade default
-  const [hoursCorrections,setHoursCorrections] = useState([]);  // [{id,init,qid,amount,reason,createdBy,createdAt}]
+  const [wteConfig,setWteConfig]= useState(()=>lsGet('rhs_wteConfig',INIT_WTE_CONFIG));
+  const [staffHours,setStaffHours] = useState(()=>lsGet('rhs_staffHours',{}));
+  const [hoursCorrections,setHoursCorrections] = useState(()=>lsGet('rhs_corrections',[]));
+
+  // Persist all key state to localStorage whenever it changes
+  useEffect(()=>lsSave('rhs_staff',staff),[staff]);
+  useEffect(()=>lsSave('rhs_rota',rota),[rota]);
+  useEffect(()=>lsSave('rhs_leave',leaveEntries),[leaveEntries]);
+  useEffect(()=>lsSave('rhs_avail',availability),[availability]);
+  useEffect(()=>lsSave('rhs_qstatus',quarterStatus),[quarterStatus]);
+  useEffect(()=>lsSave('rhs_requests',requests),[requests]);
+  useEffect(()=>lsSave('rhs_notes',dayNotes),[dayNotes]);
+  useEffect(()=>lsSave('rhs_audit',auditLog),[auditLog]);
+  useEffect(()=>lsSave('rhs_wteConfig',wteConfig),[wteConfig]);
+  useEffect(()=>lsSave('rhs_staffHours',staffHours),[staffHours]);
+  useEffect(()=>lsSave('rhs_corrections',hoursCorrections),[hoursCorrections]);
 
   const addAudit=(u,action,details)=>{
     const now=new Date(), ts=`${now.toLocaleDateString("en-GB")} ${now.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}`;
