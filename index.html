@@ -98,7 +98,7 @@ const lsGet = (key, fallback) => { try { const v=localStorage.getItem(key); retu
 const lsSave = (key, val) => { try { localStorage.setItem(key, JSON.stringify(val)); } catch{} };
 
 // Friendly calendar label for a slot object (used when filtering by person)
-const GRP_SHORT = {EARLY:"Early",MID:"Mid",LATE:"Late",WE_EARLY:"W/E",WE_LATE:"W/E Late",NIGHT1:"Night",NIGHT2:"Night",ST3_NIGHT:"Night",ACP_NIGHT:"Night"};
+const GRP_SHORT = {EARLY:"Early",MID:"Mid",LATE:"Late",WE_EARLY:"W/E Early",WE_LATE:"W/E Late",NIGHT1:"SDM Night 1",NIGHT2:"SDM Night 2",ST3_NIGHT:"ST3 Night",ACP_NIGHT:"ACP Night"};
 const slotCalLabel = sl => sl.grp ? (GRP_SHORT[sl.grp] || sl.key) : sl.key;
 
 // Hours per shift by slot key — doc = ST4+/ST3, acp = ACP/tACP
