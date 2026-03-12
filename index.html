@@ -2146,7 +2146,7 @@ function App() {
       if (val !== undefined) setter(prev => JSON.stringify(prev) === JSON.stringify(val) ? prev : val);
     };
     const unsub = appDoc().onSnapshot(snap => {
-      if (snap.exists()) {
+      if (snap.exists) {
         const d = snap.data();
         upd(setStaff)(d.staff);              upd(setRota)(d.rota);
         upd(setLE)(d.leaveEntries);          upd(setAvail)(d.availability);
