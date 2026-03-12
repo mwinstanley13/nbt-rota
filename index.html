@@ -14,6 +14,7 @@
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <style>
     html,body,#root{height:100%;margin:0}
@@ -2138,26 +2139,40 @@ function App() {
   const [staffHours,setStaffHours] = useState(()=>lsGet('rhs_staffHours',{}));
   const [hoursCorrections,setHoursCorrections] = useState(()=>lsGet('rhs_corrections',[]));
 
-  // ── Subscribe to Firestore on mount ─────────────────────────────────────────
+  // ── Subscribe to Firestore on mount (gated behind Anonymous Auth) ────────────
+  // onAuthStateChanged fires immediately; if no user, we sign in anonymously.
+  // Once authenticated, the Firestore onSnapshot listener is set up.
   // upd() only calls the setter when the value has actually changed (avoids
-  // write→snapshot→write loops by keeping the same object reference when equal)
+  // write→snapshot→write loops by keeping the same object reference when equal).
   useEffect(() => {
     const upd = setter => val => {
       if (val !== undefined) setter(prev => JSON.stringify(prev) === JSON.stringify(val) ? prev : val);
     };
-    const unsub = appDoc().onSnapshot(snap => {
-      if (snap.exists) {
-        const d = snap.data();
-        upd(setStaff)(d.staff);              upd(setRota)(d.rota);
-        upd(setLE)(d.leaveEntries);          upd(setAvail)(d.availability);
-        upd(setQS)(d.quarterStatus);         upd(setReqs)(d.requests);
-        upd(setNotes)(d.dayNotes);           upd(setAudit)(d.auditLog);
-        upd(setWteConfig)(d.wteConfig);      upd(setStaffHours)(d.staffHours);
-        upd(setHoursCorrections)(d.hoursCorrections);
+    let unsubFirestore = null;
+    const unsubAuth = firebase.auth().onAuthStateChanged(firebaseUser => {
+      if (firebaseUser) {
+        // Authenticated — connect to Firestore
+        unsubFirestore = appDoc().onSnapshot(snap => {
+          if (snap.exists) {
+            const d = snap.data();
+            upd(setStaff)(d.staff);              upd(setRota)(d.rota);
+            upd(setLE)(d.leaveEntries);          upd(setAvail)(d.availability);
+            upd(setQS)(d.quarterStatus);         upd(setReqs)(d.requests);
+            upd(setNotes)(d.dayNotes);           upd(setAudit)(d.auditLog);
+            upd(setWteConfig)(d.wteConfig);      upd(setStaffHours)(d.staffHours);
+            upd(setHoursCorrections)(d.hoursCorrections);
+          }
+          setFsReady(true);
+        }, err => { console.error('Firestore:', err); setFsReady(true); });
+      } else {
+        // Not signed in — sign in anonymously (triggers onAuthStateChanged again)
+        firebase.auth().signInAnonymously().catch(err => {
+          console.error('Anonymous auth failed:', err);
+          setFsReady(true); // fall back so the app still loads
+        });
       }
-      setFsReady(true);
-    }, err => { console.error('Firestore:', err); setFsReady(true); });
-    return () => unsub();
+    });
+    return () => { unsubAuth(); if (unsubFirestore) unsubFirestore(); };
   }, []);
 
   // ── Write all state to Firestore whenever anything changes (after load) ──────
