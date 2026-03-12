@@ -82,7 +82,6 @@ const SLOTS = [
 ];
 
 const LEAVE_T = {
-  AL:      {label:"Annual Leave", abbr:"AL",bg:"#fef9c3",fg:"#713f12",bd:"#fde047"},
   SL:      {label:"Study Leave",  abbr:"SL",bg:"#f1f5f9",fg:"#334155",bd:"#94a3b8"},
   PHEM:    {label:"PHEM",         abbr:"PH",bg:"#fff7ed",fg:"#9a3412",bd:"#fb923c"},
   RESEARCH:{label:"Research",     abbr:"RE",bg:"#ecfdf5",fg:"#14532d",bd:"#4ade80"},
@@ -95,19 +94,21 @@ const AVAIL = {
   ANY:         { label:"Any",           short:"Any",    bg:"#dcfce7", fg:"#166534", icon:"Any" },
   UNAVAILABLE: { label:"Unavailable",   short:"Unavail",bg:"#fee2e2", fg:"#7f1d1d", icon:"✗" },
   SL:          { label:"Study Leave",   short:"SL",     bg:"#f1f5f9", fg:"#334155", icon:"SL" },
-  AL:          { label:"Annual Leave",  short:"AL",     bg:"#fef9c3", fg:"#713f12", icon:"AL" },
+  MILITARY:    { label:"Military",      short:"Mil",    bg:"#f0fdf4", fg:"#166534", icon:"MI" },
   EARLY:       { label:"Early shifts",  short:"Early",  bg:"#dcfce7", fg:"#14532d", icon:"E"  },
   MID:         { label:"Mid shifts",    short:"Mid",    bg:"#dbeafe", fg:"#1e3a8a", icon:"M"  },
   LATE:        { label:"Late shifts",   short:"Late",   bg:"#fef3c7", fg:"#78350f", icon:"L"  },
   NIGHT:       { label:"Night shifts",  short:"Night",  bg:"#ddd6fe", fg:"#4c1d95", icon:"N"  },
 };
 
-// FTE reference targets per grade per quarter (admin can edit in Rota Config view)
+// FTE reference targets per grade (admin can edit in Rota Config view)
+// hoursPerQuarter = net contracted hours per 13-week quarter (after AL/BH deduction)
 const INIT_WTE_CONFIG = {
-  "ST4+": { hoursPerWeek:45.25, nights:13, weekends:6, earlies:20, mids:16, lates:20 },
-  "ST3":  { hoursPerWeek:41.75, nights:10, weekends:5, earlies:18, mids:14, lates:18 },
-  "ACP":  { hoursPerWeek:37.5,  nights:8,  weekends:4, earlies:15, mids:12, lates:15 },
-  "tACP": { hoursPerWeek:37.5,  nights:6,  weekends:4, earlies:15, mids:12, lates:15 },
+  "ST4+":     { hoursPerWeek:45.25, hoursPerQuarter:419.85,  nights:13, weekends:6, earlies:20, mids:16, lates:20 },
+  "ST3":      { hoursPerWeek:41.75, hoursPerQuarter:418.55,  nights:10, weekends:5, earlies:18, mids:14, lates:18 },
+  "ACP":      { hoursPerWeek:37.5,  hoursPerQuarter:410.625, nights:8,  weekends:4, earlies:15, mids:12, lates:15 },
+  "tACP":     { hoursPerWeek:37.5,  hoursPerQuarter:410.625, nights:6,  weekends:4, earlies:15, mids:12, lates:15 },
+  "Military": { hoursPerWeek:27.05, hoursPerQuarter:351.6,   nights:6,  weekends:3, earlies:12, mids:9,  lates:12 },
 };
 
 // localStorage helpers — safe read/write with JSON (de)serialisation
@@ -212,7 +213,9 @@ const normaliseAvailEntry = (entry) => {
   }
 
   // old AVAILABLE base (manual slot checkboxes) → treat as ANY for backward compat
-  const base = entry.base === "AVAILABLE" ? "ANY" : (entry.base || null);
+  // old AL base → treat as SL for backward compat (AL removed)
+  let base = entry.base === "AVAILABLE" ? "ANY" : (entry.base || null);
+  if (base === "AL") base = "SL";
   return { base, slots: Array.isArray(entry.slots) ? entry.slots : [] };
 };
 
@@ -226,7 +229,7 @@ const getAvailEntry = (availability, init, date) =>
 
 const isBlockedDay = (availability, init, date) => {
   const e = getAvailEntry(availability, init, date);
-  return e.base === "UNAVAILABLE" || e.base === "SL" || e.base === "AL";
+  return e.base === "UNAVAILABLE" || e.base === "SL" || e.base === "MILITARY";
 };
 
 // Maps an availability base + grade + date to the slot keys it covers
@@ -285,12 +288,12 @@ const staffHasAnythingOnDate = (init, date, rota, leaveEntries, availability, st
   return onShift || leave;
 };
 
-// Budget for one person in one quarter — uses staffHours override or falls back to grade default × 13 weeks
+// Budget for one person in one quarter — uses staffHours override, then hoursPerQuarter, then hoursPerWeek × 13
 const getStaffQuarterBudget = (init, grade, qid, wteConfig, staffHours) => {
   const override = staffHours[init] && staffHours[init][qid] != null ? staffHours[init][qid] : null;
   if (override !== null) return override;
-  const hpw = (wteConfig[grade] || wteConfig["ST4+"] || {}).hoursPerWeek || 0;
-  return Math.round(hpw * 13 * 10) / 10;
+  const cfg = wteConfig[grade] || wteConfig["ST4+"] || {};
+  return cfg.hoursPerQuarter ?? Math.round((cfg.hoursPerWeek || 0) * 13 * 10) / 10;
 };
 
 // Sum shift hours for a person across given dates
@@ -305,15 +308,17 @@ const getShiftHoursUsed = (init, grade, dates, rota) => {
   return Math.round(total * 10) / 10;
 };
 
-// SL deduction: 8hrs per SL leave day in the given dates
-const getSLHoursDeducted = (init, leaveEntries, dates) => {
+// Leave deduction: 8hrs per SL or Military leave day in the given dates
+const getLeaveHoursDeducted = (init, leaveEntries, dates) => {
   let total = 0;
   dates.forEach(d => {
     const entries = leaveEntries[d] || [];
-    if (entries.some(e => e.init === init && e.type === "SL")) total += 8;
+    if (entries.some(e => e.init === init && (e.type === "SL" || e.type === "MILITARY"))) total += 8;
   });
   return total;
 };
+// Backward-compat alias
+const getSLHoursDeducted = getLeaveHoursDeducted;
 
 // Sum of manual hours corrections for a person + quarter
 const getCorrectionsTotal = (init, qid, hoursCorrections) =>
@@ -326,7 +331,7 @@ const getHoursRemaining = (init, grade, qid, wteConfig, staffHours, rota, leaveE
   const dates = getDatesInRange(q.start, q.end);
   const budget = getStaffQuarterBudget(init, grade, qid, wteConfig, staffHours);
   const used = getShiftHoursUsed(init, grade, dates, rota);
-  const slDeduct = getSLHoursDeducted(init, leaveEntries, dates);
+  const slDeduct = getLeaveHoursDeducted(init, leaveEntries, dates);
   const corrections = getCorrectionsTotal(init, qid, hoursCorrections);
   return Math.round((budget - used - slDeduct + corrections) * 10) / 10;
 };
@@ -481,6 +486,25 @@ body{font-family:'DM Sans',sans-serif;background:#f0f4f8;font-size:13px}
 .at{font-size:10px;color:#94a3b8;width:115px;flex-shrink:0}
 .au{font-size:10.5px;font-weight:700;color:#6366f1;width:45px;flex-shrink:0}
 .aa{font-size:12px;color:#374151;flex:1}
+
+/* ── Mobile hamburger button (hidden on desktop) ── */
+.mob-hbg{display:none;position:absolute;left:14px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:22px;color:#475569;padding:4px;line-height:1;z-index:1}
+
+/* ── Responsive layout ── */
+@media(max-width:768px){
+  .sb{position:fixed;top:0;left:0;height:100%;z-index:500;transform:translateX(-100%);transition:transform .25s;width:228px;overflow-y:auto}
+  .sb.mob-open{transform:translateX(0);box-shadow:4px 0 24px rgba(0,0,0,.35)}
+  .mob-hbg{display:block}
+  .hdr{padding-left:52px}
+  .body{padding:14px 12px}
+  .sg{grid-template-columns:repeat(2,1fr)}
+  .dg2{grid-template-columns:1fr}
+  .mbox{max-width:calc(100vw - 16px)}
+  .stats-sb{display:none}
+  .bld-wrap{-webkit-overflow-scrolling:touch}
+  .tbl{font-size:11.5px}
+  .tbl th,.tbl td{padding:7px 8px}
+}
 `;
 
 // ═══════════════════════════════════════════════════════════════
@@ -522,7 +546,7 @@ function Login({staff,onLogin}) {
 // SIDEBAR
 // ═══════════════════════════════════════════════════════════════
 
-function Sidebar({user,view,setView,onLogout,pendingCount,hasOpenQ}) {
+function Sidebar({user,view,setView,onLogout,pendingCount,hasOpenQ,isOpen,onClose}) {
   const isAdmin=user.role==="admin";
   const items=[
     {id:"dashboard",icon:"📊",label:"Dashboard"},
@@ -531,20 +555,21 @@ function Sidebar({user,view,setView,onLogout,pendingCount,hasOpenQ}) {
     {id:"availability",icon:"📋",label:"Availability",badge:!isAdmin&&hasOpenQ?"!":null},
     {id:"requests",icon:"📝",label:isAdmin?"Leave Requests":"My Requests",badge:isAdmin&&pendingCount>0?pendingCount:null},
     ...(isAdmin?[
-      {id:"builder",icon:"🔧",label:"Rota Builder"},
-      {id:"staff",     icon:"👥",label:"Staff"},
-      {id:"reports",   icon:"📈",label:"Reports"},
-      {id:"rotaconfig",icon:"⚙️",label:"Rota Config"},
-      {id:"audit",     icon:"🔍",label:"Audit Log"},
+      {id:"builder",     icon:"🔧",label:"Rota Builder"},
+      {id:"adjustments", icon:"⏱️",label:"Hour Adjustments"},
+      {id:"staff",       icon:"👥",label:"Staff"},
+      {id:"reports",     icon:"📈",label:"Reports"},
+      {id:"rotaconfig",  icon:"⚙️",label:"Rota Config"},
+      {id:"audit",       icon:"🔍",label:"Audit Log"},
     ]:[{id:"reports",icon:"📈",label:"My Summary"}]),
   ];
   return (
-    <div className="sb">
+    <div className={`sb${isOpen?" mob-open":""}`}>
       <div className="sb-logo"><h1><span>🏥</span>RotaHST</h1><p>Rota Year 2026 / 2027</p></div>
       <div className="sb-sec">
         <div className="sb-lbl">Menu</div>
         {items.map(n=>(
-          <button key={n.id} className={`nav-btn${view===n.id?" act":""}`} onClick={()=>setView(n.id)}>
+          <button key={n.id} className={`nav-btn${view===n.id?" act":""}`} onClick={()=>{setView(n.id);onClose&&onClose();}}>
             <span className="ni">{n.icon}</span>{n.label}
             {n.badge&&<span className="nb">{n.badge}</span>}
           </button>
@@ -766,7 +791,7 @@ function AvailabilityView({
     setLeaveEntries(prev => {
       const day = prev[date] || [];
       const filtered = day.filter(
-        e => !(e.init === init && e.type === "SL" && e.autoFromAvailability)
+        e => !(e.init === init && (e.type === "SL" || e.type === "MILITARY") && e.autoFromAvailability)
       );
       const out = { ...prev };
       if (filtered.length === 0) delete out[date];
@@ -812,11 +837,12 @@ function AvailabilityView({
     const date = pickModal.date;
     const init = dispInit;
     const existing = getEntry(init, date);
-    const wasLeaveBase = existing?.base === "SL" || existing?.base === "AL";
-    const willBeSL = modalDraft.base === "SL";
-    const willBeAL = modalDraft.base === "AL";
-    const willBeLeave = willBeSL || willBeAL;
-    const leaveType = willBeSL ? "SL" : "AL";
+    const wasLeaveBase = existing?.base === "SL" || existing?.base === "MILITARY";
+    const willBeSL  = modalDraft.base === "SL";
+    const willBeMil = modalDraft.base === "MILITARY";
+    const willBeLeave = willBeSL || willBeMil;
+    const leaveType = willBeSL ? "SL" : "MILITARY";
+    const leaveLabel = willBeSL ? "Study Leave" : "Military";
 
     if (!modalDraft.base) return;
 
@@ -825,33 +851,31 @@ function AvailabilityView({
       removeAutoSLLeave(init, date);
     }
 
-    if (willBeLeave && !dateHasBuiltRota(date)) {
+    // Determine if the quarter is open for this date
+    const dateQuarter = QUARTERS.find(q => date >= q.start && date <= q.end);
+    const isQOpen = dateQuarter ? quarterStatus[dateQuarter.id] === "open" : false;
+
+    if (willBeLeave && isQOpen) {
+      // Quarter is open — auto-accept leave directly
       setEntry(init, date, { base: modalDraft.base, slots: [] });
-      // Add auto leave entry directly (supports both SL and AL)
       setLeaveEntries(prev => {
         const day = prev[date] || [];
-        const alreadyThere = day.some(e => e.init === init && e.type === leaveType && e.autoFromAvailability);
-        if (alreadyThere) return prev;
+        if (day.some(e => e.init === init && e.type === leaveType && e.autoFromAvailability)) return prev;
         return {
           ...prev,
           [date]: [...day, { id: Date.now() + Math.random(), init, type: leaveType, note: "Auto-added from availability", autoFromAvailability: true }]
         };
       });
-      addAudit(user.init, "Availability", `${init} marked ${date}: ${leaveType} (auto-added to rota builder)`);
+      addAudit(user.init, "Availability", `${init} marked ${date}: ${leaveType} (auto-accepted, quarter open)`);
       setPickModal(null);
       return;
     }
 
-    if (willBeLeave && dateHasBuiltRota(date)) {
+    if (willBeLeave && !isQOpen) {
+      // Quarter is closed — create a pending request for admin approval
       const alreadyPending = (requests || []).some(
-        r =>
-          r.staffInitials === init &&
-          r.type === leaveType &&
-          r.startDate === date &&
-          r.endDate === date &&
-          r.status === "pending"
+        r => r.staffInitials === init && r.type === leaveType && r.startDate === date && r.status === "pending"
       );
-
       if (!alreadyPending) {
         setRequests(prev => [
           ...prev,
@@ -862,24 +886,21 @@ function AvailabilityView({
             type: leaveType,
             startDate: date,
             endDate: date,
-            reason: "Submitted from Availability after rota build",
+            reason: "Submitted from Availability (quarter closed)",
             status: "pending",
             adminNote: "",
             createdAt: fmtISO(new Date())
           }
         ]);
-        addAudit(user.init, `${leaveType} Request`, `${init} submitted ${leaveType} request for ${date} (rota already built)`);
+        addAudit(user.init, `${leaveType} Request`, `${init} submitted ${leaveType} request for ${date}`);
       }
-
-      alert(`This date already has rota/leave built. ${leaveType} has been submitted as a request for approval.`);
+      alert(`Availability is closed. ${leaveLabel} has been submitted for admin approval.`);
       setPickModal(null);
       return;
     }
 
     setEntry(init, date, { base: modalDraft.base, slots: [] });
-
     addAudit(user.init, "Availability", `${init} marked ${date}: ${modalDraft.base}`);
-
     setPickModal(null);
   };
 
@@ -887,7 +908,7 @@ function AvailabilityView({
     const init = dispInit;
     const existing = getEntry(init, date);
 
-    if (existing?.base === "SL" || existing?.base === "AL") {
+    if (existing?.base === "SL" || existing?.base === "MILITARY") {
       removeAutoSLLeave(init, date);
     }
 
@@ -1132,8 +1153,8 @@ function AvailabilityView({
           const availOpts = [
             { key:"ANY",         label:"Any",          sub:"All shifts",       bg:AVAIL.ANY.bg,         fg:AVAIL.ANY.fg },
             { key:"UNAVAILABLE", label:"Unavailable",  sub:"Day off",          bg:AVAIL.UNAVAILABLE.bg, fg:AVAIL.UNAVAILABLE.fg },
-            { key:"SL",          label:"Study Leave",  sub:"SL",               bg:AVAIL.SL.bg,          fg:AVAIL.SL.fg },
-            { key:"AL",          label:"Annual Leave", sub:"AL",               bg:AVAIL.AL.bg,          fg:AVAIL.AL.fg },
+            { key:"SL",          label:"Study Leave",  sub:"8hrs deducted",    bg:AVAIL.SL.bg,          fg:AVAIL.SL.fg },
+            { key:"MILITARY",    label:"Military",     sub:"8hrs deducted",    bg:AVAIL.MILITARY.bg,    fg:AVAIL.MILITARY.fg },
             { key:"EARLY",       label:"Early",        sub:we?"WE Early":"E1–E4",  bg:AVAIL.EARLY.bg, fg:AVAIL.EARLY.fg },
             ...(!we ? [{ key:"MID", label:"Mid", sub:"M1–M3", bg:AVAIL.MID.bg, fg:AVAIL.MID.fg }] : []),
             { key:"LATE",        label:"Late",         sub:we?"WE Late":"L1–L4",   bg:AVAIL.LATE.bg,  fg:AVAIL.LATE.fg },
@@ -1162,14 +1183,18 @@ function AvailabilityView({
                 <div className="al al-w" style={{ marginBottom: 12 }}>🎉 {BH[pickModal.date]}</div>
               )}
 
-              {dateHasBuiltRota(pickModal.date) && (
-                <div className="al al-i" style={{ marginBottom: 12 }}>
-                  This date already has rota/leave built. SL or AL on this date will be submitted as a request for approval.
-                </div>
-              )}
+              {(() => {
+                const dateQuarter = QUARTERS.find(q => pickModal.date >= q.start && pickModal.date <= q.end);
+                const isQOpen = dateQuarter ? quarterStatus[dateQuarter.id] === "open" : false;
+                return !isQOpen && (
+                  <div className="al al-i" style={{ marginBottom: 12 }}>
+                    Availability is closed for this quarter. Study Leave or Military submitted here will require admin approval.
+                  </div>
+                );
+              })()}
 
               {(() => {
-                const SINGLE = ["ANY","UNAVAILABLE","SL","AL"];
+                const SINGLE = ["ANY","UNAVAILABLE","SL","MILITARY"];
                 const SHIFT = ["EARLY","MID","LATE","NIGHT"];
                 const draftBases = modalDraft.base ? modalDraft.base.split(",") : [];
                 const handleClick = (key) => {
@@ -1328,7 +1353,8 @@ function countShifts(init, dates, rota) {
 // Effective WTE = actual quarterly hours / grade full-time quarterly hours
 function getEffectiveWTE(init, grade, qid, wteConfig, staffHours) {
   const actual = getStaffQuarterBudget(init, grade, qid, wteConfig, staffHours);
-  const full = ((wteConfig[grade] || wteConfig["ST4+"] || {}).hoursPerWeek || 0) * 13;
+  const cfg = wteConfig[grade] || wteConfig["ST4+"] || {};
+  const full = cfg.hoursPerQuarter ?? Math.round((cfg.hoursPerWeek || 0) * 13 * 10) / 10;
   return full > 0 ? Math.round(actual / full * 100) / 100 : 1.0;
 }
 
@@ -1464,7 +1490,7 @@ function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,s
   const [leaveModal,setLM]=useState(null);  // {date}
   const [noteModal,setNM]=useState(null);
   const [noteText,setNT]=useState("");
-  const [leaveForm,setLF]=useState({init:"",type:"AL",note:""});
+  const [leaveForm,setLF]=useState({init:"",type:"SL",note:""});
   const today=fmtISO(new Date());
 
   const q=QUARTERS.find(x=>x.id===selQ)||QUARTERS[0];
@@ -1481,7 +1507,7 @@ function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,s
     if(!leaveForm.init||!leaveForm.type) return;
     setLeaveEntries(p=>({...p,[leaveModal.date]:[...(p[leaveModal.date]||[]),{...leaveForm,id:Date.now()}]}));
     addAudit(currentUser.init,"Leave Added",`${leaveForm.init} ${LEAVE_T[leaveForm.type]?.label} on ${leaveModal.date}`);
-    setLM(null); setLF({init:"",type:"AL",note:""});
+    setLM(null); setLF({init:"",type:"SL",note:""});
   };
   const removeLeave=(date,id)=>{
     setLeaveEntries(p=>({...p,[date]:(p[date]||[]).filter(x=>x.id!==id)}));
@@ -1554,7 +1580,7 @@ function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,s
                     const applicable=dateSlots.some(s=>s.key===sl.key);
                     const init=getAssigned(date,sl.key);
                     const av = init ? getAvail(init, date) : null;
-                    const conflict = init && (av?.base === "UNAVAILABLE" || av?.base === "SL" || av?.base === "AL");
+                    const conflict = init && (av?.base === "UNAVAILABLE" || av?.base === "SL" || av?.base === "MILITARY");
                     const staffMember = init ? activeStaff.find(s=>s.init===init) : null;
                     const pref = init && av?.base && !conflict
                       ? isSlotPreferred(availability, init, date, sl.key, staffMember?.grade)
@@ -1581,7 +1607,7 @@ function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,s
                         <span style={{cursor:"pointer",fontSize:10,opacity:.7}} onClick={()=>removeLeave(date,e.id)}>×</span>
                       </div>
                     ):null;})}
-                    <button className="btn bs bsm" style={{fontSize:9.5,padding:"2px 7px",marginTop:dayLeave.length>0?3:0}} onClick={()=>{setLM({date});setLF({init:"",type:"AL",note:""});}}>+ Leave</button>
+                    <button className="btn bs bsm" style={{fontSize:9.5,padding:"2px 7px",marginTop:dayLeave.length>0?3:0}} onClick={()=>{setLM({date});setLF({init:"",type:"SL",note:""});}}>+ Leave</button>
                   </td>
                 </tr>
               );
@@ -1620,7 +1646,7 @@ function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,s
               activeStaff.forEach(s=>{
                 const av = getAvail(s.init, assignModal.date);
                 const avBase = av?.base;
-                const isBlocked = avBase==="UNAVAILABLE"||avBase==="SL"||avBase==="AL";
+                const isBlocked = avBase==="UNAVAILABLE"||avBase==="SL"||avBase==="MILITARY";
                 const isPreferred = !isBlocked && isSlotPreferred(availability, s.init, assignModal.date, assignModal.slotKey, s.grade);
                 if(isPreferred) groups.avail.push(s);
                 else if(isBlocked) groups.blocked.push(s);
@@ -1636,7 +1662,7 @@ function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,s
                       {arr.map(s=>{
                         const av = getAvail(s.init, assignModal.date);
                         const avBase = av?.base;
-                        const isBlocked = avBase==="UNAVAILABLE"||avBase==="SL"||avBase==="AL";
+                        const isBlocked = avBase==="UNAVAILABLE"||avBase==="SL"||avBase==="MILITARY";
                         const isPreferred = !isBlocked && isSlotPreferred(availability, s.init, assignModal.date, assignModal.slotKey, s.grade);
                         const busy = alreadyAssigned.has(s.init) && s.init !== cur;
                         const isSelected = s.init === cur;
@@ -1780,7 +1806,7 @@ function MyShifts({user,rota,leaveEntries,dayNotes}) {
 function RequestsView({user,requests,setRequests,addAudit}) {
   const isAdmin=user.role==="admin";
   const [showForm,setSF]=useState(false);
-  const [form,setForm]=useState({type:"AL",startDate:"",endDate:"",reason:""});
+  const [form,setForm]=useState({type:"SL",startDate:"",endDate:"",reason:""});
   const [actM,setActM]=useState(null); const [note,setNote]=useState("");
   const [filter,setFilter]=useState("all");
 
@@ -1788,7 +1814,7 @@ function RequestsView({user,requests,setRequests,addAudit}) {
     if(!form.startDate||!form.endDate) return;
     const r={id:Date.now(),staffInitials:user.init,staffName:user.name,type:form.type,startDate:form.startDate,endDate:form.endDate,reason:form.reason,status:"pending",adminNote:"",createdAt:fmtISO(new Date())};
     setRequests(p=>[...p,r]);addAudit(user.init,"Leave Request",`${user.name} submitted ${LEAVE_T[form.type]?.label}`);
-    setForm({type:"AL",startDate:"",endDate:"",reason:""});setSF(false);
+    setForm({type:"SL",startDate:"",endDate:"",reason:""});setSF(false);
   };
   const act=action=>{setRequests(p=>p.map(r=>r.id===actM.id?{...r,status:action,adminNote:note}:r));addAudit(user.init,`Request ${action}`,`${LEAVE_T[actM.type]?.label} for ${actM.staffName}`);setActM(null);setNote("");};
 
@@ -1822,6 +1848,7 @@ function RequestsView({user,requests,setRequests,addAudit}) {
             {["all","pending","approved","rejected"].map(f=><button key={f} className={`btn bsm${filter===f?" bp":""}`} onClick={()=>setFilter(f)} style={{textTransform:"capitalize"}}>{f}</button>)}
           </div>
         </div>
+        <div style={{overflowX:"auto"}}>
         <table className="tbl">
           <thead><tr>{isAdmin&&<th>Staff</th>}<th>Type</th><th>From</th><th>To</th><th>Reason</th><th>Status</th>{isAdmin&&<th>Actions</th>}</tr></thead>
           <tbody>
@@ -1838,6 +1865,7 @@ function RequestsView({user,requests,setRequests,addAudit}) {
               );})}
           </tbody>
         </table>
+        </div>
       </div>
       {actM&&(
         <Modal title={actM._rej?"Reject Request":"Approve Request"} onClose={()=>setActM(null)}
@@ -1914,8 +1942,8 @@ function Reports({user,staff,rota,leaveEntries}) {
     const myLeave=Object.entries(leaveEntries).flatMap(([d,es])=>es.filter(e=>e.init===s.init).map(e=>({d,type:e.type})));
     const nights=mySlots.filter(x=>["N1","N2","SN","AN"].includes(x.sk)).length;
     const wknd=mySlots.filter(x=>["WE1","WE2","WE3","WL1","WL2"].includes(x.sk)).length;
-    const al=myLeave.filter(x=>x.type==="AL").length;
-    return{...s,total:mySlots.length,nights,wknd,al,leave:myLeave.length};
+    const sl=myLeave.filter(x=>x.type==="SL"||x.type==="MILITARY").length;
+    return{...s,total:mySlots.length,nights,wknd,sl,leave:myLeave.length};
   }),[target,rota,leaveEntries]);
   const maxT=Math.max(...stats.map(s=>s.total),1);
   return (
@@ -1937,11 +1965,11 @@ function Reports({user,staff,rota,leaveEntries}) {
       <div className="card">
         <div className="ch"><span className="ct">Weekend Frequency Summary</span></div>
         <table className="tbl">
-          <thead><tr><th>Staff</th><th>Grade</th><th>Total Shifts</th><th>W/E Shifts</th><th>Frequency</th><th>Nights</th><th>Annual Leave</th></tr></thead>
+          <thead><tr><th>Staff</th><th>Grade</th><th>Total Shifts</th><th>W/E Shifts</th><th>Frequency</th><th>Nights</th><th>SL/Military</th></tr></thead>
           <tbody>{stats.map(s=>{const ratio=s.wknd>0?(s.total/s.wknd).toFixed(1):"—";const ok=s.wknd===0||parseFloat(ratio)>=2.5;return(
             <tr key={s.id}><td style={{fontWeight:600}}>{s.name}</td><td>{s.grade}</td><td>{s.total}</td><td>{s.wknd}</td>
             <td><span style={{padding:"2px 7px",borderRadius:4,background:ok?"#d1fae5":"#fee2e2",color:ok?"#065f46":"#7f1d1d",fontWeight:700,fontSize:11}}>1:{ratio}</span></td>
-            <td>{s.nights}</td><td>{s.al} days</td></tr>
+            <td>{s.nights}</td><td>{s.sl} days</td></tr>
           );})}
           </tbody>
         </table>
@@ -1954,7 +1982,7 @@ function Reports({user,staff,rota,leaveEntries}) {
 // ROTA CONFIG — FTE references + per-staff WTE
 // ═══════════════════════════════════════════════════════════════
 
-const GRADE_KEYS = ["ST4+","ST3","ACP","tACP"];
+const GRADE_KEYS = ["ST4+","ST3","ACP","tACP","Military"];
 const SHIFT_FIELDS = [
   {key:"nights",   label:"Nights"},
   {key:"weekends", label:"Weekends"},
@@ -2005,12 +2033,21 @@ function RotaConfig({wteConfig, setWteConfig, staffHours, setStaffHours, staff, 
               <div key={grade} className="card" style={{marginBottom:14}}>
                 <div className="ch">
                   <span className="ct">{grade}</span>
-                  <div style={{display:"flex",alignItems:"center",gap:8}}>
-                    <label style={{fontSize:11,color:"#64748b"}}>FTE hrs/wk</label>
-                    <input type="number" className="fi" style={{width:70,padding:"4px 7px"}}
-                      value={cfg.hoursPerWeek||""}
-                      onChange={e=>setFTEHours(grade,e.target.value)}
-                      step="0.25" min="0"/>
+                  <div style={{display:"flex",alignItems:"center",gap:12}}>
+                    <div style={{display:"flex",alignItems:"center",gap:6}}>
+                      <label style={{fontSize:11,color:"#64748b"}}>hrs/wk</label>
+                      <input type="number" className="fi" style={{width:70,padding:"4px 7px"}}
+                        value={cfg.hoursPerWeek||""}
+                        onChange={e=>setFTEHours(grade,e.target.value)}
+                        step="0.25" min="0"/>
+                    </div>
+                    <div style={{display:"flex",alignItems:"center",gap:6}}>
+                      <label style={{fontSize:11,color:"#64748b"}}>Net hrs/qtr</label>
+                      <input type="number" className="fi" style={{width:80,padding:"4px 7px"}}
+                        value={cfg.hoursPerQuarter||""}
+                        onChange={e=>setFTE(grade,"hoursPerQuarter",e.target.value)}
+                        step="0.5" min="0"/>
+                    </div>
                   </div>
                 </div>
                 <div className="cb">
@@ -2041,7 +2078,7 @@ function RotaConfig({wteConfig, setWteConfig, staffHours, setStaffHours, staff, 
       {tab==="hours"&&(
         <div>
           <div className="al al-i" style={{marginBottom:14}}>
-            Set each person's contracted hours per quarter. Leave blank to use the grade default (hrs/wk × 13 weeks). Changing a quarter only affects that quarter — previous quarters are unaffected.
+            Set each person's contracted hours per quarter. Leave blank to use the grade default (net hrs/qtr from FTE config). Changing a quarter only affects that quarter — previous quarters are unaffected.
           </div>
           <div className="card">
             <div style={{overflowX:"auto"}}>
@@ -2058,8 +2095,8 @@ function RotaConfig({wteConfig, setWteConfig, staffHours, setStaffHours, staff, 
                 <tbody>
                   {activeStaff.map(s=>{
                     const sh = staffHours[s.init] || {};
-                    const hpw = (wteConfig[s.grade] || wteConfig["ST4+"] || {}).hoursPerWeek || 0;
-                    const defaultQtr = Math.round(hpw * 13 * 10) / 10;
+                    const cfg = wteConfig[s.grade] || wteConfig["ST4+"] || {};
+                    const defaultQtr = cfg.hoursPerQuarter ?? Math.round((cfg.hoursPerWeek || 0) * 13 * 10) / 10;
                     const annual = QUARTERS.reduce((sum,q)=>{
                       const v = sh[q.id] != null ? sh[q.id] : defaultQtr;
                       return sum + v;
@@ -2115,6 +2152,114 @@ function AuditLog({log}) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// HOUR ADJUSTMENTS VIEW
+// ═══════════════════════════════════════════════════════════════
+
+function HoursAdjustView({staff,hoursCorrections,setHoursCorrections,addAudit,currentUser,wteConfig,staffHours,rota,leaveEntries}) {
+  const [filterInit, setFilterInit] = useState("");
+  const [targetInit, setTargetInit] = useState("");
+  const [qid, setQid]               = useState("Q1");
+  const [amount, setAmount]         = useState("");
+  const [reason, setReason]         = useState("");
+
+  const activeStaff = staff.filter(s => s.role==="staff" && s.active);
+  const visible = [...(hoursCorrections||[])]
+    .filter(c => !filterInit || c.init===filterInit)
+    .sort((a,b) => b.id - a.id);
+
+  const save = () => {
+    const num = parseFloat(amount);
+    if (isNaN(num) || !reason.trim() || !targetInit) return;
+    const entry = {id:Date.now(),init:targetInit,qid,amount:num,reason:reason.trim(),createdBy:currentUser.init,createdAt:fmtISO(new Date())};
+    setHoursCorrections(p=>[...p,entry]);
+    addAudit(currentUser.init,"Hours Correction",`${targetInit} ${qid} ${num>=0?"+":""}${num}h — ${reason.trim()}`);
+    setAmount(""); setReason("");
+  };
+
+  const del = (id) => {
+    if (!window.confirm("Delete this correction?")) return;
+    setHoursCorrections(p=>p.filter(c=>c.id!==id));
+    addAudit(currentUser.init,"Hours Correction Deleted",`id=${id}`);
+  };
+
+  return (
+    <div>
+      <div className="card" style={{marginBottom:16}}>
+        <div className="ch"><span className="ct">Add Hours Adjustment</span></div>
+        <div className="cb">
+          <div className="al al-i" style={{marginBottom:14}}>
+            Log a one-off hours adjustment for any staff member. Use negative values to deduct (e.g. −16 for sick cover), positive to add. A reason is required for audit purposes.
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 100px 100px 1fr auto",gap:10,alignItems:"flex-end"}}>
+            <div className="fg" style={{marginBottom:0}}>
+              <label className="fl">Staff member</label>
+              <select className="fi" value={targetInit} onChange={e=>setTargetInit(e.target.value)}>
+                <option value="">— select —</option>
+                {activeStaff.map(s=><option key={s.id} value={s.init}>{s.name} ({s.init})</option>)}
+              </select>
+            </div>
+            <div className="fg" style={{marginBottom:0}}>
+              <label className="fl">Quarter</label>
+              <select className="fi" value={qid} onChange={e=>setQid(e.target.value)}>
+                {QUARTERS.map(q=><option key={q.id} value={q.id}>{q.id}</option>)}
+              </select>
+            </div>
+            <div className="fg" style={{marginBottom:0}}>
+              <label className="fl">Hours (+/−)</label>
+              <input type="number" className="fi" value={amount} onChange={e=>setAmount(e.target.value)} step="0.5" placeholder="e.g. −16"/>
+            </div>
+            <div className="fg" style={{marginBottom:0}}>
+              <label className="fl">Reason</label>
+              <input className="fi" value={reason} onChange={e=>setReason(e.target.value)} placeholder="e.g. Sick cover, study day"/>
+            </div>
+            <button className="btn bp" onClick={save} disabled={!amount||!reason.trim()||!targetInit} style={{whiteSpace:"nowrap"}}>
+              Add
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="ch">
+          <span className="ct">All Adjustments</span>
+          <select className="fi" style={{width:180}} value={filterInit} onChange={e=>setFilterInit(e.target.value)}>
+            <option value="">All staff</option>
+            {activeStaff.map(s=><option key={s.id} value={s.init}>{s.name}</option>)}
+          </select>
+        </div>
+        <div style={{overflowX:"auto"}}>
+          {visible.length===0
+            ? <div style={{padding:24,textAlign:"center",color:"#94a3b8"}}>No adjustments recorded{filterInit ? " for this person" : ""}.</div>
+            : <table className="tbl">
+                <thead>
+                  <tr><th>Staff</th><th>Q</th><th>Amount</th><th>Reason</th><th>Logged by</th><th>Date</th><th></th></tr>
+                </thead>
+                <tbody>
+                  {visible.map(c=>{
+                    const s = staff.find(x=>x.init===c.init);
+                    return (
+                      <tr key={c.id}>
+                        <td style={{fontWeight:600}}>{s?.name||c.init}</td>
+                        <td><span className="badge b-staff">{c.qid}</span></td>
+                        <td style={{fontWeight:700,color:c.amount>=0?"#16a34a":"#ef4444"}}>{c.amount>=0?"+":""}{c.amount}h</td>
+                        <td>{c.reason}</td>
+                        <td style={{color:"#64748b"}}>{c.createdBy}</td>
+                        <td style={{color:"#94a3b8",fontSize:11}}>{c.createdAt}</td>
+                        <td><button className="btn bd bsm" onClick={()=>del(c.id)}>Delete</button></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+          }
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
 // MAIN APP
 // ═══════════════════════════════════════════════════════════════
 
@@ -2128,7 +2273,7 @@ function App() {
   const [availability,setAvail]= useState(()=>lsGet('rhs_avail',{}));
   const [quarterStatus,setQS]  = useState(()=>lsGet('rhs_qstatus',{Q1:"open",Q2:"closed",Q3:"closed",Q4:"closed"}));
   const [requests,setReqs]     = useState(()=>lsGet('rhs_requests',[
-    {id:1,staffInitials:"MC",staffName:"Michael Connolly",type:"AL",startDate:"2026-09-01",endDate:"2026-09-05",reason:"Family holiday",status:"pending",adminNote:"",createdAt:"2026-08-05"},
+    {id:1,staffInitials:"MC",staffName:"Michael Connolly",type:"SL",startDate:"2026-09-01",endDate:"2026-09-05",reason:"Conference",status:"pending",adminNote:"",createdAt:"2026-08-05"},
     {id:2,staffInitials:"NW",staffName:"Nat Wright",      type:"SL",startDate:"2026-08-20",endDate:"2026-08-21",reason:"Conference",   status:"approved",adminNote:"Approved",createdAt:"2026-08-03"},
   ]));
   const [dayNotes,setNotes]    = useState(()=>lsGet('rhs_notes',{}));
@@ -2138,6 +2283,7 @@ function App() {
   const [wteConfig,setWteConfig]= useState(()=>lsGet('rhs_wteConfig',INIT_WTE_CONFIG));
   const [staffHours,setStaffHours] = useState(()=>lsGet('rhs_staffHours',{}));
   const [hoursCorrections,setHoursCorrections] = useState(()=>lsGet('rhs_corrections',[]));
+  const [menuOpen,setMenuOpen] = useState(false);
 
   // ── Subscribe to Firestore on mount (gated behind Anonymous Auth) ────────────
   // onAuthStateChanged fires immediately; if no user, we sign in anonymously.
@@ -2194,7 +2340,7 @@ function App() {
   const hasOpenQ=QUARTERS.some(q=>quarterStatus[q.id]==="open");
   const isAdmin=user?.role==="admin";
 
-  const titles={dashboard:"Dashboard",calendar:"Rota Calendar",myshifts:"My Shifts",availability:"Availability",requests:isAdmin?"Leave Requests":"My Requests",builder:"Rota Builder",staff:"Staff Management",reports:isAdmin?"Reports":"My Summary",rotaconfig:"Rota Config",audit:"Audit Log"};
+  const titles={dashboard:"Dashboard",calendar:"Rota Calendar",myshifts:"My Shifts",availability:"Availability",requests:isAdmin?"Leave Requests":"My Requests",builder:"Rota Builder",adjustments:"Hour Adjustments",staff:"Staff Management",reports:isAdmin?"Reports":"My Summary",rotaconfig:"Rota Config",audit:"Audit Log"};
 
   if(!fsReady) return(
     <><style>{CSS}</style>
@@ -2211,9 +2357,11 @@ function App() {
     <>
       <style>{CSS}</style>
       <div className="app">
-        <Sidebar user={user} view={view} setView={setView} onLogout={()=>setUser(null)} pendingCount={pendingCount} hasOpenQ={hasOpenQ}/>
+        <Sidebar user={user} view={view} setView={setView} onLogout={()=>setUser(null)} pendingCount={pendingCount} hasOpenQ={hasOpenQ} isOpen={menuOpen} onClose={()=>setMenuOpen(false)}/>
+        {menuOpen&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.4)",zIndex:499}} onClick={()=>setMenuOpen(false)}/>}
         <div className="main">
-          <div className="hdr">
+          <div className="hdr" style={{position:"relative"}}>
+            <button className="mob-hbg" onClick={()=>setMenuOpen(m=>!m)}>☰</button>
             <h2>{titles[view]||""}</h2>
             <div style={{display:"flex",gap:7,alignItems:"center"}}>
               {isAdmin&&<span className="badge b-admin">Admin</span>}
@@ -2244,6 +2392,7 @@ function App() {
             {view==="staff"      &&isAdmin&&<StaffMgmt staff={staff} setStaff={setStaff} addAudit={addAudit} currentUser={user}/>}
             {view==="reports"    &&<Reports user={user} staff={staff} rota={rota} leaveEntries={leaveEntries}/>}
             {view==="rotaconfig" &&isAdmin&&<RotaConfig wteConfig={wteConfig} setWteConfig={setWteConfig} staffHours={staffHours} setStaffHours={setStaffHours} staff={staff} addAudit={addAudit}/>}
+            {view==="adjustments"&&isAdmin&&<HoursAdjustView staff={staff} hoursCorrections={hoursCorrections} setHoursCorrections={setHoursCorrections} addAudit={addAudit} currentUser={user} wteConfig={wteConfig} staffHours={staffHours} rota={rota} leaveEntries={leaveEntries}/>}
             {view==="audit"      &&isAdmin&&<AuditLog log={auditLog}/>}
           </div>
         </div>
