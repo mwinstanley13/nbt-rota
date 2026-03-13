@@ -95,6 +95,7 @@ const AVAIL = {
   UNAVAILABLE: { label:"Unavailable",   short:"Unavail",bg:"#fee2e2", fg:"#7f1d1d", icon:"✗" },
   SL:          { label:"Study Leave",   short:"SL",     bg:"#f1f5f9", fg:"#334155", icon:"SL" },
   MILITARY:    { label:"Military",      short:"Mil",    bg:"#f0fdf4", fg:"#166534", icon:"MI" },
+  PHEM:        { label:"PHEM",          short:"PH",     bg:"#fff7ed", fg:"#9a3412", icon:"PH" },
   EARLY:       { label:"Early shifts",  short:"Early",  bg:"#dcfce7", fg:"#14532d", icon:"E"  },
   MID:         { label:"Mid shifts",    short:"Mid",    bg:"#dbeafe", fg:"#1e3a8a", icon:"M"  },
   LATE:        { label:"Late shifts",   short:"Late",   bg:"#fef3c7", fg:"#78350f", icon:"L"  },
@@ -133,39 +134,39 @@ const isACPGrade = grade => grade==="ACP"||grade==="tACP";
 const getSlotHours = (slotKey, grade) => { const h=SLOT_HOURS[slotKey]||{doc:0,acp:0}; return isACPGrade(grade)?h.acp:h.doc; };
 
 const INIT_STAFF = [
-  {id:1, name:"Michael Connolly",     init:"MC",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
-  {id:2, name:"Aled Donaldson",       init:"AD",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
-  {id:3, name:"John Allison",         init:"JA",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
-  {id:4, name:"Sarah Johnson",        init:"SJ",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
-  {id:5, name:"Anthony McLaughlin",   init:"AM",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
-  {id:6, name:"Eleanor Burke",        init:"EB",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
-  {id:7, name:"Sam Copson",           init:"SC",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
-  {id:8, name:"Matthew Bankhead",     init:"MB",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
-  {id:9, name:"Mark Winstanley",      init:"MW",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
-  {id:10,name:"Lauren Bose",          init:"LB",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
-  {id:11,name:"Cal Doherty",          init:"CD",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
-  {id:12,name:"Celestine Weegenaar",  init:"CW",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
-  {id:13,name:"Maud Mccutcheon",      init:"MM",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
-  {id:14,name:"Jodie Sage",           init:"JS",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
-  {id:15,name:"Mhairi De Saint Croix",init:"MDS", grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
-  {id:16,name:"Hayley Fairbairn",     init:"HF",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
-  {id:17,name:"Vay Deshpande",        init:"VD",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
-  {id:18,name:"Sarah Ackroyd",        init:"SA",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
-  {id:19,name:"Michael Cole",         init:"MCOL",grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
-  {id:20,name:"Steven Arena",         init:"SAr", grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
-  {id:21,name:"Andy Witt",            init:"AW",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
-  {id:22,name:"Karl Smith",           init:"KS",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
-  {id:23,name:"Nat Nauman",           init:"NN",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true},
-  {id:24,name:"Nat Wright",           init:"NW",  grade:"ST3", hrs:41.75,pw:"rota2026",role:"staff",active:true},
-  {id:25,name:"Tom Field",            init:"TF",  grade:"ST3", hrs:41.75,pw:"rota2026",role:"staff",active:true},
-  {id:26,name:"Jaz Matthews",         init:"JM",  grade:"ST3", hrs:41.75,pw:"rota2026",role:"staff",active:true},
-  {id:27,name:"Steph Gooch",          init:"SG",  grade:"ST3", hrs:41.75,pw:"rota2026",role:"staff",active:true},
-  {id:28,name:"Emma Worgan",          init:"EW",  grade:"ST3", hrs:41.75,pw:"rota2026",role:"staff",active:true},
-  {id:29,name:"Mike Gammon",          init:"MG",  grade:"ST3", hrs:41.75,pw:"rota2026",role:"staff",active:true},
-  {id:30,name:"Harriet Jones",        init:"HJ",  grade:"ST3", hrs:41.75,pw:"rota2026",role:"staff",active:true},
-  {id:31,name:"Jack Sadler",          init:"JS2", grade:"ST3", hrs:41.75,pw:"rota2026",role:"staff",active:true},
-  {id:32,name:"Nikki Mavel",          init:"NM",  grade:"ACP", hrs:37.5, pw:"rota2026",role:"staff",active:true},
-  {id:99,name:"Rota Admin",           init:"ADM", grade:"Admin",hrs:0,   pw:"admin2026",role:"admin",active:true},
+  {id:1, name:"Michael Connolly",     init:"MC",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
+  {id:2, name:"Aled Donaldson",       init:"AD",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
+  {id:3, name:"John Allison",         init:"JA",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
+  {id:4, name:"Sarah Johnson",        init:"SJ",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
+  {id:5, name:"Anthony McLaughlin",   init:"AM",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
+  {id:6, name:"Eleanor Burke",        init:"EB",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
+  {id:7, name:"Sam Copson",           init:"SC",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
+  {id:8, name:"Matthew Bankhead",     init:"MB",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
+  {id:9, name:"Mark Winstanley",      init:"MW",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
+  {id:10,name:"Lauren Bose",          init:"LB",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
+  {id:11,name:"Cal Doherty",          init:"CD",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
+  {id:12,name:"Celestine Weegenaar",  init:"CW",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
+  {id:13,name:"Maud Mccutcheon",      init:"MM",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
+  {id:14,name:"Jodie Sage",           init:"JS",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
+  {id:15,name:"Mhairi De Saint Croix",init:"MDS", grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
+  {id:16,name:"Hayley Fairbairn",     init:"HF",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
+  {id:17,name:"Vay Deshpande",        init:"VD",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
+  {id:18,name:"Sarah Ackroyd",        init:"SA",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
+  {id:19,name:"Michael Cole",         init:"MCOL",grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
+  {id:20,name:"Steven Arena",         init:"SAr", grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
+  {id:21,name:"Andy Witt",            init:"AW",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
+  {id:22,name:"Karl Smith",           init:"KS",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
+  {id:23,name:"Nat Nauman",           init:"NN",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
+  {id:24,name:"Nat Wright",           init:"NW",  grade:"ST3", hrs:41.75,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
+  {id:25,name:"Tom Field",            init:"TF",  grade:"ST3", hrs:41.75,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
+  {id:26,name:"Jaz Matthews",         init:"JM",  grade:"ST3", hrs:41.75,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
+  {id:27,name:"Steph Gooch",          init:"SG",  grade:"ST3", hrs:41.75,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
+  {id:28,name:"Emma Worgan",          init:"EW",  grade:"ST3", hrs:41.75,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
+  {id:29,name:"Mike Gammon",          init:"MG",  grade:"ST3", hrs:41.75,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
+  {id:30,name:"Harriet Jones",        init:"HJ",  grade:"ST3", hrs:41.75,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
+  {id:31,name:"Jack Sadler",          init:"JS2", grade:"ST3", hrs:41.75,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
+  {id:32,name:"Nikki Mavel",          init:"NM",  grade:"ACP", hrs:37.5, pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
+  {id:99,name:"Rota Admin",           init:"ADM", grade:"Admin",hrs:0,   pw:"admin2026",role:"admin",active:true,slDays:0,militaryDays:0},
 ];
 
 // ═══════════════════════════════════════════════════════════════
@@ -229,7 +230,7 @@ const getAvailEntry = (availability, init, date) =>
 
 const isBlockedDay = (availability, init, date) => {
   const e = getAvailEntry(availability, init, date);
-  return e.base === "UNAVAILABLE" || e.base === "SL" || e.base === "MILITARY";
+  return e.base === "UNAVAILABLE" || e.base === "SL" || e.base === "MILITARY" || e.base === "PHEM";
 };
 
 // Maps an availability base + grade + date to the slot keys it covers
@@ -576,6 +577,7 @@ function Sidebar({user,view,setView,onLogout,pendingCount,hasOpenQ,isOpen,onClos
       {id:"adjustments", icon:"⏱️",label:"Hour Adjustments"},
       {id:"staff",       icon:"👥",label:"Staff"},
       {id:"reports",     icon:"📈",label:"Reports"},
+      {id:"fixeddays",   icon:"📆",label:"Fixed Days Off"},
       {id:"rotaconfig",  icon:"⚙️",label:"Rota Config"},
       {id:"yearsetup",   icon:"📅",label:"Year Setup"},
       {id:"audit",       icon:"🔍",label:"Audit Log"},
@@ -765,7 +767,9 @@ function AvailabilityView({
   requests,
   setRequests,
   applyCarryForward,
-  quarters
+  quarters,
+  fixedDaysOff,
+  setFixedDaysOff
 }) {
   const isAdmin = user.role === "admin";
 
@@ -1183,14 +1187,15 @@ function AvailabilityView({
             "SDM Night 1 & 2";
 
           const availOpts = [
-            { key:"ANY",         label:"Any",          sub:"All shifts",       bg:AVAIL.ANY.bg,         fg:AVAIL.ANY.fg },
-            { key:"UNAVAILABLE", label:"Unavailable",  sub:"Day off",          bg:AVAIL.UNAVAILABLE.bg, fg:AVAIL.UNAVAILABLE.fg },
-            { key:"SL",          label:"Study Leave",  sub:"8hrs deducted",    bg:AVAIL.SL.bg,          fg:AVAIL.SL.fg },
-            { key:"MILITARY",    label:"Military",     sub:"8hrs deducted",    bg:AVAIL.MILITARY.bg,    fg:AVAIL.MILITARY.fg },
-            { key:"EARLY",       label:"Early",        sub:we?"WE Early":"E1–E4",  bg:AVAIL.EARLY.bg, fg:AVAIL.EARLY.fg },
-            ...(!we ? [{ key:"MID", label:"Mid", sub:"M1–M3", bg:AVAIL.MID.bg, fg:AVAIL.MID.fg }] : []),
-            { key:"LATE",        label:"Late",         sub:we?"WE Late":"L1–L4",   bg:AVAIL.LATE.bg,  fg:AVAIL.LATE.fg },
-            { key:"NIGHT",       label:"Night",        sub:nightLabel,         bg:AVAIL.NIGHT.bg,       fg:AVAIL.NIGHT.fg },
+            { key:"ANY",         label:"Any",         bg:AVAIL.ANY.bg,         fg:AVAIL.ANY.fg },
+            { key:"UNAVAILABLE", label:"Unavailable", bg:AVAIL.UNAVAILABLE.bg, fg:AVAIL.UNAVAILABLE.fg },
+            { key:"SL",          label:"Study Leave", bg:AVAIL.SL.bg,          fg:AVAIL.SL.fg },
+            { key:"MILITARY",    label:"Military",    bg:AVAIL.MILITARY.bg,    fg:AVAIL.MILITARY.fg },
+            { key:"PHEM",        label:"PHEM",        bg:AVAIL.PHEM.bg,        fg:AVAIL.PHEM.fg },
+            { key:"EARLY",       label:"Early",       bg:AVAIL.EARLY.bg,       fg:AVAIL.EARLY.fg },
+            ...(!we ? [{ key:"MID", label:"Mid",      bg:AVAIL.MID.bg,         fg:AVAIL.MID.fg }] : []),
+            { key:"LATE",        label:"Late",        bg:AVAIL.LATE.bg,        fg:AVAIL.LATE.fg },
+            { key:"NIGHT",       label:"Night",       bg:AVAIL.NIGHT.bg,       fg:AVAIL.NIGHT.fg },
           ];
 
           return (
@@ -1226,7 +1231,7 @@ function AvailabilityView({
               })()}
 
               {(() => {
-                const SINGLE = ["ANY","UNAVAILABLE","SL","MILITARY"];
+                const SINGLE = ["ANY","UNAVAILABLE","SL","MILITARY","PHEM"];
                 const SHIFT = ["EARLY","MID","LATE","NIGHT"];
                 const draftBases = modalDraft.base ? modalDraft.base.split(",") : [];
                 const handleClick = (key) => {
@@ -1261,8 +1266,7 @@ function AvailabilityView({
                             transition: "all .1s"
                           }}
                         >
-                          <div>{opt.label}</div>
-                          <div style={{ fontSize: 9.5, fontWeight: 500, opacity: 0.75, marginTop: 2 }}>{opt.sub}</div>
+                          {opt.label}
                         </button>
                       );
                     })}
@@ -1272,6 +1276,51 @@ function AvailabilityView({
             </Modal>
           );
         })()}
+
+    {/* ── Fixed Days Off ── */}
+    {!isAdmin && fixedDaysOff && setFixedDaysOff && (() => {
+      const DAY_NAMES = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+      const REASONS   = ["Research","Fellow Day"];
+      const myFixed   = fixedDaysOff.filter(f=>f.init===user.init);
+      const [fdDay, setFdDay] = React.useState("Monday");
+      const [fdReason, setFdReason] = React.useState("Research");
+      const addFixed = () => {
+        if (myFixed.some(f=>f.dayOfWeek===fdDay&&f.reason===fdReason)) return;
+        setFixedDaysOff(prev=>[...prev,{id:Date.now(),init:user.init,name:user.name,dayOfWeek:fdDay,reason:fdReason,addedDate:fmtISO(new Date())}]);
+        addAudit(user.init,"Fixed Day Off",`${user.init} added fixed ${fdReason} day: ${fdDay}`);
+      };
+      return (
+        <div className="card" style={{marginTop:18}}>
+          <div className="ch"><span className="ct">Fixed Days Off</span><span style={{fontSize:11,color:"#94a3b8",marginLeft:8}}>Regular non-working days (Research / Fellow Day)</span></div>
+          <div className="cb">
+            {myFixed.length===0&&<p style={{fontSize:12.5,color:"#94a3b8",margin:"8px 0"}}>No fixed days off set.</p>}
+            {myFixed.map(f=>(
+              <div key={f.id} style={{display:"flex",alignItems:"center",gap:10,padding:"6px 0",borderBottom:"1px solid #f1f5f9"}}>
+                <span style={{flex:1,fontSize:13,fontWeight:600}}>{f.dayOfWeek}</span>
+                <span style={{padding:"2px 8px",borderRadius:4,background:"#eff6ff",color:"#1d4ed8",fontSize:11,fontWeight:600}}>{f.reason}</span>
+                <button className="btn bs bsm" style={{color:"#ef4444",borderColor:"#ef4444"}} onClick={()=>{setFixedDaysOff(prev=>prev.filter(x=>x.id!==f.id));addAudit(user.init,"Fixed Day Off",`${user.init} removed fixed ${f.reason}: ${f.dayOfWeek}`);}}>Remove</button>
+              </div>
+            ))}
+            <div style={{display:"flex",gap:8,marginTop:12,flexWrap:"wrap",alignItems:"flex-end"}}>
+              <div className="fg" style={{margin:0}}>
+                <label className="fl">Day</label>
+                <select className="fi" style={{padding:"5px 8px"}} value={fdDay} onChange={e=>setFdDay(e.target.value)}>
+                  {DAY_NAMES.map(d=><option key={d}>{d}</option>)}
+                </select>
+              </div>
+              <div className="fg" style={{margin:0}}>
+                <label className="fl">Reason</label>
+                <select className="fi" style={{padding:"5px 8px"}} value={fdReason} onChange={e=>setFdReason(e.target.value)}>
+                  {REASONS.map(r=><option key={r}>{r}</option>)}
+                </select>
+              </div>
+              <button className="btn bp" style={{height:34,alignSelf:"flex-end"}} onClick={addFixed}>＋ Add</button>
+            </div>
+          </div>
+        </div>
+      );
+    })()}
+
     </div>
   );
 }
@@ -1917,11 +1966,15 @@ function RequestsView({user,requests,setRequests,addAudit}) {
 function StaffMgmt({staff,setStaff,addAudit,currentUser}) {
   const [modal,setModal]=useState(null); const [form,setForm]=useState({});
   const [pwModal,setPwM]=useState(null); const [newPw,setNPw]=useState("");
-  const save=()=>{modal==="add"?setStaff(p=>[...p,{...form,id:Date.now()}]):setStaff(p=>p.map(s=>s.id===modal.id?{...s,...form}:s));addAudit(currentUser.init,"Staff",`${form.name} ${modal==="add"?"added":"updated"}`);setModal(null);};
+  const save=()=>{
+    const rec={...form,slDays:parseInt(form.slDays)||0,militaryDays:parseInt(form.militaryDays)||0};
+    modal==="add"?setStaff(p=>[...p,{...rec,id:Date.now()}]):setStaff(p=>p.map(s=>s.id===modal.id?{...s,...rec}:s));
+    addAudit(currentUser.init,"Staff",`${form.name} ${modal==="add"?"added":"updated"}`);setModal(null);
+  };
   const show=staff.filter(s=>s.role!=="admin");
   return (
     <div>
-      <div style={{display:"flex",gap:10,marginBottom:14}}><button className="btn bp" onClick={()=>{setForm({name:"",init:"",grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true});setModal("add");}}>＋ Add Staff</button></div>
+      <div style={{display:"flex",gap:10,marginBottom:14}}><button className="btn bp" onClick={()=>{setForm({name:"",init:"",grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0});setModal("add");}}>＋ Add Staff</button></div>
       <div className="card">
         <table className="tbl">
           <thead><tr><th>Name</th><th>Init</th><th>Grade</th><th>Hrs</th><th>Status</th><th>Actions</th></tr></thead>
@@ -1951,6 +2004,8 @@ function StaffMgmt({staff,setStaff,addAudit,currentUser}) {
             <option>ST4+</option><option>ST3</option><option>ACP</option><option>PHEM Fellow</option><option>Research Fellow</option><option>Military</option>
           </select></div>
           <div className="fg"><label className="fl">Hours/Week</label><input type="number" className="fi" value={form.hrs||45.25} onChange={e=>setForm(f=>({...f,hrs:parseFloat(e.target.value)||0}))}/></div>
+          <div className="fg"><label className="fl">SL Days Entitlement / yr</label><input type="number" className="fi" value={form.slDays??30} onChange={e=>setForm(f=>({...f,slDays:e.target.value}))}/></div>
+          <div className="fg"><label className="fl">Military Days / yr</label><input type="number" className="fi" value={form.militaryDays??0} onChange={e=>setForm(f=>({...f,militaryDays:e.target.value}))}/></div>
           {modal==="add"&&<div className="fg"><label className="fl">Password</label><input className="fi" value={form.pw||"rota2026"} onChange={e=>setForm(f=>({...f,pw:e.target.value}))}/></div>}
         </div>
       </Modal>}
@@ -1963,47 +2018,157 @@ function StaffMgmt({staff,setStaff,addAudit,currentUser}) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// FIXED DAYS OFF — Admin view
+// ═══════════════════════════════════════════════════════════════
+
+function FixedDaysView({fixedDaysOff,setFixedDaysOff,staff,addAudit,currentUser}) {
+  const [filterInit,setFilterInit]=useState("");
+  const filtered=fixedDaysOff.filter(f=>!filterInit||f.init===filterInit);
+  const DAY_ORDER=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+  const sorted=[...filtered].sort((a,b)=>DAY_ORDER.indexOf(a.dayOfWeek)-DAY_ORDER.indexOf(b.dayOfWeek)||a.name?.localeCompare(b.name));
+  return (
+    <div>
+      <div className="card">
+        <div className="ch">
+          <span className="ct">Fixed Days Off</span>
+          <select className="fi" style={{width:180,padding:"4px 8px",marginLeft:"auto"}} value={filterInit} onChange={e=>setFilterInit(e.target.value)}>
+            <option value="">All Staff</option>
+            {staff.filter(s=>s.role==="staff"&&s.active).sort((a,b)=>a.name.localeCompare(b.name)).map(s=><option key={s.id} value={s.init}>{s.name}</option>)}
+          </select>
+        </div>
+        <div className="cb">
+          {sorted.length===0&&<p style={{fontSize:12.5,color:"#94a3b8",padding:"8px 0"}}>No fixed days off recorded.</p>}
+          <table className="tbl">
+            <thead><tr><th>Staff</th><th>Grade</th><th>Day</th><th>Reason</th><th>Added</th><th>Action</th></tr></thead>
+            <tbody>{sorted.map(f=>{
+              const sm=staff.find(s=>s.init===f.init);
+              return (
+                <tr key={f.id}>
+                  <td style={{fontWeight:600}}>{f.name||f.init}</td>
+                  <td>{sm?.grade||"—"}</td>
+                  <td>{f.dayOfWeek}</td>
+                  <td><span style={{padding:"2px 8px",borderRadius:4,background:"#eff6ff",color:"#1d4ed8",fontSize:11,fontWeight:600}}>{f.reason}</span></td>
+                  <td style={{fontSize:11,color:"#94a3b8"}}>{f.addedDate||"—"}</td>
+                  <td><button className="btn bs bsm" style={{color:"#ef4444",borderColor:"#ef4444"}} onClick={()=>{setFixedDaysOff(prev=>prev.filter(x=>x.id!==f.id));addAudit(currentUser.init,"Fixed Day Off",`Admin removed ${f.name||f.init} fixed ${f.reason}: ${f.dayOfWeek}`);}}>Remove</button></td>
+                </tr>
+              );
+            })}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
 // REPORTS
 // ═══════════════════════════════════════════════════════════════
 
 function Reports({user,staff,rota,leaveEntries}) {
   const isAdmin=user.role==="admin";
   const target=isAdmin?staff.filter(s=>s.role==="staff"&&s.active):staff.filter(s=>s.init===user.init);
+
+  // ISO-week key (Monday-anchored) for grouping weekend units
+  const weekKey=d=>{const dt=new Date(d);const mon=new Date(dt);mon.setDate(dt.getDate()-((dt.getDay()+6)%7));return mon.toISOString().slice(0,10);};
+
   const stats=useMemo(()=>target.map(s=>{
-    const mySlots=Object.entries(rota).flatMap(([d,slots])=>Object.entries(slots).filter(([,i])=>i===s.init).map(([sk])=>({d,sk})));
+    const mySlots=Object.entries(rota).flatMap(([d,slots])=>Object.entries(slots).filter(([,v])=>v===s.init).map(([sk])=>({d,sk})));
     const myLeave=Object.entries(leaveEntries).flatMap(([d,es])=>es.filter(e=>e.init===s.init).map(e=>({d,type:e.type})));
+
+    const total=mySlots.length;
     const nights=mySlots.filter(x=>["N1","N2","SN","AN"].includes(x.sk)).length;
-    const wknd=mySlots.filter(x=>["WE1","WE2","WE3","WL1","WL2"].includes(x.sk)).length;
-    const sl=myLeave.filter(x=>x.type==="SL"||x.type==="MILITARY").length;
-    return{...s,total:mySlots.length,nights,wknd,sl,leave:myLeave.length};
+
+    // Weekends worked: unique ISO weeks where person worked Fri-night, Sat any, or Sun any
+    const weWeeks=new Set();
+    mySlots.forEach(({d,sk})=>{
+      const day=new Date(d).getDay(); // 0=Sun,1=Mon...5=Fri,6=Sat
+      const isFriNight=day===5&&["N1","N2","SN","AN"].includes(sk);
+      const isSat=day===6;
+      const isSun=day===0;
+      if(isFriNight||isSat||isSun) weWeeks.add(weekKey(d));
+    });
+    const weWorked=weWeeks.size;
+
+    // Shift type breakdowns (early/mid/late across week and weekend)
+    const earlySlots=["E1","E2","E3","E4","WE1","WE2","WE3"];
+    const midSlots  =["M1","M2","M3"];
+    const lateSlots =["L1","L2","L3","L4","WL1","WL2"];
+    const earlies=mySlots.filter(x=>earlySlots.includes(x.sk)).length;
+    const mids   =mySlots.filter(x=>midSlots.includes(x.sk)).length;
+    const lates  =mySlots.filter(x=>lateSlots.includes(x.sk)).length;
+
+    const pct=(n)=>total>0?Math.round((n/total)*100):0;
+
+    // Leave taken (unique dates to avoid double-counting auto entries)
+    const slDates  =new Set(myLeave.filter(x=>x.type==="SL").map(x=>x.d));
+    const milDates =new Set(myLeave.filter(x=>x.type==="MILITARY").map(x=>x.d));
+
+    return{
+      ...s, total, nights, weWorked,
+      earlies,mids,lates,
+      pctEarly:pct(earlies), pctMid:pct(mids), pctLate:pct(lates),
+      slTaken:slDates.size,   slEntitlement:s.slDays??30,
+      milTaken:milDates.size, milEntitlement:s.militaryDays??0,
+    };
   }),[target,rota,leaveEntries]);
-  const maxT=Math.max(...stats.map(s=>s.total),1);
+
+  const thStyle={background:"#f8fafc",fontWeight:700,fontSize:11,color:"#475569",padding:"8px 10px",textAlign:"center",borderBottom:"2px solid #e2e8f0",whiteSpace:"nowrap"};
+  const tdStyle={padding:"7px 10px",textAlign:"center",fontSize:12.5,borderBottom:"1px solid #f1f5f9"};
+  const pctCell=(pct)=>{
+    const bg=pct>=30?"#eff6ff":pct>=20?"#f0fdf4":"#fafafa";
+    const fg=pct>=30?"#1d4ed8":pct>=20?"#15803d":"#64748b";
+    return <span style={{padding:"2px 7px",borderRadius:4,background:bg,color:fg,fontWeight:700,fontSize:11}}>{pct}%</span>;
+  };
+
   return (
-    <div>
-      <div className="dg2" style={{marginBottom:16}}>
-        <div className="card">
-          <div className="ch"><span className="ct">Total Shifts</span></div>
-          <div className="cb" style={{maxHeight:380,overflowY:"auto"}}>
-            {stats.map(s=><div key={s.id} className="rbar"><div className="rl" title={s.name}>{s.name.split(" ")[0]} {s.name.split(" ")[1]?.[0]}.</div><div className="rt"><div className="rf" style={{width:`${(s.total/maxT)*100}%`,background:"#10b981"}}/></div><div className="rv">{s.total}</div></div>)}
-          </div>
-        </div>
-        <div className="card">
-          <div className="ch"><span className="ct">Night Shifts</span></div>
-          <div className="cb" style={{maxHeight:380,overflowY:"auto"}}>
-            {stats.map(s=><div key={s.id} className="rbar"><div className="rl" title={s.name}>{s.name.split(" ")[0]} {s.name.split(" ")[1]?.[0]}.</div><div className="rt"><div className="rf" style={{width:s.total>0?`${(s.nights/s.total)*100}%`:"0%",background:"#6366f1"}}/></div><div className="rv">{s.nights}</div></div>)}
-          </div>
-        </div>
-      </div>
-      <div className="card">
-        <div className="ch"><span className="ct">Weekend Frequency Summary</span></div>
-        <table className="tbl">
-          <thead><tr><th>Staff</th><th>Grade</th><th>Total Shifts</th><th>W/E Shifts</th><th>Frequency</th><th>Nights</th><th>SL/Military</th></tr></thead>
-          <tbody>{stats.map(s=>{const ratio=s.wknd>0?(s.total/s.wknd).toFixed(1):"—";const ok=s.wknd===0||parseFloat(ratio)>=2.5;return(
-            <tr key={s.id}><td style={{fontWeight:600}}>{s.name}</td><td>{s.grade}</td><td>{s.total}</td><td>{s.wknd}</td>
-            <td><span style={{padding:"2px 7px",borderRadius:4,background:ok?"#d1fae5":"#fee2e2",color:ok?"#065f46":"#7f1d1d",fontWeight:700,fontSize:11}}>1:{ratio}</span></td>
-            <td>{s.nights}</td><td>{s.sl} days</td></tr>
-          );})}
-          </tbody>
+    <div className="card">
+      <div className="ch"><span className="ct">Shift Summary</span><span style={{fontSize:11,color:"#94a3b8",marginLeft:8}}>All assigned shifts in this year's rota</span></div>
+      <div style={{overflowX:"auto"}}>
+        <table className="tbl" style={{minWidth:760}}>
+          <thead>
+            <tr>
+              <th style={{...thStyle,textAlign:"left"}}>Staff</th>
+              <th style={thStyle}>Grade</th>
+              <th style={thStyle}>Total Shifts</th>
+              <th style={thStyle}>W/E Worked</th>
+              <th style={thStyle}>Nights</th>
+              <th style={thStyle}>% Early</th>
+              <th style={thStyle}>% Mid</th>
+              <th style={thStyle}>% Late</th>
+              <th style={thStyle}>SL Taken</th>
+              <th style={thStyle}>Military</th>
+            </tr>
+          </thead>
+          <tbody>{stats.map(s=>(
+            <tr key={s.id} style={{transition:"background .1s"}} onMouseEnter={e=>e.currentTarget.style.background="#f8fafc"} onMouseLeave={e=>e.currentTarget.style.background=""}>
+              <td style={{...tdStyle,textAlign:"left",fontWeight:600}}>{s.name}</td>
+              <td style={tdStyle}><span style={{padding:"2px 7px",borderRadius:4,background:"#f1f5f9",color:"#475569",fontSize:11,fontWeight:600}}>{s.grade}</span></td>
+              <td style={{...tdStyle,fontWeight:700,color:"#0f172a"}}>{s.total}</td>
+              <td style={tdStyle}>{s.weWorked}</td>
+              <td style={tdStyle}>
+                <span style={{padding:"2px 7px",borderRadius:4,background:"#ede9fe",color:"#4c1d95",fontWeight:700,fontSize:11}}>{s.nights}</span>
+              </td>
+              <td style={tdStyle}>{pctCell(s.pctEarly)}</td>
+              <td style={tdStyle}>{pctCell(s.pctMid)}</td>
+              <td style={tdStyle}>{pctCell(s.pctLate)}</td>
+              <td style={tdStyle}>
+                <span style={{padding:"2px 7px",borderRadius:4,fontWeight:700,fontSize:11,
+                  background:s.slTaken>s.slEntitlement?"#fee2e2":s.slTaken===s.slEntitlement?"#fef9c3":"#f1f5f9",
+                  color:s.slTaken>s.slEntitlement?"#7f1d1d":s.slTaken===s.slEntitlement?"#713f12":"#334155"}}>
+                  {s.slTaken}/{s.slEntitlement}
+                </span>
+              </td>
+              <td style={tdStyle}>
+                {s.milEntitlement>0
+                  ? <span style={{padding:"2px 7px",borderRadius:4,fontWeight:700,fontSize:11,
+                      background:s.milTaken>s.milEntitlement?"#fee2e2":"#f0fdf4",
+                      color:s.milTaken>s.milEntitlement?"#7f1d1d":"#166534"}}>
+                      {s.milTaken}/{s.milEntitlement}
+                    </span>
+                  : <span style={{fontSize:11,color:"#cbd5e1"}}>—</span>}
+              </td>
+            </tr>
+          ))}</tbody>
         </table>
       </div>
     </div>
@@ -2439,6 +2604,7 @@ function App() {
   const [staff,setStaff]           = useState(()=>lsGet('rhs_staff',INIT_STAFF));
   const [wteConfig,setWteConfig]   = useState(()=>lsGet('rhs_wteConfig',INIT_WTE_CONFIG));
   const [auditLog,setAudit]        = useState(()=>lsGet('rhs_audit',[{id:1,ts:"2026-08-05 09:00",user:"ADM",action:"System Init",details:"RotaHST 2026/27 initialised"}]));
+  const [fixedDaysOff,setFixedDaysOff] = useState(()=>lsGet('rhs_fixedDaysOff',[]));
 
   // Year management
   const [years,setYears]           = useState(()=>lsGet('rhs_years',[{id:"2026-27",label:"2026/27",quarters:QUARTERS,active:true,archived:false}]));
@@ -2523,6 +2689,7 @@ function App() {
               upd(setNotesByYear)(d.notesByYear);
               upd(setCorrsByYear)(d.corrsByYear);
               upd(setSHByYear)(d.staffHoursByYear);
+              upd(setFixedDaysOff)(d.fixedDaysOff);
             }
           }
           setFsReady(true);
@@ -2542,11 +2709,11 @@ function App() {
   // Also mirrors to localStorage as an offline / fast-reload cache
   useEffect(() => {
     if (!fsReady) return;
-    const payload = {staff,auditLog,wteConfig,years,activeYearId,rotaByYear,leaveByYear:leaveByYear,availByYear,qStatusByYear,requestsByYear,notesByYear,corrsByYear,staffHoursByYear};
+    const payload = {staff,auditLog,wteConfig,years,activeYearId,rotaByYear,leaveByYear:leaveByYear,availByYear,qStatusByYear,requestsByYear,notesByYear,corrsByYear,staffHoursByYear,fixedDaysOff};
     appDoc().set(payload).catch(console.error);
-    Object.entries({rhs_staff:staff,rhs_audit:auditLog,rhs_wteConfig:wteConfig,rhs_years:years,rhs_activeYearId:activeYearId,rhs_rotaByYear:rotaByYear,rhs_leaveByYear:leaveByYear,rhs_availByYear:availByYear,rhs_qstatusByYear:qStatusByYear,rhs_requestsByYear:requestsByYear,rhs_notesByYear:notesByYear,rhs_corrsByYear:corrsByYear,rhs_staffHoursByYear:staffHoursByYear})
+    Object.entries({rhs_staff:staff,rhs_audit:auditLog,rhs_wteConfig:wteConfig,rhs_years:years,rhs_activeYearId:activeYearId,rhs_rotaByYear:rotaByYear,rhs_leaveByYear:leaveByYear,rhs_availByYear:availByYear,rhs_qstatusByYear:qStatusByYear,rhs_requestsByYear:requestsByYear,rhs_notesByYear:notesByYear,rhs_corrsByYear:corrsByYear,rhs_staffHoursByYear:staffHoursByYear,rhs_fixedDaysOff:fixedDaysOff})
       .forEach(([k,v])=>lsSave(k,v));
-  },[fsReady,staff,auditLog,wteConfig,years,activeYearId,rotaByYear,leaveByYear,availByYear,qStatusByYear,requestsByYear,notesByYear,corrsByYear,staffHoursByYear]);
+  },[fsReady,staff,auditLog,wteConfig,years,activeYearId,rotaByYear,leaveByYear,availByYear,qStatusByYear,requestsByYear,notesByYear,corrsByYear,staffHoursByYear,fixedDaysOff]);
 
   const addAudit=(u,action,details)=>{
     const now=new Date(), ts=`${now.toLocaleDateString("en-GB")} ${now.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}`;
@@ -2626,12 +2793,15 @@ function App() {
                   setRequests={setReqs}
                   applyCarryForward={applyCarryForward}
                   quarters={activeYearQuarters}
+                  fixedDaysOff={fixedDaysOff}
+                  setFixedDaysOff={setFixedDaysOff}
                 />
               )}
             {view==="requests"   &&<RequestsView user={user} requests={requests} setRequests={setReqs} addAudit={addAudit}/>}
             {view==="builder"    &&isAdmin&&<RotaBuilder rota={rota} setRota={setRota} leaveEntries={leaveEntries} setLeaveEntries={setLE} staff={staff} dayNotes={dayNotes} setDayNotes={setNotes} availability={availability} addAudit={addAudit} currentUser={user} wteConfig={wteConfig} staffHours={staffHours} hoursCorrections={hoursCorrections} setHoursCorrections={setHoursCorrections}/>}
             {view==="staff"      &&isAdmin&&<StaffMgmt staff={staff} setStaff={setStaff} addAudit={addAudit} currentUser={user}/>}
             {view==="reports"    &&<Reports user={user} staff={staff} rota={rota} leaveEntries={leaveEntries}/>}
+            {view==="fixeddays"  &&isAdmin&&<FixedDaysView fixedDaysOff={fixedDaysOff} setFixedDaysOff={setFixedDaysOff} staff={staff} addAudit={addAudit} currentUser={user}/>}
             {view==="rotaconfig" &&isAdmin&&<RotaConfig wteConfig={wteConfig} setWteConfig={setWteConfig} staffHours={staffHours} setStaffHours={setStaffHours} staff={staff} addAudit={addAudit}/>}
             {view==="adjustments"&&isAdmin&&<HoursAdjustView staff={staff} hoursCorrections={hoursCorrections} setHoursCorrections={setHoursCorrections} addAudit={addAudit} currentUser={user} wteConfig={wteConfig} staffHours={staffHours} rota={rota} leaveEntries={leaveEntries}/>}
             {view==="audit"      &&isAdmin&&<AuditLog log={auditLog}/>}
