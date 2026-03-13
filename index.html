@@ -254,30 +254,58 @@ function generateDemoAvailability(staffList, quarters) {
   if (!q1) return {};
   const dates = getDatesInRange(q1.start, q1.end);
   const avail = {};
+
+  // Split staff into night-workers (~30%) and day-workers (~70%) by pattern
+  // pattern 0 = dedicated night staff; 1 = early-pref; 2 = late-pref; 3 = flexible
   staffList.filter(s=>s.role==="staff"&&s.active).forEach(s => {
     avail[s.init] = {};
     const seed = s.id;
-    const pattern = seed % 4; // 0=nights, 1=early-pref, 2=late-pref, 3=mixed
+    const pattern = seed % 4;
+
+    // Give each person just 1 SL and 1 UNAVAILABLE day for the whole quarter,
+    // staggered by seed so they don't all land on the same day
+    const slIdx = (seed * 17) % dates.length;
+    const unavIdx = (seed * 37 + 13) % dates.length;
+    // 1 in 4 weekends off (not 1 in 3) — pick one weekend per month by seed
+    const unavWeekend = seed % 4; // which weekend-block (mod 4) is off for this person
+
     dates.forEach((date, idx) => {
       const dow = new Date(date).getDay(); // 0=Sun,6=Sat
       const isWE = dow===0||dow===6;
       const weekNum = Math.floor(idx/7);
-      // SL ~once per fortnight, staggered
-      if ((idx + seed*3) % 14 === 0) { avail[s.init][date]={base:"SL",slots:[]}; return; }
-      // UNAVAILABLE ~once per 3 weeks
-      if ((idx + seed*7) % 21 === 0) { avail[s.init][date]={base:"UNAVAILABLE",slots:[]}; return; }
-      // 1 in 3 weekends off
-      if (isWE && weekNum%3===(seed%3)) { avail[s.init][date]={base:"UNAVAILABLE",slots:[]}; return; }
-      if (isWE) return; // remaining weekends = ANY
-      // Weekday patterns
-      if (pattern===0 && dow>=1&&dow<=4 && weekNum%2===(seed%2)) { avail[s.init][date]={base:"NIGHT",slots:[]}; return; }
-      if (pattern===1 && (idx+seed)%3===0) { avail[s.init][date]={base:"EARLY",slots:[]}; return; }
-      if (pattern===2 && (idx+seed)%3===1) { avail[s.init][date]={base:"LATE",slots:[]}; return; }
-      if (pattern===3) {
-        if ((idx+seed)%5===0) { avail[s.init][date]={base:"EARLY",slots:[]}; return; }
-        if ((idx+seed)%5===2) { avail[s.init][date]={base:"LATE",slots:[]}; return; }
+
+      // Single SL day
+      if (idx === slIdx) { avail[s.init][date]={base:"SL",slots:[]}; return; }
+      // Single UNAVAILABLE day (avoid weekends, so bump to next weekday if needed)
+      if (idx === unavIdx && !isWE) { avail[s.init][date]={base:"UNAVAILABLE",slots:[]}; return; }
+      // 1 in 4 weekends off
+      if (isWE && weekNum%4===unavWeekend) { avail[s.init][date]={base:"UNAVAILABLE",slots:[]}; return; }
+
+      // Night-pattern staff: mark Mon–Thu as NIGHT on their night weeks
+      if (pattern===0 && dow>=1&&dow<=4 && weekNum%2===(seed%2)) {
+        avail[s.init][date]={base:"NIGHT",slots:[]}; return;
       }
-      // else ANY — omit (saves space)
+      // Friday nights & weekend nights for night-pattern staff
+      if (pattern===0 && (dow===5) && weekNum%2===(seed%2)) {
+        avail[s.init][date]={base:"NIGHT",slots:[]}; return;
+      }
+
+      // Early-preference staff: EARLY on ~1 in 3 weekdays
+      if (pattern===1 && !isWE && (idx+seed)%3===0) {
+        avail[s.init][date]={base:"EARLY",slots:[]}; return;
+      }
+      // Late-preference staff: LATE on ~1 in 3 weekdays
+      if (pattern===2 && !isWE && (idx+seed)%3===1) {
+        avail[s.init][date]={base:"LATE",slots:[]}; return;
+      }
+      // Mixed staff: occasional early or late preference
+      if (pattern===3 && !isWE) {
+        if ((idx+seed)%7===0) { avail[s.init][date]={base:"EARLY",slots:[]}; return; }
+        if ((idx+seed)%7===3) { avail[s.init][date]={base:"LATE",slots:[]}; return; }
+      }
+
+      // All other days: explicitly ANY (fills calendar visually)
+      avail[s.init][date]={base:"ANY",slots:[]};
     });
   });
   return avail;
