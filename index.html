@@ -248,6 +248,41 @@ const getDatesInRange = (start,end) => {
 
 const getQuarterForDate = d => QUARTERS.find(q=>d>=q.start&&d<=q.end);
 
+// Generate realistic demo availability for Q1 — deterministic (seed = staff id)
+function generateDemoAvailability(staffList, quarters) {
+  const q1 = (quarters||QUARTERS).find(q=>q.id==="Q1") || (quarters||QUARTERS)[0];
+  if (!q1) return {};
+  const dates = getDatesInRange(q1.start, q1.end);
+  const avail = {};
+  staffList.filter(s=>s.role==="staff"&&s.active).forEach(s => {
+    avail[s.init] = {};
+    const seed = s.id;
+    const pattern = seed % 4; // 0=nights, 1=early-pref, 2=late-pref, 3=mixed
+    dates.forEach((date, idx) => {
+      const dow = new Date(date).getDay(); // 0=Sun,6=Sat
+      const isWE = dow===0||dow===6;
+      const weekNum = Math.floor(idx/7);
+      // SL ~once per fortnight, staggered
+      if ((idx + seed*3) % 14 === 0) { avail[s.init][date]={base:"SL",slots:[]}; return; }
+      // UNAVAILABLE ~once per 3 weeks
+      if ((idx + seed*7) % 21 === 0) { avail[s.init][date]={base:"UNAVAILABLE",slots:[]}; return; }
+      // 1 in 3 weekends off
+      if (isWE && weekNum%3===(seed%3)) { avail[s.init][date]={base:"UNAVAILABLE",slots:[]}; return; }
+      if (isWE) return; // remaining weekends = ANY
+      // Weekday patterns
+      if (pattern===0 && dow>=1&&dow<=4 && weekNum%2===(seed%2)) { avail[s.init][date]={base:"NIGHT",slots:[]}; return; }
+      if (pattern===1 && (idx+seed)%3===0) { avail[s.init][date]={base:"EARLY",slots:[]}; return; }
+      if (pattern===2 && (idx+seed)%3===1) { avail[s.init][date]={base:"LATE",slots:[]}; return; }
+      if (pattern===3) {
+        if ((idx+seed)%5===0) { avail[s.init][date]={base:"EARLY",slots:[]}; return; }
+        if ((idx+seed)%5===2) { avail[s.init][date]={base:"LATE",slots:[]}; return; }
+      }
+      // else ANY — omit (saves space)
+    });
+  });
+  return avail;
+}
+
 const normaliseAvailEntry = (entry) => {
   if (!entry) return null;
 
@@ -665,9 +700,9 @@ function Sidebar({user,view,setView,onLogout,pendingCount,hasOpenQ,isOpen,onClos
 // DASHBOARD
 // ═══════════════════════════════════════════════════════════════
 
-function Dashboard({user,staff,rota,requests,dayNotes,availability,quarterStatus,quarters}) {
+function Dashboard({user,staff,rota,requests,dayNotes,availability,quarterStatus,quarters,demoMode,loadDemoData,resetToFresh,isAdmin:isAdminProp}) {
   const qs = quarters || QUARTERS;
-  const today=fmtISO(new Date()), isAdmin=user.role==="admin";
+  const today=fmtISO(new Date()), isAdmin=isAdminProp||(user.role==="admin");
   const todaySlots=rota[today]||{};
   const todayStaffInit=[...new Set(Object.values(todaySlots).filter(Boolean))];
   const pending=requests.filter(r=>r.status==="pending");
@@ -732,6 +767,30 @@ function Dashboard({user,staff,rota,requests,dayNotes,availability,quarterStatus
           </div>
         </div>
       </div>
+
+      {/* Data Management — admin only */}
+      {isAdmin&&(
+        <div className="card" style={{marginTop:18,border:"1px solid #fecaca"}}>
+          <div className="ch" style={{background:"#fff7ed"}}>
+            <span className="ct" style={{color:"#9a3412"}}>🔧 Data Management</span>
+            <span style={{fontSize:11,color:"#94a3b8",marginLeft:8}}>Admin only</span>
+          </div>
+          <div className="cb">
+            <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+              <div style={{flex:1,minWidth:220,padding:14,background:"#f0fdf4",borderRadius:8,border:"1px solid #86efac"}}>
+                <div style={{fontWeight:700,fontSize:13,marginBottom:4,color:"#14532d"}}>🧪 Load Demo Data</div>
+                <div style={{fontSize:12,color:"#166534",marginBottom:10}}>Loads all default staff with realistic Q1 availability so you can test the AI rota builder straight away.{demoMode&&<span style={{marginLeft:6,fontWeight:700}}> (Active)</span>}</div>
+                <button className="btn bp bsm" onClick={loadDemoData}>{demoMode?"Reload Demo":"Load Demo"}</button>
+              </div>
+              <div style={{flex:1,minWidth:220,padding:14,background:"#fff1f2",borderRadius:8,border:"1px solid #fca5a5"}}>
+                <div style={{fontWeight:700,fontSize:13,marginBottom:4,color:"#7f1d1d"}}>🗑 Fresh Start</div>
+                <div style={{fontSize:12,color:"#991b1b",marginBottom:10}}>Removes <strong>all staff and all data</strong>. Keeps year structure and config (shift times, FTE targets, AI rules). Use when ready to go live.</div>
+                <button className="btn bsm" style={{background:"#ef4444",color:"white",border:"none",cursor:"pointer",borderRadius:6,padding:"5px 12px",fontWeight:600}} onClick={resetToFresh}>Reset to Fresh Start</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -3170,6 +3229,7 @@ function App() {
   const [shiftTimes,setShiftTimes]         = useState(()=>lsGet('rhs_shiftTimes',DEFAULT_SHIFT_TIMES));
   const [staffShiftTimes,setSST]           = useState(()=>lsGet('rhs_staffShiftTimes',{}));
   const [trainingDays,setTrainingDays]     = useState(()=>lsGet('rhs_trainingDays',[])); // [{id,date,type:"SpR"|"ACP",note}]
+  const [demoMode,setDemoMode]             = useState(()=>lsGet('rhs_demoMode',false));
 
   // Year management
   const [years,setYears]           = useState(()=>lsGet('rhs_years',[{id:"2026-27",label:"2026/27",quarters:QUARTERS,active:true,archived:false}]));
@@ -3278,15 +3338,41 @@ function App() {
   // Also mirrors to localStorage as an offline / fast-reload cache
   useEffect(() => {
     if (!fsReady) return;
-    const payload = {staff,auditLog,wteConfig,years,activeYearId,rotaByYear,leaveByYear:leaveByYear,availByYear,qStatusByYear,requestsByYear,notesByYear,corrsByYear,staffHoursByYear,fixedDaysOff,genRules,shiftTimes,staffShiftTimes,trainingDays};
+    const payload = {staff,auditLog,wteConfig,years,activeYearId,rotaByYear,leaveByYear:leaveByYear,availByYear,qStatusByYear,requestsByYear,notesByYear,corrsByYear,staffHoursByYear,fixedDaysOff,genRules,shiftTimes,staffShiftTimes,trainingDays,demoMode};
     appDoc().set(payload).catch(console.error);
-    Object.entries({rhs_staff:staff,rhs_audit:auditLog,rhs_wteConfig:wteConfig,rhs_years:years,rhs_activeYearId:activeYearId,rhs_rotaByYear:rotaByYear,rhs_leaveByYear:leaveByYear,rhs_availByYear:availByYear,rhs_qstatusByYear:qStatusByYear,rhs_requestsByYear:requestsByYear,rhs_notesByYear:notesByYear,rhs_corrsByYear:corrsByYear,rhs_staffHoursByYear:staffHoursByYear,rhs_fixedDaysOff:fixedDaysOff,rhs_genRules:genRules,rhs_shiftTimes:shiftTimes,rhs_staffShiftTimes:staffShiftTimes,rhs_trainingDays:trainingDays})
+    Object.entries({rhs_staff:staff,rhs_audit:auditLog,rhs_wteConfig:wteConfig,rhs_years:years,rhs_activeYearId:activeYearId,rhs_rotaByYear:rotaByYear,rhs_leaveByYear:leaveByYear,rhs_availByYear:availByYear,rhs_qstatusByYear:qStatusByYear,rhs_requestsByYear:requestsByYear,rhs_notesByYear:notesByYear,rhs_corrsByYear:corrsByYear,rhs_staffHoursByYear:staffHoursByYear,rhs_fixedDaysOff:fixedDaysOff,rhs_genRules:genRules,rhs_shiftTimes:shiftTimes,rhs_staffShiftTimes:staffShiftTimes,rhs_trainingDays:trainingDays,rhs_demoMode:demoMode})
       .forEach(([k,v])=>lsSave(k,v));
-  },[fsReady,staff,auditLog,wteConfig,years,activeYearId,rotaByYear,leaveByYear,availByYear,qStatusByYear,requestsByYear,notesByYear,corrsByYear,staffHoursByYear,fixedDaysOff,genRules,shiftTimes,staffShiftTimes,trainingDays]);
+  },[fsReady,staff,auditLog,wteConfig,years,activeYearId,rotaByYear,leaveByYear,availByYear,qStatusByYear,requestsByYear,notesByYear,corrsByYear,staffHoursByYear,fixedDaysOff,genRules,shiftTimes,staffShiftTimes,trainingDays,demoMode]);
 
   const addAudit=(u,action,details)=>{
     const now=new Date(), ts=`${now.toLocaleDateString("en-GB")} ${now.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}`;
     setAudit(p=>[...p,{id:Date.now(),ts,user:u,action,details}]);
+  };
+
+  const loadDemoData = () => {
+    if (!confirm("Load demo data? This loads all default staff and realistic Q1 availability so you can test the AI rota builder. Any existing staff or Q1 availability will be overwritten.")) return;
+    const baseStaff = (staff.length && staff.some(s=>s.role==="staff")) ? staff : INIT_STAFF;
+    if (!staff.length || staff.every(s=>s.role==="admin")) setStaff(INIT_STAFF);
+    const demoAvail = generateDemoAvailability(baseStaff, activeYearQuarters);
+    setAvail(demoAvail);
+    setDemoMode(true);
+    addAudit("ADM","Demo Mode","Demo availability loaded");
+  };
+
+  const resetToFresh = () => {
+    if (!confirm("Reset to Fresh Start?\n\nThis will:\n• Remove ALL staff\n• Clear ALL rota, availability, leave, requests and corrections\n• Keep year/quarter structure and all config\n\nThis cannot be undone. Continue?")) return;
+    setStaff([]);
+    setRotaByYear({});
+    setLeaveByYear({});
+    setAvailByYear({});
+    setQStatusByYear({});
+    setReqsByYear({});
+    setNotesByYear({});
+    setCorrsByYear({});
+    setSHByYear({});
+    setFixedDaysOff([]);
+    setAudit([]);
+    setDemoMode(false);
   };
 
   const applyCarryForward = (closingQid) => {
@@ -3343,8 +3429,14 @@ function App() {
               </select>
             </div>
           </div>
+          {isAdmin&&demoMode&&(
+            <div style={{background:"#fef08a",borderBottom:"2px solid #facc15",padding:"7px 20px",fontSize:12.5,fontWeight:600,color:"#713f12",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
+              <span>⚠️ DEMO MODE — Sample availability loaded. The AI Rota Builder is ready to test.</span>
+              <button onClick={()=>setDemoMode(false)} style={{background:"none",border:"1px solid #ca8a04",borderRadius:5,padding:"2px 10px",fontSize:11,color:"#713f12",cursor:"pointer",fontWeight:600}}>Dismiss</button>
+            </div>
+          )}
           <div className="body">
-            {view==="dashboard"  &&<Dashboard user={user} staff={staff} rota={rota} requests={requests} dayNotes={dayNotes} availability={availability} quarterStatus={quarterStatus} quarters={activeYearQuarters}/>}
+            {view==="dashboard"  &&<Dashboard user={user} staff={staff} rota={rota} requests={requests} dayNotes={dayNotes} availability={availability} quarterStatus={quarterStatus} quarters={activeYearQuarters} demoMode={demoMode} loadDemoData={loadDemoData} resetToFresh={resetToFresh} isAdmin={isAdmin}/>}
             {view==="calendar"   &&<CalendarView rota={rota} leaveEntries={leaveEntries} dayNotes={dayNotes} staff={staff} viewMonth={viewMonth} setViewMonth={setVM} viewMode="month" setViewMode={()=>{}} trainingDays={trainingDays}/>}
             {view==="myshifts"   &&!isAdmin&&<MyShifts user={user} rota={rota} leaveEntries={leaveEntries} dayNotes={dayNotes}/>}
             {view==="availability"&&(<AvailabilityView
