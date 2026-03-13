@@ -112,6 +112,52 @@ const INIT_WTE_CONFIG = {
   "Military": { hoursPerWeek:27.05, hoursPerQuarter:351.6,   nights:6,  weekends:3, earlies:12, mids:9,  lates:12 },
 };
 
+// Default shift start/end times per slot (admin-editable in Rota Config)
+const DEFAULT_SHIFT_TIMES = {
+  E1:{start:"08:00",end:"16:30"}, E2:{start:"08:00",end:"16:30"}, E3:{start:"08:00",end:"16:30"}, E4:{start:"08:00",end:"16:30"},
+  M1:{start:"11:00",end:"20:00"}, M2:{start:"11:00",end:"20:00"}, M3:{start:"11:00",end:"20:00"},
+  L1:{start:"16:00",end:"00:00"}, L2:{start:"16:00",end:"00:00"}, L3:{start:"16:00",end:"00:00"}, L4:{start:"16:00",end:"00:00"},
+  WE1:{start:"08:00",end:"18:00"}, WE2:{start:"08:00",end:"18:00"}, WE3:{start:"08:00",end:"18:00"},
+  WL1:{start:"14:00",end:"00:00"}, WL2:{start:"14:00",end:"00:00"},
+  N1:{start:"22:00",end:"08:30"}, N2:{start:"22:00",end:"08:30"}, SN:{start:"22:00",end:"08:30"}, AN:{start:"22:00",end:"08:30"},
+  SL:{start:"08:00",end:"16:00"}, RESEARCH:{start:"08:00",end:"16:00"}, FELLOW:{start:"08:00",end:"16:00"}, MILITARY:{start:"08:00",end:"16:00"},
+};
+
+// Returns shift duration in hours (handles overnight crossings)
+const getShiftDuration = (slotKey, init, shiftTimes, staffShiftTimes) => {
+  const times = ((staffShiftTimes||{})[init]||{})[slotKey] || (shiftTimes||{})[slotKey] || DEFAULT_SHIFT_TIMES[slotKey];
+  if (!times) return 0;
+  const [sh,sm] = times.start.split(":").map(Number);
+  const [eh,em] = times.end.split(":").map(Number);
+  let hrs = (eh*60+em - (sh*60+sm)) / 60;
+  if (hrs <= 0) hrs += 24;
+  return hrs;
+};
+
+// AI generation rules — default config
+const INIT_GEN_RULES = {
+  slotGrades: {
+    E1:["ST4+","ST3","ACP","tACP"], E2:["ST4+","ST3","ACP","tACP"], E3:["ST4+","ST3","ACP","tACP"], E4:["ST4+","ST3","ACP","tACP"],
+    M1:["ST4+","ST3","ACP","tACP"], M2:["ST4+","ST3","ACP","tACP"], M3:["ST4+","ST3","ACP","tACP"],
+    L1:["ST4+","ST3","ACP","tACP"], L2:["ST4+","ST3","ACP","tACP"], L3:["ST4+","ST3","ACP","tACP"], L4:["ST4+","ST3","ACP","tACP"],
+    WE1:["ST4+","ST3","ACP","tACP"], WE2:["ST4+","ST3","ACP","tACP"], WE3:["ST4+","ST3","ACP","tACP"],
+    WL1:["ST4+","ST3","ACP","tACP"], WL2:["ST4+","ST3","ACP","tACP"],
+    N1:["ST4+"], N2:["ST4+"], SN:["ST3"], AN:["ACP","tACP"],
+  },
+  minStaffing: {
+    monday:        ["E1","L1","L2","N1"],
+    weekday_other: ["E1","L1","N1"],
+    friday:        ["E1","L1","N1"],
+    weekend:       ["WE1","WL1","N1"],
+  },
+  weekdayNightDays: ["Monday","Tuesday","Wednesday","Thursday"],
+  weekendNightDays: ["Friday","Saturday","Sunday"],
+  maxShiftHours: 13, minRestHours: 11, maxConsecNights: 4, maxConsecLongDays: 5,
+  maxConsecWorkingDays: 7, postNightRestHours: 46, restEvery14Days: 48,
+  maxWeekendFreq: "1in2", targetWeekendFreq: "1in3", maxConsecWeekends: 4,
+  balanceNights: true, balanceWeekends: true, matchWteTargets: true,
+};
+
 // localStorage helpers — safe read/write with JSON (de)serialisation
 const lsGet = (key, fallback) => { try { const v=localStorage.getItem(key); return v!=null?JSON.parse(v):fallback; } catch{return fallback;} };
 const lsSave = (key, val) => { try { localStorage.setItem(key, JSON.stringify(val)); } catch{} };
@@ -134,39 +180,39 @@ const isACPGrade = grade => grade==="ACP"||grade==="tACP";
 const getSlotHours = (slotKey, grade) => { const h=SLOT_HOURS[slotKey]||{doc:0,acp:0}; return isACPGrade(grade)?h.acp:h.doc; };
 
 const INIT_STAFF = [
-  {id:1, name:"Michael Connolly",     init:"MC",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
-  {id:2, name:"Aled Donaldson",       init:"AD",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
-  {id:3, name:"John Allison",         init:"JA",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
-  {id:4, name:"Sarah Johnson",        init:"SJ",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
-  {id:5, name:"Anthony McLaughlin",   init:"AM",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
-  {id:6, name:"Eleanor Burke",        init:"EB",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
-  {id:7, name:"Sam Copson",           init:"SC",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
-  {id:8, name:"Matthew Bankhead",     init:"MB",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
-  {id:9, name:"Mark Winstanley",      init:"MW",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
-  {id:10,name:"Lauren Bose",          init:"LB",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
-  {id:11,name:"Cal Doherty",          init:"CD",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
-  {id:12,name:"Celestine Weegenaar",  init:"CW",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
-  {id:13,name:"Maud Mccutcheon",      init:"MM",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
-  {id:14,name:"Jodie Sage",           init:"JS",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
-  {id:15,name:"Mhairi De Saint Croix",init:"MDS", grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
-  {id:16,name:"Hayley Fairbairn",     init:"HF",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
-  {id:17,name:"Vay Deshpande",        init:"VD",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
-  {id:18,name:"Sarah Ackroyd",        init:"SA",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
-  {id:19,name:"Michael Cole",         init:"MCOL",grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
-  {id:20,name:"Steven Arena",         init:"SAr", grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
-  {id:21,name:"Andy Witt",            init:"AW",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
-  {id:22,name:"Karl Smith",           init:"KS",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
-  {id:23,name:"Nat Nauman",           init:"NN",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
-  {id:24,name:"Nat Wright",           init:"NW",  grade:"ST3", hrs:41.75,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
-  {id:25,name:"Tom Field",            init:"TF",  grade:"ST3", hrs:41.75,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
-  {id:26,name:"Jaz Matthews",         init:"JM",  grade:"ST3", hrs:41.75,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
-  {id:27,name:"Steph Gooch",          init:"SG",  grade:"ST3", hrs:41.75,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
-  {id:28,name:"Emma Worgan",          init:"EW",  grade:"ST3", hrs:41.75,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
-  {id:29,name:"Mike Gammon",          init:"MG",  grade:"ST3", hrs:41.75,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
-  {id:30,name:"Harriet Jones",        init:"HJ",  grade:"ST3", hrs:41.75,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
-  {id:31,name:"Jack Sadler",          init:"JS2", grade:"ST3", hrs:41.75,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
-  {id:32,name:"Nikki Mavel",          init:"NM",  grade:"ACP", hrs:37.5, pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0},
-  {id:99,name:"Rota Admin",           init:"ADM", grade:"Admin",hrs:0,   pw:"admin2026",role:"admin",active:true,slDays:0,militaryDays:0},
+  {id:1, name:"Michael Connolly",     init:"MC",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0,nightBlockPref:"any"},
+  {id:2, name:"Aled Donaldson",       init:"AD",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0,nightBlockPref:"any"},
+  {id:3, name:"John Allison",         init:"JA",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0,nightBlockPref:"any"},
+  {id:4, name:"Sarah Johnson",        init:"SJ",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0,nightBlockPref:"any"},
+  {id:5, name:"Anthony McLaughlin",   init:"AM",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0,nightBlockPref:"any"},
+  {id:6, name:"Eleanor Burke",        init:"EB",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0,nightBlockPref:"any"},
+  {id:7, name:"Sam Copson",           init:"SC",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0,nightBlockPref:"any"},
+  {id:8, name:"Matthew Bankhead",     init:"MB",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0,nightBlockPref:"any"},
+  {id:9, name:"Mark Winstanley",      init:"MW",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0,nightBlockPref:"any"},
+  {id:10,name:"Lauren Bose",          init:"LB",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0,nightBlockPref:"any"},
+  {id:11,name:"Cal Doherty",          init:"CD",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0,nightBlockPref:"any"},
+  {id:12,name:"Celestine Weegenaar",  init:"CW",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0,nightBlockPref:"any"},
+  {id:13,name:"Maud Mccutcheon",      init:"MM",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0,nightBlockPref:"any"},
+  {id:14,name:"Jodie Sage",           init:"JS",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0,nightBlockPref:"any"},
+  {id:15,name:"Mhairi De Saint Croix",init:"MDS", grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0,nightBlockPref:"any"},
+  {id:16,name:"Hayley Fairbairn",     init:"HF",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0,nightBlockPref:"any"},
+  {id:17,name:"Vay Deshpande",        init:"VD",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0,nightBlockPref:"any"},
+  {id:18,name:"Sarah Ackroyd",        init:"SA",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0,nightBlockPref:"any"},
+  {id:19,name:"Michael Cole",         init:"MCOL",grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0,nightBlockPref:"any"},
+  {id:20,name:"Steven Arena",         init:"SAr", grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0,nightBlockPref:"any"},
+  {id:21,name:"Andy Witt",            init:"AW",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0,nightBlockPref:"any"},
+  {id:22,name:"Karl Smith",           init:"KS",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0,nightBlockPref:"any"},
+  {id:23,name:"Nat Nauman",           init:"NN",  grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0,nightBlockPref:"any"},
+  {id:24,name:"Nat Wright",           init:"NW",  grade:"ST3", hrs:41.75,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0,nightBlockPref:"any"},
+  {id:25,name:"Tom Field",            init:"TF",  grade:"ST3", hrs:41.75,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0,nightBlockPref:"any"},
+  {id:26,name:"Jaz Matthews",         init:"JM",  grade:"ST3", hrs:41.75,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0,nightBlockPref:"any"},
+  {id:27,name:"Steph Gooch",          init:"SG",  grade:"ST3", hrs:41.75,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0,nightBlockPref:"any"},
+  {id:28,name:"Emma Worgan",          init:"EW",  grade:"ST3", hrs:41.75,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0,nightBlockPref:"any"},
+  {id:29,name:"Mike Gammon",          init:"MG",  grade:"ST3", hrs:41.75,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0,nightBlockPref:"any"},
+  {id:30,name:"Harriet Jones",        init:"HJ",  grade:"ST3", hrs:41.75,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0,nightBlockPref:"any"},
+  {id:31,name:"Jack Sadler",          init:"JS2", grade:"ST3", hrs:41.75,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0,nightBlockPref:"any"},
+  {id:32,name:"Nikki Mavel",          init:"NM",  grade:"ACP", hrs:37.5, pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0,nightBlockPref:"any"},
+  {id:99,name:"Rota Admin",           init:"ADM", grade:"Admin",hrs:0,   pw:"admin2026",role:"admin",active:true,slDays:0,militaryDays:0,nightBlockPref:"any"},
 ];
 
 // ═══════════════════════════════════════════════════════════════
@@ -511,6 +557,13 @@ body{font-family:'DM Sans',sans-serif;background:#f0f4f8;font-size:13px}
   .tbl th,.tbl td{padding:7px 8px}
   .sb-col-btn{display:none}
 }
+@keyframes spin{to{transform:rotate(360deg)}}
+.ai-tab-bar{display:flex;gap:0;border-bottom:2px solid #e2e8f0;margin-bottom:0}
+.ai-tab{padding:9px 18px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;color:#94a3b8;border-bottom:2px solid transparent;margin-bottom:-2px;transition:color .15s}
+.ai-tab.act{color:#0f172a;border-bottom-color:#10b981}
+.draft-cell-new{background:#dcfce7;color:#166534;padding:1px 5px;border-radius:4px;font-weight:700;font-size:10.5px;display:inline-block}
+.draft-cell-exist{background:#dbeafe;color:#1e40af;padding:1px 5px;border-radius:4px;font-weight:700;font-size:10.5px;display:inline-block}
+.draft-cell-conflict{background:#fee2e2;color:#7f1d1d;padding:1px 5px;border-radius:4px;font-weight:700;font-size:10.5px;display:inline-block}
 .sb-col-btn{position:absolute;bottom:60px;right:-12px;width:24px;height:24px;border-radius:50%;background:white;border:1px solid #e2e8f0;box-shadow:0 1px 4px rgba(0,0,0,.12);cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center;z-index:10;color:#475569;transition:transform .2s}
 .sb-col-btn:hover{background:#f1f5f9}
 .sb.sb-col{width:52px;overflow:hidden}
@@ -573,6 +626,7 @@ function Sidebar({user,view,setView,onLogout,pendingCount,hasOpenQ,isOpen,onClos
     {id:"availability",icon:"📋",label:"Availability",badge:!isAdmin&&hasOpenQ?"!":null},
     {id:"requests",icon:"📝",label:isAdmin?"Leave Requests":"My Requests",badge:isAdmin&&pendingCount>0?pendingCount:null},
     ...(isAdmin?[
+      {id:"airota",      icon:"🤖",label:"AI Rota Builder"},
       {id:"builder",     icon:"🔧",label:"Rota Builder"},
       {id:"adjustments", icon:"⏱️",label:"Hour Adjustments"},
       {id:"staff",       icon:"👥",label:"Staff"},
@@ -686,9 +740,10 @@ function Dashboard({user,staff,rota,requests,dayNotes,availability,quarterStatus
 // CALENDAR VIEW (read-only, derived from rota slot data)
 // ═══════════════════════════════════════════════════════════════
 
-function CalendarView({rota,leaveEntries,dayNotes,staff,viewMonth,setViewMonth,viewMode,setViewMode}) {
+function CalendarView({rota,leaveEntries,dayNotes,staff,viewMonth,setViewMonth,viewMode,setViewMode,trainingDays}) {
   const [fStaff,setFS]=useState(""), [dayModal,setDM]=useState(null);
   const today=fmtISO(new Date()), yr=viewMonth.getFullYear(), mo=viewMonth.getMonth();
+  const tdMap=useMemo(()=>Object.fromEntries((trainingDays||[]).map(t=>[t.date,t])),[trainingDays]);
   const days=useMemo(()=>getMonthDays(yr,mo),[yr,mo]);
   const DOW=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
   const activeStaff=staff.filter(s=>s.role==="staff"&&s.active);
@@ -718,11 +773,14 @@ function CalendarView({rota,leaveEntries,dayNotes,staff,viewMonth,setViewMonth,v
           {DOW.map(d=><div key={d} className="cdow">{d}</div>)}
           {days.map(({date,inMonth})=>{
             const isBH=!!BH[date],isToday=date===today,we=isWeekend(date),items=getDateStaff(date),note=dayNotes[date],MAX=3;
+            const td=tdMap[date];
+            const tdBg=td?(td.type==="SpR"?"rgba(254,240,138,.55)":"rgba(243,232,255,.65)"):null;
             return (
-              <div key={date} className={`cc${!inMonth?" om":""}${isToday?" td":""}${isBH?" bh":!inMonth?"":we?" we":""}`} onClick={()=>inMonth&&setDM(date)}>
+              <div key={date} className={`cc${!inMonth?" om":""}${isToday?" td":""}${isBH?" bh":!inMonth?"":we?" we":""}`} onClick={()=>inMonth&&setDM(date)} style={tdBg?{background:tdBg}:undefined}>
                 <div className={`cdate${!inMonth?" om":""}`}>
                   <span className={isToday?"td-num":""}>{new Date(date+"T00:00:00").getDate()}</span>
                   {isBH&&<span className="bh-tag">BH</span>}
+                  {td&&<span style={{fontSize:7.5,fontWeight:700,padding:"0px 3px",borderRadius:2,background:td.type==="SpR"?"#fef08a":"#e9d5ff",color:td.type==="SpR"?"#713f12":"#6b21a8",marginLeft:2}}>{td.type}</span>}
                 </div>
                 {note&&<div style={{fontSize:8,color:"#92400e",background:"#fef9c3",padding:"1px 3px",borderRadius:3,marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>📌</div>}
                 {items.slice(0,MAX).map((x,i)=><span key={i} className="chip-sm" style={{background:x.slot.bg,color:x.slot.fg,borderColor:x.slot.bd}}>{fStaff ? slotCalLabel(x.slot) : x.init}</span>)}
@@ -1974,7 +2032,7 @@ function StaffMgmt({staff,setStaff,addAudit,currentUser}) {
   const show=staff.filter(s=>s.role!=="admin");
   return (
     <div>
-      <div style={{display:"flex",gap:10,marginBottom:14}}><button className="btn bp" onClick={()=>{setForm({name:"",init:"",grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0});setModal("add");}}>＋ Add Staff</button></div>
+      <div style={{display:"flex",gap:10,marginBottom:14}}><button className="btn bp" onClick={()=>{setForm({name:"",init:"",grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0,nightBlockPref:"any"});setModal("add");}}>＋ Add Staff</button></div>
       <div className="card">
         <table className="tbl">
           <thead><tr><th>Name</th><th>Init</th><th>Grade</th><th>Hrs</th><th>Status</th><th>Actions</th></tr></thead>
@@ -2006,6 +2064,13 @@ function StaffMgmt({staff,setStaff,addAudit,currentUser}) {
           <div className="fg"><label className="fl">Hours/Week</label><input type="number" className="fi" value={form.hrs||45.25} onChange={e=>setForm(f=>({...f,hrs:parseFloat(e.target.value)||0}))}/></div>
           <div className="fg"><label className="fl">SL Days Entitlement / yr</label><input type="number" className="fi" value={form.slDays??30} onChange={e=>setForm(f=>({...f,slDays:e.target.value}))}/></div>
           <div className="fg"><label className="fl">Military Days / yr</label><input type="number" className="fi" value={form.militaryDays??0} onChange={e=>setForm(f=>({...f,militaryDays:e.target.value}))}/></div>
+          <div className="fg"><label className="fl">Night Block Preference</label>
+            <select className="fi" value={form.nightBlockPref||"any"} onChange={e=>setForm(f=>({...f,nightBlockPref:e.target.value}))}>
+              <option value="any">Any / No preference</option>
+              <option value="full">Full block (4 nights Mon–Thu)</option>
+              <option value="split">Split block (2+2 nights)</option>
+            </select>
+          </div>
           {modal==="add"&&<div className="fg"><label className="fl">Password</label><input className="fi" value={form.pw||"rota2026"} onChange={e=>setForm(f=>({...f,pw:e.target.value}))}/></div>}
         </div>
       </Modal>}
@@ -2188,9 +2253,14 @@ const SHIFT_FIELDS = [
   {key:"lates",    label:"Lates"},
 ];
 
-function RotaConfig({wteConfig, setWteConfig, staffHours, setStaffHours, staff, addAudit}) {
-  const [tab, setTab] = useState("fte"); // "fte" | "hours"
+function RotaConfig({wteConfig, setWteConfig, staffHours, setStaffHours, staff, addAudit, shiftTimes, setShiftTimes, staffShiftTimes, setStaffShiftTimes, trainingDays, setTrainingDays}) {
+  const [tab, setTab] = useState("fte"); // "fte" | "hours" | "shifttimes" | "training"
   const activeStaff = staff.filter(s => s.role==="staff" && s.active);
+  const [tdDate,setTdDate]  = useState("");
+  const [tdType,setTdType]  = useState("SpR");
+  const [tdNote,setTdNote]  = useState("");
+  const [stStaff,setStStaff] = useState(""); // for per-staff shift time overrides
+  const [stSlot,setStSlot]   = useState("E1");
 
   const setFTE = (grade, field, val) => {
     const num = parseFloat(val);
@@ -2211,10 +2281,12 @@ function RotaConfig({wteConfig, setWteConfig, staffHours, setStaffHours, staff, 
     if (num !== null) addAudit("ADM", "Hours Override", `${init} ${qid} → ${num}h`);
   };
 
+  const SLOT_KEYS_ALL = ["E1","E2","E3","E4","M1","M2","M3","L1","L2","L3","L4","WE1","WE2","WE3","WL1","WL2","N1","N2","SN","AN","SL","RESEARCH","FELLOW","MILITARY"];
+
   return (
     <div>
-      <div style={{display:"flex",gap:7,marginBottom:18}}>
-        {[["fte","FTE Reference Targets"],["hours","Staff Hours"]].map(([k,lbl])=>(
+      <div style={{display:"flex",gap:7,marginBottom:18,flexWrap:"wrap"}}>
+        {[["fte","FTE Targets"],["hours","Staff Hours"],["shifttimes","Shift Times"],["training","Training Days"]].map(([k,lbl])=>(
           <button key={k} className={`btn${tab===k?" bp":" bs"}`} onClick={()=>setTab(k)}>{lbl}</button>
         ))}
       </div>
@@ -2222,60 +2294,42 @@ function RotaConfig({wteConfig, setWteConfig, staffHours, setStaffHours, staff, 
       {tab==="fte"&&(
         <div>
           <div className="al al-i" style={{marginBottom:14}}>
-            Set the <strong>full-time equivalent</strong> targets for each grade. Individual targets are scaled by each person's effective hours. These apply across all quarters.
+            Set the <strong>full-time equivalent</strong> targets for each grade. Individual targets are scaled by each person's effective hours.
           </div>
-          {GRADE_KEYS.map(grade=>{
-            const cfg = wteConfig[grade] || {};
-            return (
-              <div key={grade} className="card" style={{marginBottom:14}}>
-                <div className="ch">
-                  <span className="ct">{grade}</span>
-                  <div style={{display:"flex",alignItems:"center",gap:12}}>
-                    <div style={{display:"flex",alignItems:"center",gap:6}}>
-                      <label style={{fontSize:11,color:"#64748b"}}>hrs/wk</label>
-                      <input type="number" className="fi" style={{width:70,padding:"4px 7px"}}
-                        value={cfg.hoursPerWeek||""}
-                        onChange={e=>setFTEHours(grade,e.target.value)}
-                        step="0.25" min="0"/>
-                    </div>
-                    <div style={{display:"flex",alignItems:"center",gap:6}}>
-                      <label style={{fontSize:11,color:"#64748b"}}>Net hrs/qtr</label>
-                      <input type="number" className="fi" style={{width:80,padding:"4px 7px"}}
-                        value={cfg.hoursPerQuarter||""}
-                        onChange={e=>setFTE(grade,"hoursPerQuarter",e.target.value)}
-                        step="0.5" min="0"/>
-                    </div>
-                  </div>
-                </div>
-                <div className="cb">
-                  <table className="tbl" style={{maxWidth:400}}>
-                    <thead>
-                      <tr><th>Shift type</th><th style={{textAlign:"center"}}>FTE target</th></tr>
-                    </thead>
-                    <tbody>
-                      {SHIFT_FIELDS.map(f=>(
-                        <tr key={f.key}>
-                          <td style={{fontWeight:600,fontSize:12}}>{f.label}</td>
-                          <td style={{padding:"5px 8px"}}>
-                            <input type="number" className="fi" style={{width:70,padding:"4px 7px",textAlign:"center"}}
-                              value={cfg[f.key]??""} onChange={e=>setFTE(grade,f.key,e.target.value)}
-                              min="0" step="1"/>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            );
-          })}
+          <div className="card">
+            <div style={{overflowX:"auto"}}>
+              <table className="tbl">
+                <thead>
+                  <tr>
+                    <th>Grade</th><th>hrs/wk</th><th>Net hrs/qtr</th>
+                    {SHIFT_FIELDS.map(f=><th key={f.key}>{f.label}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {GRADE_KEYS.map(grade=>{
+                    const cfg = wteConfig[grade] || {};
+                    return (
+                      <tr key={grade}>
+                        <td style={{fontWeight:700}}>{grade}</td>
+                        <td><input type="number" className="fi" style={{width:65,padding:"3px 6px"}} value={cfg.hoursPerWeek||""} onChange={e=>setFTEHours(grade,e.target.value)} step="0.25" min="0"/></td>
+                        <td><input type="number" className="fi" style={{width:75,padding:"3px 6px"}} value={cfg.hoursPerQuarter||""} onChange={e=>setFTE(grade,"hoursPerQuarter",e.target.value)} step="0.5" min="0"/></td>
+                        {SHIFT_FIELDS.map(f=>(
+                          <td key={f.key}><input type="number" className="fi" style={{width:55,padding:"3px 6px",textAlign:"center"}} value={cfg[f.key]??""} onChange={e=>setFTE(grade,f.key,e.target.value)} min="0" step="1"/></td>
+                        ))}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       )}
 
       {tab==="hours"&&(
         <div>
           <div className="al al-i" style={{marginBottom:14}}>
-            Set each person's contracted hours per quarter. Leave blank to use the grade default (net hrs/qtr from FTE config). Changing a quarter only affects that quarter — previous quarters are unaffected.
+            Set each person's contracted hours per quarter. Leave blank to use the grade default (net hrs/qtr from FTE config).
           </div>
           <div className="card">
             <div style={{overflowX:"auto"}}>
@@ -2329,6 +2383,124 @@ function RotaConfig({wteConfig, setWteConfig, staffHours, setStaffHours, staff, 
           </div>
         </div>
       )}
+
+      {tab==="shifttimes"&&shiftTimes&&(
+        <div>
+          <div className="al al-i" style={{marginBottom:14}}>Default shift start/end times used for rest-rule calculations in the AI rota generator. <strong>All times in 24hr format.</strong></div>
+          <div className="card" style={{marginBottom:14}}>
+            <div className="ch"><span className="ct">Default Slot Times</span></div>
+            <div className="cb">
+              <table className="tbl">
+                <thead><tr><th>Slot</th><th>Start</th><th>End</th><th style={{color:"#94a3b8"}}>Duration</th></tr></thead>
+                <tbody>{SLOT_KEYS_ALL.map(sk=>{
+                  const t = shiftTimes[sk] || DEFAULT_SHIFT_TIMES[sk] || {start:"",end:""};
+                  const dur = getShiftDuration(sk,null,shiftTimes,{});
+                  return (
+                    <tr key={sk}>
+                      <td style={{fontWeight:700,color:"#475569"}}>{sk}</td>
+                      <td><input className="fi" style={{width:80,padding:"3px 7px"}} value={t.start} onChange={e=>setShiftTimes(p=>({...p,[sk]:{...(p[sk]||{}),start:e.target.value,end:(p[sk]||{}).end||t.end}}))} placeholder="HH:MM"/></td>
+                      <td><input className="fi" style={{width:80,padding:"3px 7px"}} value={t.end}   onChange={e=>setShiftTimes(p=>({...p,[sk]:{...(p[sk]||{}),end:e.target.value,start:(p[sk]||{}).start||t.start}}))} placeholder="HH:MM"/></td>
+                      <td style={{color:"#94a3b8",fontSize:12}}>{dur>0?`${dur}h`:""}</td>
+                    </tr>
+                  );
+                })}</tbody>
+              </table>
+            </div>
+          </div>
+          {staffShiftTimes&&setStaffShiftTimes&&(
+            <div className="card">
+              <div className="ch"><span className="ct">Per-Staff Time Overrides</span><span style={{fontSize:11,color:"#94a3b8",marginLeft:8}}>Override individual timings for a specific person</span></div>
+              <div className="cb">
+                <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"flex-end",marginBottom:16}}>
+                  <div className="fg" style={{margin:0}}>
+                    <label className="fl">Staff</label>
+                    <select className="fi" style={{padding:"5px 8px",minWidth:160}} value={stStaff} onChange={e=>setStStaff(e.target.value)}>
+                      <option value="">Select…</option>
+                      {activeStaff.map(s=><option key={s.id} value={s.init}>{s.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="fg" style={{margin:0}}>
+                    <label className="fl">Slot</label>
+                    <select className="fi" style={{padding:"5px 8px"}} value={stSlot} onChange={e=>setStSlot(e.target.value)}>
+                      {SLOT_KEYS_ALL.map(sk=><option key={sk}>{sk}</option>)}
+                    </select>
+                  </div>
+                </div>
+                {stStaff&&(()=>{
+                  const overrides = staffShiftTimes[stStaff]||{};
+                  const existingKeys = Object.keys(overrides);
+                  return (
+                    <div>
+                      {existingKeys.length===0&&<p style={{fontSize:12.5,color:"#94a3b8"}}>No overrides set for {staff.find(s=>s.init===stStaff)?.name||stStaff}.</p>}
+                      {existingKeys.map(sk=>{
+                        const t=overrides[sk];
+                        return (
+                          <div key={sk} style={{display:"flex",gap:10,alignItems:"center",padding:"6px 0",borderBottom:"1px solid #f1f5f9"}}>
+                            <span style={{width:50,fontWeight:700,fontSize:13}}>{sk}</span>
+                            <input className="fi" style={{width:75,padding:"3px 7px"}} value={t.start} onChange={e=>setStaffShiftTimes(p=>({...p,[stStaff]:{...(p[stStaff]||{}),[sk]:{...t,start:e.target.value}}}))} placeholder="HH:MM"/>
+                            <span style={{color:"#94a3b8"}}>→</span>
+                            <input className="fi" style={{width:75,padding:"3px 7px"}} value={t.end}   onChange={e=>setStaffShiftTimes(p=>({...p,[stStaff]:{...(p[stStaff]||{}),[sk]:{...t,end:e.target.value}}}))} placeholder="HH:MM"/>
+                            <button className="btn bs bsm" style={{color:"#ef4444",borderColor:"#ef4444"}} onClick={()=>setStaffShiftTimes(p=>{const copy={...p};const sc={...(copy[stStaff]||{})};delete sc[sk];return{...copy,[stStaff]:sc};})}>✕</button>
+                          </div>
+                        );
+                      })}
+                      <button className="btn bs bsm" style={{marginTop:10}} onClick={()=>{
+                        const defaults=shiftTimes[stSlot]||DEFAULT_SHIFT_TIMES[stSlot]||{start:"08:00",end:"16:30"};
+                        setStaffShiftTimes(p=>({...p,[stStaff]:{...(p[stStaff]||{}),[stSlot]:{...defaults}}}));
+                      }}>＋ Add {stSlot} override for {staff.find(s=>s.init===stStaff)?.name||stStaff}</button>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab==="training"&&trainingDays!==undefined&&(
+        <div>
+          <div className="al al-i" style={{marginBottom:14}}>Add SpR regional training days or ACP training days. These highlight the whole day on the rota calendar and availability calendar.</div>
+          <div className="card" style={{marginBottom:14}}>
+            <div className="ch"><span className="ct">Add Training Day</span></div>
+            <div className="cb">
+              <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"flex-end"}}>
+                <div className="fg" style={{margin:0}}><label className="fl">Date</label><input type="date" className="fi" style={{padding:"5px 8px"}} value={tdDate} onChange={e=>setTdDate(e.target.value)}/></div>
+                <div className="fg" style={{margin:0}}><label className="fl">Type</label>
+                  <select className="fi" style={{padding:"5px 8px"}} value={tdType} onChange={e=>setTdType(e.target.value)}>
+                    <option value="SpR">SpR Regional Training</option>
+                    <option value="ACP">ACP Training Day</option>
+                  </select>
+                </div>
+                <div className="fg" style={{margin:0,flex:1,minWidth:160}}><label className="fl">Note (optional)</label><input className="fi" style={{padding:"5px 8px"}} value={tdNote} onChange={e=>setTdNote(e.target.value)} placeholder="e.g. Bristol Royal Infirmary"/></div>
+                <button className="btn bp" style={{height:34,alignSelf:"flex-end"}} disabled={!tdDate} onClick={()=>{
+                  if(!tdDate) return;
+                  setTrainingDays(p=>[...p,{id:Date.now(),date:tdDate,type:tdType,note:tdNote}]);
+                  setTdDate(""); setTdNote("");
+                }}>＋ Add</button>
+              </div>
+            </div>
+          </div>
+          <div className="card">
+            <div className="ch"><span className="ct">All Training Days</span></div>
+            <div className="cb">
+              {trainingDays.length===0&&<p style={{fontSize:12.5,color:"#94a3b8"}}>No training days added yet.</p>}
+              <table className="tbl">
+                <thead><tr><th>Date</th><th>Day</th><th>Type</th><th>Note</th><th>Action</th></tr></thead>
+                <tbody>{[...trainingDays].sort((a,b)=>a.date.localeCompare(b.date)).map(td=>(
+                  <tr key={td.id}>
+                    <td style={{fontWeight:600}}>{td.date}</td>
+                    <td style={{color:"#64748b"}}>{["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][new Date(td.date).getDay()]}</td>
+                    <td><span style={{padding:"2px 8px",borderRadius:4,fontWeight:700,fontSize:11,background:td.type==="SpR"?"#fef9c3":"#f3e8ff",color:td.type==="SpR"?"#713f12":"#6b21a8"}}>{td.type}</span></td>
+                    <td style={{fontSize:12,color:"#64748b"}}>{td.note||"—"}</td>
+                    <td><button className="btn bs bsm" style={{color:"#ef4444",borderColor:"#ef4444"}} onClick={()=>setTrainingDays(p=>p.filter(x=>x.id!==td.id))}>Remove</button></td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
@@ -2588,6 +2760,395 @@ function YearSetupView({years,setYears,activeYearId,setActiveYearId,staff,
 }
 
 // ═══════════════════════════════════════════════════════════════
+// AI ROTA BUILDER
+// ═══════════════════════════════════════════════════════════════
+
+function AIRotaView({user,staff,rota,setRota,availability,leaveEntries,quarterStatus,wteConfig,staffHours,genRules,setGenRules,shiftTimes,addAudit,quarters}) {
+  const [tab,setTab]           = useState("rules");
+  const [selQ,setSelQ]         = useState("Q1");
+  const [slotFilter,setSF]     = useState("all");
+  const [overwrite,setOW]      = useState(false);
+  const [generating,setGen]    = useState(false);
+  const [genError,setErr]      = useState(null);
+  const [rotaDraft,setDraft]   = useState(null);
+  const [conflicts,setCfls]    = useState([]);
+  const [accepted,setAccepted] = useState(false);
+
+  const activeStaff = staff.filter(s=>s.role==="staff"&&s.active);
+  const GRADES = ["ST4+","ST3","ACP","tACP","Military"];
+  const ALL_SLOTS = ["E1","E2","E3","E4","M1","M2","M3","L1","L2","L3","L4","WE1","WE2","WE3","WL1","WL2","N1","N2","SN","AN"];
+  const DAYS_OF_WEEK = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+
+  // ── helpers ──
+  const fmtDate = d => { const dt=new Date(d); return dt.toLocaleDateString("en-GB",{weekday:"short",day:"2-digit",month:"short"}); };
+  const isNightSl = sk => ["N1","N2","SN","AN"].includes(sk);
+  const isWESl    = sk => ["WE1","WE2","WE3","WL1","WL2"].includes(sk);
+  const dayTypeFn = d => {
+    const dow = new Date(d).getDay(); // 0=Sun,6=Sat
+    if (dow===0||dow===6) return "weekend";
+    if (dow===1) return "monday";
+    if (dow===5) return "friday";
+    return "weekday_other";
+  };
+
+  const rules = genRules || INIT_GEN_RULES;
+
+  const setSlotGrade = (slot, grade, checked) => {
+    const current = (rules.slotGrades||{})[slot]||[];
+    const updated  = checked ? [...new Set([...current,grade])] : current.filter(g=>g!==grade);
+    setGenRules(prev=>({...prev, slotGrades:{...(prev.slotGrades||{}),[slot]:updated}}));
+  };
+
+  const setMinStaff = (dayType, slot, checked) => {
+    const current = (rules.minStaffing||{})[dayType]||[];
+    const updated  = checked ? [...new Set([...current,slot])] : current.filter(s=>s!==slot);
+    setGenRules(prev=>({...prev, minStaffing:{...(prev.minStaffing||{}),[dayType]:updated}}));
+  };
+
+  const setRule = (field, val) => setGenRules(prev=>({...prev,[field]:val}));
+
+  // ── generate ──
+  const generate = async () => {
+    setGen(true); setErr(null); setDraft(null); setCfls([]); setAccepted(false);
+    try {
+      const q = (quarters||QUARTERS).find(x=>x.id===selQ) || (quarters||QUARTERS)[0];
+      if (!q) throw new Error("Quarter not found");
+
+      // build dates array
+      const dates = [];
+      let cur = new Date(q.start);
+      const end = new Date(q.end);
+      while (cur <= end) { dates.push(cur.toISOString().slice(0,10)); cur.setDate(cur.getDate()+1); }
+
+      // filter dates by slotFilter
+      const filteredDates = slotFilter==="all" ? dates :
+        slotFilter==="nights" ? dates : // nights are on all days; we'll filter slots in prompt
+        dates.filter(d=>{ const dow=new Date(d).getDay(); return dow===0||dow===5||dow===6; }); // weekends
+
+      // compact availability per person
+      const avMap = {};
+      activeStaff.forEach(s=>{
+        const blocked=[],earlyOnly=[],midOnly=[],lateOnly=[],nightOnly=[];
+        filteredDates.forEach(d=>{
+          const e = (availability[s.init]||{})[d];
+          const base = e?.base;
+          if(!base||base==="ANY") return;
+          if(["UNAVAILABLE","SL","MILITARY","PHEM"].includes(base)) blocked.push(d);
+          else if(base==="EARLY") earlyOnly.push(d);
+          else if(base==="MID")   midOnly.push(d);
+          else if(base==="LATE")  lateOnly.push(d);
+          else if(base==="NIGHT") nightOnly.push(d);
+        });
+        avMap[s.init]={blocked,earlyOnly,midOnly,lateOnly,nightOnly};
+      });
+
+      // build targets per person for this quarter
+      const targets = {};
+      activeStaff.forEach(s=>{
+        const cfg = wteConfig[s.grade] || wteConfig["ST4+"] || {};
+        const wte = ((staffHours||{})[s.init]||{})[selQ] ?? 1.0;
+        targets[s.init]={
+          nights:  Math.round((cfg.nights||0)*wte),
+          weekends:Math.round((cfg.weekends||0)*wte),
+          earlies: Math.round((cfg.earlies||0)*wte),
+          mids:    Math.round((cfg.mids||0)*wte),
+          lates:   Math.round((cfg.lates||0)*wte),
+        };
+      });
+
+      const payload = {
+        dates: filteredDates,
+        dayTypes: Object.fromEntries(filteredDates.map(d=>[d,dayTypeFn(d)])),
+        slots: rules.slotGrades||{},
+        minStaffing: rules.minStaffing||{},
+        staff: activeStaff.map(s=>({init:s.init,name:s.name,grade:s.grade,nightBlockPref:s.nightBlockPref||"any"})),
+        availability: avMap,
+        targets,
+        contractRules: {
+          maxShiftHours:         rules.maxShiftHours||13,
+          minRestHours:          rules.minRestHours||11,
+          maxConsecNights:       rules.maxConsecNights||4,
+          maxConsecLongDays:     rules.maxConsecLongDays||5,
+          maxConsecWorkingDays:  rules.maxConsecWorkingDays||7,
+          postNightRestHours:    rules.postNightRestHours||46,
+          maxConsecWeekends:     rules.maxConsecWeekends||4,
+        },
+        shiftTimes: shiftTimes||DEFAULT_SHIFT_TIMES,
+        slotFilter,
+      };
+
+      const resp = await fetch("/.netlify/functions/generate-rota",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify(payload),
+      });
+      if(!resp.ok) {
+        const errData = await resp.json().catch(()=>({error:`HTTP ${resp.status}`}));
+        throw new Error(errData.error||`HTTP ${resp.status}`);
+      }
+      const {rota:draft,conflicts:cfls} = await resp.json();
+      setDraft(draft||{}); setCfls(cfls||[]); setTab("draft");
+    } catch(e) {
+      setErr(e.message);
+    } finally {
+      setGen(false);
+    }
+  };
+
+  // ── accept ──
+  const acceptDraft = () => {
+    if(!rotaDraft) return;
+    setRota(prev=>{
+      const next={...prev};
+      Object.entries(rotaDraft).forEach(([date,slots])=>{
+        if(overwrite) next[date]={...(prev[date]||{}),...slots};
+        else next[date]={...slots,...(prev[date]||{})};
+      });
+      return next;
+    });
+    const filled=Object.values(rotaDraft).reduce((s,sl)=>s+Object.keys(sl).length,0);
+    addAudit(user.init,"AI Rota",`Draft accepted: ${selQ}, ${Object.keys(rotaDraft).length} days, ${filled} assignments, ${conflicts.length} conflicts`);
+    setDraft(null); setCfls([]); setAccepted(true); setTab("generate");
+  };
+
+  const errCount   = conflicts.filter(c=>c.severity==="error").length;
+  const warnCount  = conflicts.filter(c=>c.severity==="warning").length;
+
+  // ── render ──
+  return (
+    <div>
+      <div className="card" style={{marginBottom:18}}>
+        <div className="ch">
+          <span className="ct">🤖 AI Rota Builder</span>
+          <span style={{fontSize:11,color:"#94a3b8",marginLeft:8}}>Powered by Claude — generates a draft rota from availability + your rules</span>
+        </div>
+        <div className="cb" style={{paddingBottom:0}}>
+          <div className="ai-tab-bar">
+            {[["rules","⚙️ Rules"],["generate","▶ Generate"],["draft",`📋 Draft${rotaDraft?` (${Object.keys(rotaDraft).length}d)`:""}`]].map(([k,lbl])=>(
+              <button key={k} className={`ai-tab${tab===k?" act":""}`} onClick={()=>setTab(k)}>{lbl}</button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── RULES TAB ── */}
+      {tab==="rules"&&(
+        <div>
+          {/* Slot grade requirements */}
+          <div className="card" style={{marginBottom:14}}>
+            <div className="ch"><span className="ct">Slot Grade Requirements</span><span style={{fontSize:11,color:"#94a3b8",marginLeft:8}}>Which grades may be assigned to each slot</span></div>
+            <div className="cb" style={{overflowX:"auto"}}>
+              <table className="tbl" style={{minWidth:520}}>
+                <thead><tr><th style={{textAlign:"left"}}>Slot</th><th style={{textAlign:"left"}}>Group</th>{GRADES.map(g=><th key={g}>{g}</th>)}</tr></thead>
+                <tbody>{ALL_SLOTS.map(sk=>{
+                  const grp=SLOTS.find(s=>s.key===sk)?.grp||"";
+                  const allowed=(rules.slotGrades||{})[sk]||[];
+                  return (
+                    <tr key={sk}>
+                      <td style={{fontWeight:700,color:"#334155"}}>{sk}</td>
+                      <td style={{fontSize:11,color:"#94a3b8"}}>{grp}</td>
+                      {GRADES.map(g=>(
+                        <td key={g} style={{textAlign:"center"}}>
+                          <input type="checkbox" checked={allowed.includes(g)} onChange={e=>setSlotGrade(sk,g,e.target.checked)}/>
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })}</tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Minimum daily staffing */}
+          <div className="card" style={{marginBottom:14}}>
+            <div className="ch"><span className="ct">Minimum Daily Staffing</span><span style={{fontSize:11,color:"#94a3b8",marginLeft:8}}>Slots that must be filled each day (AI prioritises these)</span></div>
+            <div className="cb">
+              {[["monday","Monday"],["weekday_other","Tue – Thu"],["friday","Friday"],["weekend","Weekend / BH"]].map(([dt,lbl])=>{
+                const req=(rules.minStaffing||{})[dt]||[];
+                const relevant=dt==="weekend"?["WE1","WE2","WE3","WL1","WL2","N1","N2","SN","AN"]:["E1","E2","E3","E4","M1","M2","M3","L1","L2","L3","L4","N1","N2","SN","AN"];
+                return (
+                  <div key={dt} style={{marginBottom:12}}>
+                    <div style={{fontWeight:700,fontSize:12.5,color:"#334155",marginBottom:6}}>{lbl}</div>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                      {relevant.map(sk=>(
+                        <label key={sk} style={{display:"flex",alignItems:"center",gap:4,fontSize:12,cursor:"pointer",padding:"3px 8px",borderRadius:5,background:req.includes(sk)?"#dcfce7":"#f8fafc",border:`1px solid ${req.includes(sk)?"#86efac":"#e2e8f0"}`}}>
+                          <input type="checkbox" checked={req.includes(sk)} onChange={e=>setMinStaff(dt,sk,e.target.checked)} style={{marginRight:2}}/>{sk}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* JD Contract rules */}
+          <div className="card">
+            <div className="ch"><span className="ct">JD Contract Rules</span><span style={{fontSize:11,color:"#94a3b8",marginLeft:8}}>Junior Doctors contract — used by AI and validation layer</span></div>
+            <div className="cb">
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:10}}>
+                {[
+                  ["maxShiftHours","Max shift length (hrs)",1,24],
+                  ["minRestHours","Min rest between shifts (hrs)",1,24],
+                  ["maxConsecNights","Max consecutive nights",1,7],
+                  ["postNightRestHours","Post-night rest required (hrs)",24,96],
+                  ["maxConsecLongDays","Max consec long days (>10h)",1,10],
+                  ["maxConsecWorkingDays","Max consecutive working days",1,14],
+                  ["maxConsecWeekends","Max consecutive weekends",1,8],
+                ].map(([field,label,mn,mx])=>(
+                  <div key={field} className="fg" style={{margin:0}}>
+                    <label className="fl">{label}</label>
+                    <input type="number" className="fi" style={{padding:"5px 8px"}}
+                      value={rules[field]??""} min={mn} max={mx} step="1"
+                      onChange={e=>setRule(field,parseInt(e.target.value)||0)}/>
+                  </div>
+                ))}
+              </div>
+              <div style={{marginTop:14,padding:10,background:"#f8fafc",borderRadius:7,fontSize:11.5,color:"#64748b"}}>
+                <strong>Fixed rules always applied:</strong> Each person works at most one slot per day. Night slots are grade-restricted (N1/N2: ST4+; SN: ST3; AN: ACP/tACP). Blocked days (SL, Military, PHEM, Unavailable) are never scheduled.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── GENERATE TAB ── */}
+      {tab==="generate"&&(
+        <div className="card">
+          <div className="ch"><span className="ct">Generate Rota Draft</span></div>
+          <div className="cb">
+            {accepted&&<div className="al al-ok" style={{marginBottom:14}}>✓ Draft accepted and merged into the rota for {selQ}.</div>}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:14,marginBottom:18}}>
+              <div className="fg" style={{margin:0}}>
+                <label className="fl">Quarter</label>
+                <select className="fi" style={{padding:"6px 10px"}} value={selQ} onChange={e=>{setSelQ(e.target.value);setAccepted(false);}}>
+                  {(quarters||QUARTERS).map(q=><option key={q.id} value={q.id}>{q.label}</option>)}
+                </select>
+              </div>
+              <div className="fg" style={{margin:0}}>
+                <label className="fl">Slots to fill</label>
+                <select className="fi" style={{padding:"6px 10px"}} value={slotFilter} onChange={e=>setSF(e.target.value)}>
+                  <option value="all">All slots (Early, Mid, Late, Night, W/E)</option>
+                  <option value="weekends">Weekends + Nights only</option>
+                  <option value="nights">Nights only (N1, N2, SN, AN)</option>
+                </select>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:8,paddingTop:18}}>
+                <input type="checkbox" id="overwrite" checked={overwrite} onChange={e=>setOW(e.target.checked)}/>
+                <label htmlFor="overwrite" style={{fontSize:13,color:"#374151",cursor:"pointer"}}>Overwrite existing assignments</label>
+              </div>
+            </div>
+
+            <div style={{background:"#f8fafc",borderRadius:8,padding:14,marginBottom:18,fontSize:12.5,color:"#64748b"}}>
+              <strong>How it works:</strong> Claude reads all staff availability for {selQ}, applies your rules, and returns a full draft rota. You review it on the Draft tab — conflicts are highlighted — then click Accept to merge it in. The existing rota is untouched until you accept.
+              {!overwrite&&" Existing slot assignments will be preserved (AI only fills empty slots)."}
+              {overwrite&&<span style={{color:"#d97706"}}> ⚠ Overwrite mode: existing assignments will be replaced.</span>}
+            </div>
+
+            {genError&&<div className="al al-w" style={{marginBottom:14}}>⚠️ {genError}</div>}
+
+            <button className="btn bp" style={{padding:"10px 24px",fontSize:14,gap:8}} onClick={generate} disabled={generating}>
+              {generating?<><span style={{display:"inline-block",animation:"spin 1s linear infinite"}}>⟳</span> Generating…</>:"🤖 Generate Draft"}
+            </button>
+            {generating&&<p style={{marginTop:10,fontSize:12,color:"#64748b"}}>Sending availability data to Claude… this usually takes 15–30 seconds.</p>}
+          </div>
+        </div>
+      )}
+
+      {/* ── DRAFT TAB ── */}
+      {tab==="draft"&&rotaDraft&&(
+        <div>
+          {/* Summary banner */}
+          <div style={{display:"flex",gap:10,marginBottom:14,flexWrap:"wrap"}}>
+            <div style={{flex:1,padding:12,borderRadius:8,background:errCount>0?"#fee2e2":"#dcfce7",border:`1px solid ${errCount>0?"#fca5a5":"#86efac"}`}}>
+              <div style={{fontWeight:700,fontSize:13,color:errCount>0?"#7f1d1d":"#14532d"}}>{errCount>0?`⛔ ${errCount} Error${errCount>1?"s":""}`:warnCount>0?`⚠️ ${warnCount} Warning${warnCount>1?"s":""}`:errCount===0&&warnCount===0?"✅ No conflicts found":""}</div>
+              <div style={{fontSize:11.5,color:errCount>0?"#991b1b":"#166534",marginTop:2}}>{errCount>0?"Review errors before accepting.":warnCount>0?"Warnings are preference mismatches — safe to accept.":"All assignments pass grade, availability, and contract checks."}</div>
+            </div>
+            <div style={{padding:12,borderRadius:8,background:"#f1f5f9",border:"1px solid #e2e8f0",minWidth:140}}>
+              <div style={{fontWeight:700,fontSize:13,color:"#334155"}}>{Object.keys(rotaDraft).length} days</div>
+              <div style={{fontSize:11.5,color:"#64748b"}}>{Object.values(rotaDraft).reduce((s,sl)=>s+Object.keys(sl).length,0)} total assignments</div>
+            </div>
+          </div>
+
+          {/* Conflicts list */}
+          {conflicts.length>0&&(
+            <div className="card" style={{marginBottom:14}}>
+              <div className="ch"><span className="ct">Conflicts</span></div>
+              <div className="cb" style={{overflowX:"auto"}}>
+                <table className="tbl">
+                  <thead><tr><th>Date</th><th>Slot</th><th>Person</th><th>Rule</th><th>Severity</th></tr></thead>
+                  <tbody>{conflicts.map((c,i)=>(
+                    <tr key={i}>
+                      <td style={{fontWeight:600,whiteSpace:"nowrap"}}>{fmtDate(c.date)}</td>
+                      <td><span style={{fontWeight:700}}>{c.slot}</span></td>
+                      <td><span style={{background:"#e0e7ff",color:"#3730a3",padding:"1px 6px",borderRadius:4,fontWeight:700,fontSize:11}}>{c.init}</span></td>
+                      <td style={{fontSize:12,color:"#64748b"}}>{c.rule}</td>
+                      <td><span style={{padding:"2px 7px",borderRadius:4,fontWeight:700,fontSize:11,background:c.severity==="error"?"#fee2e2":"#fef3c7",color:c.severity==="error"?"#7f1d1d":"#78350f"}}>{c.severity}</span></td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Draft rota preview */}
+          <div className="card" style={{marginBottom:14}}>
+            <div className="ch"><span className="ct">Draft Rota Preview</span>
+              <div style={{display:"flex",gap:8,fontSize:11}}>
+                <span style={{padding:"1px 6px",borderRadius:3,background:"#dcfce7",color:"#166534"}}>■</span><span style={{color:"#64748b"}}>New</span>
+                <span style={{padding:"1px 6px",borderRadius:3,background:"#dbeafe",color:"#1e40af"}}>■</span><span style={{color:"#64748b"}}>Existing</span>
+                <span style={{padding:"1px 6px",borderRadius:3,background:"#fee2e2",color:"#7f1d1d"}}>■</span><span style={{color:"#64748b"}}>Conflict</span>
+              </div>
+            </div>
+            <div className="cb" style={{overflowX:"auto",maxHeight:520,overflowY:"auto"}}>
+              <table style={{borderCollapse:"collapse",minWidth:600,fontSize:11.5}}>
+                <thead style={{position:"sticky",top:0,zIndex:2,background:"#f8fafc"}}>
+                  <tr>
+                    <th style={{padding:"6px 10px",textAlign:"left",border:"1px solid #e2e8f0",fontWeight:700,fontSize:11,color:"#475569",minWidth:90}}>Date</th>
+                    {ALL_SLOTS.map(sk=><th key={sk} style={{padding:"4px 6px",border:"1px solid #e2e8f0",fontWeight:700,fontSize:10,color:"#94a3b8",minWidth:36,textAlign:"center"}}>{sk}</th>)}
+                  </tr>
+                </thead>
+                <tbody>{Object.keys(rotaDraft).sort().map(date=>{
+                  const daySlots=rotaDraft[date]||{};
+                  const existSlots=rota[date]||{};
+                  const conflictSlots=new Set(conflicts.filter(c=>c.date===date).map(c=>c.slot));
+                  return (
+                    <tr key={date} style={{background:"white"}}>
+                      <td style={{padding:"4px 8px",border:"1px solid #f1f5f9",fontWeight:600,fontSize:11,whiteSpace:"nowrap",color:"#374151"}}>{fmtDate(date)}</td>
+                      {ALL_SLOTS.map(sk=>{
+                        const init=daySlots[sk];
+                        const wasExisting=existSlots[sk]&&!overwrite;
+                        const isCfl=conflictSlots.has(sk);
+                        return (
+                          <td key={sk} style={{padding:"3px 4px",border:"1px solid #f1f5f9",textAlign:"center"}}>
+                            {init&&<span className={isCfl?"draft-cell-conflict":wasExisting?"draft-cell-exist":"draft-cell-new"}>{init}</span>}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}</tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Accept / Discard */}
+          <div style={{display:"flex",gap:10}}>
+            <button className="btn bp" style={{padding:"10px 22px"}} onClick={acceptDraft}>✓ Accept Draft</button>
+            <button className="btn bs" style={{padding:"10px 22px"}} onClick={()=>{setDraft(null);setCfls([]);setTab("generate");}}>✗ Discard</button>
+            {errCount>0&&<span style={{fontSize:12,color:"#94a3b8",alignSelf:"center"}}>You can still accept with errors — review and fix in Rota Builder after.</span>}
+          </div>
+        </div>
+      )}
+
+      {tab==="draft"&&!rotaDraft&&(
+        <div className="card"><div className="cb" style={{textAlign:"center",padding:40,color:"#94a3b8"}}>No draft generated yet. Go to the Generate tab to create one.</div></div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
 // MAIN APP
 // ═══════════════════════════════════════════════════════════════
 
@@ -2605,6 +3166,10 @@ function App() {
   const [wteConfig,setWteConfig]   = useState(()=>lsGet('rhs_wteConfig',INIT_WTE_CONFIG));
   const [auditLog,setAudit]        = useState(()=>lsGet('rhs_audit',[{id:1,ts:"2026-08-05 09:00",user:"ADM",action:"System Init",details:"RotaHST 2026/27 initialised"}]));
   const [fixedDaysOff,setFixedDaysOff] = useState(()=>lsGet('rhs_fixedDaysOff',[]));
+  const [genRules,setGenRules]             = useState(()=>lsGet('rhs_genRules',INIT_GEN_RULES));
+  const [shiftTimes,setShiftTimes]         = useState(()=>lsGet('rhs_shiftTimes',DEFAULT_SHIFT_TIMES));
+  const [staffShiftTimes,setSST]           = useState(()=>lsGet('rhs_staffShiftTimes',{}));
+  const [trainingDays,setTrainingDays]     = useState(()=>lsGet('rhs_trainingDays',[])); // [{id,date,type:"SpR"|"ACP",note}]
 
   // Year management
   const [years,setYears]           = useState(()=>lsGet('rhs_years',[{id:"2026-27",label:"2026/27",quarters:QUARTERS,active:true,archived:false}]));
@@ -2690,6 +3255,10 @@ function App() {
               upd(setCorrsByYear)(d.corrsByYear);
               upd(setSHByYear)(d.staffHoursByYear);
               upd(setFixedDaysOff)(d.fixedDaysOff);
+              upd(setGenRules)(d.genRules);
+              upd(setShiftTimes)(d.shiftTimes);
+              upd(setSST)(d.staffShiftTimes);
+              upd(setTrainingDays)(d.trainingDays);
             }
           }
           setFsReady(true);
@@ -2709,11 +3278,11 @@ function App() {
   // Also mirrors to localStorage as an offline / fast-reload cache
   useEffect(() => {
     if (!fsReady) return;
-    const payload = {staff,auditLog,wteConfig,years,activeYearId,rotaByYear,leaveByYear:leaveByYear,availByYear,qStatusByYear,requestsByYear,notesByYear,corrsByYear,staffHoursByYear,fixedDaysOff};
+    const payload = {staff,auditLog,wteConfig,years,activeYearId,rotaByYear,leaveByYear:leaveByYear,availByYear,qStatusByYear,requestsByYear,notesByYear,corrsByYear,staffHoursByYear,fixedDaysOff,genRules,shiftTimes,staffShiftTimes,trainingDays};
     appDoc().set(payload).catch(console.error);
-    Object.entries({rhs_staff:staff,rhs_audit:auditLog,rhs_wteConfig:wteConfig,rhs_years:years,rhs_activeYearId:activeYearId,rhs_rotaByYear:rotaByYear,rhs_leaveByYear:leaveByYear,rhs_availByYear:availByYear,rhs_qstatusByYear:qStatusByYear,rhs_requestsByYear:requestsByYear,rhs_notesByYear:notesByYear,rhs_corrsByYear:corrsByYear,rhs_staffHoursByYear:staffHoursByYear,rhs_fixedDaysOff:fixedDaysOff})
+    Object.entries({rhs_staff:staff,rhs_audit:auditLog,rhs_wteConfig:wteConfig,rhs_years:years,rhs_activeYearId:activeYearId,rhs_rotaByYear:rotaByYear,rhs_leaveByYear:leaveByYear,rhs_availByYear:availByYear,rhs_qstatusByYear:qStatusByYear,rhs_requestsByYear:requestsByYear,rhs_notesByYear:notesByYear,rhs_corrsByYear:corrsByYear,rhs_staffHoursByYear:staffHoursByYear,rhs_fixedDaysOff:fixedDaysOff,rhs_genRules:genRules,rhs_shiftTimes:shiftTimes,rhs_staffShiftTimes:staffShiftTimes,rhs_trainingDays:trainingDays})
       .forEach(([k,v])=>lsSave(k,v));
-  },[fsReady,staff,auditLog,wteConfig,years,activeYearId,rotaByYear,leaveByYear,availByYear,qStatusByYear,requestsByYear,notesByYear,corrsByYear,staffHoursByYear,fixedDaysOff]);
+  },[fsReady,staff,auditLog,wteConfig,years,activeYearId,rotaByYear,leaveByYear,availByYear,qStatusByYear,requestsByYear,notesByYear,corrsByYear,staffHoursByYear,fixedDaysOff,genRules,shiftTimes,staffShiftTimes,trainingDays]);
 
   const addAudit=(u,action,details)=>{
     const now=new Date(), ts=`${now.toLocaleDateString("en-GB")} ${now.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}`;
@@ -2776,7 +3345,7 @@ function App() {
           </div>
           <div className="body">
             {view==="dashboard"  &&<Dashboard user={user} staff={staff} rota={rota} requests={requests} dayNotes={dayNotes} availability={availability} quarterStatus={quarterStatus} quarters={activeYearQuarters}/>}
-            {view==="calendar"   &&<CalendarView rota={rota} leaveEntries={leaveEntries} dayNotes={dayNotes} staff={staff} viewMonth={viewMonth} setViewMonth={setVM} viewMode="month" setViewMode={()=>{}}/>}
+            {view==="calendar"   &&<CalendarView rota={rota} leaveEntries={leaveEntries} dayNotes={dayNotes} staff={staff} viewMonth={viewMonth} setViewMonth={setVM} viewMode="month" setViewMode={()=>{}} trainingDays={trainingDays}/>}
             {view==="myshifts"   &&!isAdmin&&<MyShifts user={user} rota={rota} leaveEntries={leaveEntries} dayNotes={dayNotes}/>}
             {view==="availability"&&(<AvailabilityView
                   user={user}
@@ -2802,7 +3371,8 @@ function App() {
             {view==="staff"      &&isAdmin&&<StaffMgmt staff={staff} setStaff={setStaff} addAudit={addAudit} currentUser={user}/>}
             {view==="reports"    &&<Reports user={user} staff={staff} rota={rota} leaveEntries={leaveEntries}/>}
             {view==="fixeddays"  &&isAdmin&&<FixedDaysView fixedDaysOff={fixedDaysOff} setFixedDaysOff={setFixedDaysOff} staff={staff} addAudit={addAudit} currentUser={user}/>}
-            {view==="rotaconfig" &&isAdmin&&<RotaConfig wteConfig={wteConfig} setWteConfig={setWteConfig} staffHours={staffHours} setStaffHours={setStaffHours} staff={staff} addAudit={addAudit}/>}
+            {view==="rotaconfig" &&isAdmin&&<RotaConfig wteConfig={wteConfig} setWteConfig={setWteConfig} staffHours={staffHours} setStaffHours={setStaffHours} staff={staff} addAudit={addAudit} shiftTimes={shiftTimes} setShiftTimes={setShiftTimes} staffShiftTimes={staffShiftTimes} setStaffShiftTimes={setSST} trainingDays={trainingDays} setTrainingDays={setTrainingDays}/>}
+{view==="airota"     &&isAdmin&&<AIRotaView user={user} staff={staff} rota={rota} setRota={setRota} availability={availability} leaveEntries={leaveEntries} quarterStatus={quarterStatus} wteConfig={wteConfig} staffHours={staffHours} genRules={genRules} setGenRules={setGenRules} shiftTimes={shiftTimes} addAudit={addAudit} quarters={activeYearQuarters}/>}
             {view==="adjustments"&&isAdmin&&<HoursAdjustView staff={staff} hoursCorrections={hoursCorrections} setHoursCorrections={setHoursCorrections} addAudit={addAudit} currentUser={user} wteConfig={wteConfig} staffHours={staffHours} rota={rota} leaveEntries={leaveEntries}/>}
             {view==="audit"      &&isAdmin&&<AuditLog log={auditLog}/>}
             {view==="yearsetup"  &&isAdmin&&<YearSetupView years={years} setYears={setYears} activeYearId={activeYearId} setActiveYearId={setActiveYearId} staff={staff} rotaByYear={rotaByYear} leaveByYear={leaveByYear} availByYear={availByYear} qStatusByYear={qStatusByYear} requestsByYear={requestsByYear} notesByYear={notesByYear} corrsByYear={corrsByYear} staffHoursByYear={staffHoursByYear} setQStatusByYear={setQStatusByYear} addAudit={addAudit} currentUser={user}/>}
