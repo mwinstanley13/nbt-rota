@@ -905,6 +905,7 @@ function CalendarView({rota,leaveEntries,dayNotes,staff,viewMonth,setViewMonth,v
 function AvailabilityView({
   user,
   staff,
+  setStaff,
   availability,
   setAvailability,
   quarterStatus,
@@ -1237,6 +1238,44 @@ function AvailabilityView({
                 </div>
               </div>
             </div>
+
+            {/* Night block preference — only relevant for staff who do nights */}
+            {(() => {
+              const me = staff.find(s => s.init === user.init);
+              if (!me || !["ST4+","ST3","ACP","tACP"].includes(me.grade)) return null;
+              const pref = me.nightBlockPref || "any";
+              const opts = [
+                { val:"any",  label:"No preference",      desc:"System decides based on staffing needs" },
+                { val:"4",    label:"4 nights (Mon–Thu)",  desc:"Prefer to do all 4 weekday nights in one block" },
+                { val:"2+2",  label:"Split 2+2",           desc:"Prefer to split into Mon–Tue and Wed–Thu" },
+              ];
+              const save = (val) => {
+                if (setStaff) setStaff(prev => prev.map(s => s.init === user.init ? {...s, nightBlockPref: val} : s));
+                addAudit(user.init, "Night Pref", `Set night block preference: ${val}`);
+              };
+              return (
+                <div className="card" style={{ marginBottom: 16 }}>
+                  <div className="ch"><span className="ct">🌙 Night Block Preference</span></div>
+                  <div className="cb">
+                    <div style={{ fontSize: 12, color: "#64748b", marginBottom: 10 }}>
+                      When generating the rota, your night shifts will be scheduled as weekday blocks (Mon–Thu) or weekend blocks (Fri–Sun). Choose how you prefer weekday nights to be assigned.
+                    </div>
+                    <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                      {opts.map(o => (
+                        <button key={o.val} onClick={() => save(o.val)}
+                          style={{ padding:"8px 14px", borderRadius:8, border:`2px solid ${pref===o.val?"#10b981":"#e2e8f0"}`,
+                            background: pref===o.val ? "#ecfdf5" : "#f8fafc",
+                            color: pref===o.val ? "#065f46" : "#374151",
+                            cursor:"pointer", textAlign:"left", minWidth:160 }}>
+                          <div style={{ fontWeight: pref===o.val ? 700 : 500, fontSize:13 }}>{pref===o.val ? "✓ " : ""}{o.label}</div>
+                          <div style={{ fontSize:11, color:"#64748b", marginTop:2 }}>{o.desc}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         ) : (
           <div className="al al-w">
@@ -3475,6 +3514,7 @@ function App() {
             {view==="availability"&&(<AvailabilityView
                   user={user}
                   staff={staff}
+                  setStaff={setStaff}
                   availability={availability}
                   setAvailability={setAvail}
                   quarterStatus={quarterStatus}

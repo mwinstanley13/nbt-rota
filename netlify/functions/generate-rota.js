@@ -104,8 +104,16 @@ function scheduleNights(body) {
   function pickFromPool(pool, blockDates, exclude) {
     const eligible = pool.filter(s => !exclude.has(s.init) && canDoBlock(s.init, blockDates));
     if (!eligible.length) return null;
-    // Sort by highest deficit (target - count) desc, then lowest count desc
+    const is4Night = blockDates.length >= 4;
+    const is2Night = blockDates.length === 2;
     eligible.sort((a, b) => {
+      // Respect night block preference
+      const pa = a.nightBlockPref || "any";
+      const pb = b.nightBlockPref || "any";
+      const prefScore = p => is4Night ? (p==="4"?2:p==="any"?1:0) : is2Night ? (p==="2+2"?2:p==="any"?1:0) : 1;
+      const ps = prefScore(pb) - prefScore(pa);
+      if (ps !== 0) return ps;
+      // Then by highest deficit (target - count) desc
       const da = state[a.init].target - state[a.init].nightCount;
       const db = state[b.init].target - state[b.init].nightCount;
       return db !== da ? db - da : state[a.init].nightCount - state[b.init].nightCount;
@@ -147,9 +155,11 @@ function scheduleNights(body) {
     if (weekday.length > 0) {
       const wd = weekday.sort();
 
-      // Determine sub-blocks: try full block first; split 2+2 if < 2 eligible
-      const canDo4 = pools.n1n2.filter(s => canDoBlock(s.init, wd));
-      let subBlocks = canDo4.length >= 2 ? [wd] : splitBlock(wd);
+      // Determine sub-blocks: split if < 2 eligible, or majority prefer 2+2
+      const canDo4   = pools.n1n2.filter(s => canDoBlock(s.init, wd));
+      const prefer2p2 = canDo4.filter(s => s.nightBlockPref === "2+2").length;
+      const prefer4   = canDo4.filter(s => s.nightBlockPref !== "2+2").length;
+      let subBlocks = (canDo4.length >= 2 && prefer4 >= prefer2p2) ? [wd] : splitBlock(wd);
 
       subBlocks.forEach(sub => {
         const used = new Set();
