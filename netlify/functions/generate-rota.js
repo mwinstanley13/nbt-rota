@@ -1,8 +1,9 @@
-// RotaHST AI Rota Generator — Netlify Serverless Function
-// Nights are scheduled deterministically (blocks, rest rules, grade matching).
-// Claude handles day shifts only (simpler problem, more reliable output).
+// RotaHST Rota Generator — Netlify Serverless Function
+// Fully deterministic: no Claude API needed.
+// Nights → deterministic block scheduler (Mon-Thu / Fri-Sun blocks).
+// Day shifts → greedy scheduler respecting rest, targets, grade rules.
 
-// ── Date helpers ──────────────────────────────────────────────────────────────
+// ── Date / time helpers ───────────────────────────────────────────────────────
 
 function addDays(dateStr, n) {
   const d = new Date(dateStr + "T12:00:00Z");
@@ -18,110 +19,120 @@ function diffDays(a, b) {
   return Math.round((new Date(b + "T12:00:00Z") - new Date(a + "T12:00:00Z")) / 86400000);
 }
 
-function shiftDurationHours(times) {
-  if (!times) return 0;
+// Return shift start and end in minutes from midnight (end may be >1440 if overnight)
+function shiftMinutes(times) {
+  if (!times) return null;
   const [sh, sm] = times.start.split(":").map(Number);
-  const [eh, em] = times.end.split(":").map(Number);
-  let h = (eh * 60 + em - (sh * 60 + sm)) / 60;
-  if (h <= 0) h += 24;
-  return h;
+  let [eh, em] = times.end.split(":").map(Number);
+  const startMins = sh * 60 + sm;
+  let endMins = eh * 60 + em;
+  if (endMins <= startMins) endMins += 1440; // overnight
+  return { start: startMins, end: endMins };
 }
 
-// ── Night block scheduler (deterministic) ────────────────────────────────────
-// Groups dates into Mon–Thu and Fri–Sun blocks. Picks eligible staff by grade,
-// balancing toward targets, respecting post-night rest and max-consecutive rules.
+// Gap in minutes between two shifts (prev end → next start, across date boundary)
+function restGapMins(prevDate, prevTimes, nextDate, nextTimes) {
+  if (!prevTimes || !nextTimes) return 99999;
+  const prev = shiftMinutes(prevTimes);
+  const next = shiftMinutes(nextTimes);
+  if (!prev || !next) return 99999;
+  const dayGap = diffDays(prevDate, nextDate);
+  const nextStartAbsMins = dayGap * 1440 + next.start;
+  return nextStartAbsMins - prev.end;
+}
+
+// ── Default shift times (used if not overridden) ──────────────────────────────
+
+const DEFAULT_TIMES = {
+  E1:{start:"08:00",end:"16:30"}, E2:{start:"08:00",end:"16:30"}, E3:{start:"08:00",end:"16:30"}, E4:{start:"08:00",end:"16:30"},
+  M1:{start:"11:00",end:"20:00"}, M2:{start:"11:00",end:"20:00"}, M3:{start:"11:00",end:"20:00"},
+  L1:{start:"16:00",end:"00:00"}, L2:{start:"16:00",end:"00:00"}, L3:{start:"16:00",end:"00:00"}, L4:{start:"16:00",end:"00:00"},
+  WE1:{start:"08:00",end:"18:00"}, WE2:{start:"08:00",end:"18:00"}, WE3:{start:"08:00",end:"18:00"},
+  WL1:{start:"14:00",end:"00:00"}, WL2:{start:"14:00",end:"00:00"},
+  N1:{start:"22:00",end:"08:30"},  N2:{start:"22:00",end:"08:30"},
+  SN:{start:"22:00",end:"08:30"},  AN:{start:"22:00",end:"08:30"},
+};
+
+function getTimes(slotKey, shiftTimes) {
+  return (shiftTimes || {})[slotKey] || DEFAULT_TIMES[slotKey] || null;
+}
+
+// ── Night block scheduler ─────────────────────────────────────────────────────
 
 function scheduleNights(body) {
   const { dates, staff, availability, targets, contractRules } = body;
   const maxConsec   = contractRules?.maxConsecNights    || 4;
   const postRestHrs = contractRules?.postNightRestHours || 46;
+  const avMap = availability;
 
-  const avMap = availability; // {init:{blocked[],earlyOnly[],lateOnly[],midOnly[],nightOnly[]}}
-
-  // ── Pools by grade ──
   const pools = {
     n1n2: staff.filter(s => s.grade === "ST4+"),
     sn:   staff.filter(s => s.grade === "ST3"),
     an:   staff.filter(s => ["ACP","tACP"].includes(s.grade)),
   };
 
-  // ── Per-person state ──
   const state = {};
   staff.forEach(s => {
     state[s.init] = {
       nightCount: 0,
-      target:     targets[s.init]?.nights || 0,
-      history:    [], // sorted assigned night dates
+      target: targets[s.init]?.nights || 0,
+      history: [],
     };
   });
 
-  // ── Helpers ──
-
   function isAvailableForNight(init, date) {
     const av = avMap[init] || {};
-    if (av.blocked?.includes(date))   return false;
-    if (av.earlyOnly?.includes(date)) return false;
-    if (av.lateOnly?.includes(date))  return false;
-    if (av.midOnly?.includes(date))   return false;
-    // If nightOnly is set and this date is not in it, person prefers nights only on specific days
-    // We still allow assigning (nightOnly = "I want nights on these days" not "only nights ever")
-    return true;
+    return !(av.blocked?.includes(date) || av.earlyOnly?.includes(date) ||
+             av.lateOnly?.includes(date) || av.midOnly?.includes(date));
   }
 
   function canDoBlock(init, blockDates) {
     if (!blockDates.every(d => isAvailableForNight(init, d))) return false;
-
     const hist = state[init].history;
-    if (hist.length === 0) return true;
-
+    if (!hist.length) return true;
     const lastNight = hist[hist.length - 1];
-    const firstProposed = blockDates[0];
-    const gap = diffDays(lastNight, firstProposed);
-
+    const gap = diffDays(lastNight, blockDates[0]);
     if (gap === 1) {
-      // Extending existing run — check max consecutive
       let consec = 1;
       for (let i = hist.length - 2; i >= 0; i--) {
-        if (diffDays(hist[i], hist[i + 1]) === 1) consec++;
-        else break;
+        if (diffDays(hist[i], hist[i + 1]) === 1) consec++; else break;
       }
-      // blockDates could add more consecutive nights
       return consec + blockDates.length <= maxConsec;
     }
-
     if (gap > 1) {
-      // New block — check post-night rest
-      // Last night shift ends at 08:30 the morning AFTER lastNight date
-      const lastNightEndMs = new Date(lastNight + "T08:30:00Z").getTime() + 86400000;
-      const newBlockStartMs = new Date(firstProposed + "T22:00:00Z").getTime();
-      const restHours = (newBlockStartMs - lastNightEndMs) / 3600000;
-      return restHours >= postRestHrs;
+      const lastEndMs  = new Date(lastNight + "T08:30:00Z").getTime() + 86400000;
+      const newStartMs = new Date(blockDates[0] + "T22:00:00Z").getTime();
+      return (newStartMs - lastEndMs) / 3600000 >= postRestHrs;
     }
-
-    return false; // gap <= 0 (same or earlier date)
+    return false;
   }
 
   function pickFromPool(pool, blockDates, exclude) {
-    const eligible = pool.filter(s => !exclude.has(s.init) && canDoBlock(s.init, blockDates));
-    if (!eligible.length) return null;
-    const is4Night = blockDates.length >= 4;
-    const is2Night = blockDates.length === 2;
-    eligible.sort((a, b) => {
-      // Respect night block preference
-      const pa = a.nightBlockPref || "any";
-      const pb = b.nightBlockPref || "any";
-      const prefScore = p => is4Night ? (p==="4"?2:p==="any"?1:0) : is2Night ? (p==="2+2"?2:p==="any"?1:0) : 1;
-      const ps = prefScore(pb) - prefScore(pa);
-      if (ps !== 0) return ps;
-      // Then by highest deficit (target - count) desc
-      const da = state[a.init].target - state[a.init].nightCount;
-      const db = state[b.init].target - state[b.init].nightCount;
-      return db !== da ? db - da : state[a.init].nightCount - state[b.init].nightCount;
-    });
-    return eligible[0];
+    const is4 = blockDates.length >= 4;
+    const is2 = blockDates.length === 2;
+    const prefScore = p => is4 ? (p==="4"?2:p==="any"?1:0) : is2 ? (p==="2+2"?2:p==="any"?1:0) : 1;
+
+    // 1st pass: people under target; 2nd pass: anyone eligible
+    for (const maxOver of [0, 99]) {
+      const eligible = pool.filter(s =>
+        !exclude.has(s.init) &&
+        canDoBlock(s.init, blockDates) &&
+        (state[s.init].nightCount - state[s.init].target) <= maxOver
+      );
+      if (!eligible.length) continue;
+      eligible.sort((a, b) => {
+        const ps = prefScore(b.nightBlockPref||"any") - prefScore(a.nightBlockPref||"any");
+        if (ps !== 0) return ps;
+        const da = state[a.init].target - state[a.init].nightCount;
+        const db = state[b.init].target - state[b.init].nightCount;
+        return db !== da ? db - da : state[a.init].nightCount - state[b.init].nightCount;
+      });
+      return eligible[0];
+    }
+    return null;
   }
 
-  function recordAssignment(person, blockDates, slot, nightRota) {
+  function record(person, blockDates, slot, nightRota) {
     blockDates.forEach(date => {
       if (!nightRota[date]) nightRota[date] = {};
       nightRota[date][slot] = person.init;
@@ -131,16 +142,11 @@ function scheduleNights(body) {
     state[person.init].nightCount += blockDates.length;
   }
 
-  // ── Group dates into night blocks by ISO week ──
-  // Weekday nights: Mon(1)–Thu(4); Weekend nights: Fri(5)–Sat(6)–Sun(0)
-
-  const weekMap = {}; // "2026-08-03" (Mon of ISO week) → {weekday:[], weekend:[]}
-  const sortedDates = [...dates].sort();
-
-  sortedDates.forEach(d => {
+  // Group dates by ISO week → weekday (Mon-Thu) and weekend (Fri-Sun) buckets
+  const weekMap = {};
+  [...dates].sort().forEach(d => {
     const dow = dowOf(d);
-    const daysSinceMon = (dow + 6) % 7;
-    const monday = addDays(d, -daysSinceMon);
+    const monday = addDays(d, -((dow + 6) % 7));
     if (!weekMap[monday]) weekMap[monday] = { weekday: [], weekend: [] };
     if (dow >= 1 && dow <= 4) weekMap[monday].weekday.push(d);
     if (dow === 5 || dow === 6 || dow === 0) weekMap[monday].weekend.push(d);
@@ -151,267 +157,318 @@ function scheduleNights(body) {
   Object.keys(weekMap).sort().forEach(wk => {
     const { weekday, weekend } = weekMap[wk];
 
-    // ── Weekday block (Mon–Thu, up to 4 nights) ──
     if (weekday.length > 0) {
       const wd = weekday.sort();
-
-      // Determine sub-blocks: split if < 2 eligible, or majority prefer 2+2
       const canDo4   = pools.n1n2.filter(s => canDoBlock(s.init, wd));
-      const prefer2p2 = canDo4.filter(s => s.nightBlockPref === "2+2").length;
-      const prefer4   = canDo4.filter(s => s.nightBlockPref !== "2+2").length;
-      let subBlocks = (canDo4.length >= 2 && prefer4 >= prefer2p2) ? [wd] : splitBlock(wd);
+      const pref2p2  = canDo4.filter(s => s.nightBlockPref === "2+2").length;
+      const prefOth  = canDo4.filter(s => s.nightBlockPref !== "2+2").length;
+      const subBlocks = (canDo4.length >= 2 && prefOth >= pref2p2) ? [wd] :
+        wd.length > 2 ? [wd.slice(0, Math.ceil(wd.length/2)), wd.slice(Math.ceil(wd.length/2))] : [wd];
 
       subBlocks.forEach(sub => {
         const used = new Set();
-
         const n1 = pickFromPool(pools.n1n2, sub, used);
-        if (n1) { recordAssignment(n1, sub, "N1", nightRota); used.add(n1.init); }
-
+        if (n1) { record(n1, sub, "N1", nightRota); used.add(n1.init); }
         const n2 = pickFromPool(pools.n1n2, sub, used);
-        if (n2) { recordAssignment(n2, sub, "N2", nightRota); }
-
+        if (n2) { record(n2, sub, "N2", nightRota); }
         const sn = pickFromPool(pools.sn, sub, new Set());
-        if (sn) { recordAssignment(sn, sub, "SN", nightRota); }
-
+        if (sn) { record(sn, sub, "SN", nightRota); }
         const an = pickFromPool(pools.an, sub, new Set());
-        if (an) { recordAssignment(an, sub, "AN", nightRota); }
+        if (an) { record(an, sub, "AN", nightRota); }
       });
     }
 
-    // ── Weekend block (Fri–Sat–Sun, up to 3 nights) ──
     if (weekend.length > 0) {
       const we = weekend.sort();
       const used = new Set();
-
       const n1 = pickFromPool(pools.n1n2, we, used);
-      if (n1) { recordAssignment(n1, we, "N1", nightRota); used.add(n1.init); }
-
+      if (n1) { record(n1, we, "N1", nightRota); used.add(n1.init); }
       const n2 = pickFromPool(pools.n1n2, we, used);
-      if (n2) { recordAssignment(n2, we, "N2", nightRota); }
-
+      if (n2) { record(n2, we, "N2", nightRota); }
       const sn = pickFromPool(pools.sn, we, new Set());
-      if (sn) { recordAssignment(sn, we, "SN", nightRota); }
-
+      if (sn) { record(sn, we, "SN", nightRota); }
       const an = pickFromPool(pools.an, we, new Set());
-      if (an) { recordAssignment(an, we, "AN", nightRota); }
+      if (an) { record(an, we, "AN", nightRota); }
     }
   });
 
   return nightRota;
 }
 
-// Split a block of dates into two halves (2+2 split)
-function splitBlock(dates) {
-  const mid = Math.ceil(dates.length / 2);
-  const a = dates.slice(0, mid);
-  const b = dates.slice(mid);
-  return b.length > 0 ? [a, b] : [a];
-}
-
 // ── Post-night rest blocked dates ─────────────────────────────────────────────
-// Returns {init: Set<date>} where each date is blocked for day shifts because
-// it falls within the 46-hr rest window after a night run ends.
 
 function getPostNightBlocked(nightRota, staff, postRestHrs) {
   const rest = postRestHrs || 46;
-  const nightsByPerson = {}; // init → sorted night dates
+  const nightsByPerson = {};
   staff.forEach(s => { nightsByPerson[s.init] = []; });
-
   Object.entries(nightRota).forEach(([date, slots]) => {
     Object.values(slots).forEach(init => {
       if (init && nightsByPerson[init]) nightsByPerson[init].push(date);
     });
   });
-
   const blocked = {};
   staff.forEach(s => { blocked[s.init] = new Set(); });
-
   Object.entries(nightsByPerson).forEach(([init, dates]) => {
     if (!dates.length) return;
     const sorted = dates.sort();
-
     for (let i = 0; i < sorted.length; i++) {
-      const isRunEnd = i === sorted.length - 1 ||
-        diffDays(sorted[i], sorted[i + 1]) !== 1;
-
+      const isRunEnd = i === sorted.length - 1 || diffDays(sorted[i], sorted[i + 1]) !== 1;
       if (isRunEnd) {
-        // Night ends at 08:30 the morning after the last date
-        const runEndMs = new Date(sorted[i] + "T08:30:00Z").getTime() + 86400000;
-        const restEndsMs = runEndMs + rest * 3600000;
-
-        // Block any date whose early shift (08:00) starts before rest ends
-        for (let offset = 1; offset <= 3; offset++) {
-          const candidate = addDays(sorted[i], offset);
-          const earlyStartMs = new Date(candidate + "T08:00:00Z").getTime();
-          if (earlyStartMs < restEndsMs) {
+        const runEndMs  = new Date(sorted[i] + "T08:30:00Z").getTime() + 86400000;
+        const restEndMs = runEndMs + rest * 3600000;
+        for (let off = 1; off <= 3; off++) {
+          const candidate = addDays(sorted[i], off);
+          if (new Date(candidate + "T08:00:00Z").getTime() < restEndMs) {
             blocked[init].add(candidate);
           }
         }
       }
     }
   });
-
-  return blocked; // init → Set of blocked day-shift dates
+  return blocked;
 }
 
-// ── Build prompt for Claude (day shifts only) ─────────────────────────────────
+// ── Deterministic day shift scheduler ────────────────────────────────────────
+// Fills E/M/L weekday slots and WE/WL weekend slots.
+// Priority: required slots first, then additional slots to balance workload.
+// Respects: 11h min rest, max 7 consec days, blocked dates, grade requirements,
+//           availability preferences, quarterly targets (soft cap).
 
-const short = d => d.slice(5); // "2026-08-05" → "08-05"
+function scheduleDayShifts(body, nightRota, postNightBlocked) {
+  const {
+    dates, staff, availability, targets, contractRules,
+    slots: slotGrades, minStaffing, shiftTimes, dayTypes,
+  } = body;
 
-function buildDayPrompt(body, nightRota, postNightBlocked) {
-  const { dates, staff, availability, targets, contractRules, minStaffing } = body;
+  const minRestHrs = contractRules?.minRestHours || 11;
+  const maxConsecDays = contractRules?.maxConsecWorkingDays || 7;
+  const avMap = availability;
+  const nightSlots = new Set(["N1","N2","SN","AN"]);
 
-  // Who is on nights each day
-  const onNightsPerDay = {}; // date → Set of inits
+  // ── Per-person tracking ──
+  const pState = {};
+  staff.forEach(s => {
+    const tgt = targets[s.init] || {};
+    pState[s.init] = {
+      counts:   { earlies:0, mids:0, lates:0, weekends:0 },
+      targets:  { earlies: tgt.earlies||0, mids: tgt.mids||0, lates: tgt.lates||0, weekends: tgt.weekends||0 },
+      lastShift: null,   // {date, slotKey}
+      workDates: new Set(),
+    };
+  });
+  // Seed working days from night rota
   Object.entries(nightRota).forEach(([date, slots]) => {
-    onNightsPerDay[date] = new Set(Object.values(slots).filter(Boolean));
+    Object.values(slots).forEach(init => {
+      if (init && pState[init]) pState[init].workDates.add(date);
+    });
   });
 
-  // Staff lines
-  const staffLines = staff.map(s => {
-    const av = availability[s.init] || {};
-    const parts = [`${s.init}(${s.grade})`];
+  // ── Helpers ──
 
-    const xDates = dates.filter(d => {
-      if (av.blocked?.includes(d)) return true;
-      if (onNightsPerDay[d]?.has(s.init)) return true;          // on nights this day
-      if (postNightBlocked[s.init]?.has(d)) return true;        // post-night rest
-      return false;
-    }).map(short);
+  function st(slotKey) { return getTimes(slotKey, shiftTimes); }
 
-    const ea = (av.earlyOnly || []).filter(d => dates.includes(d)).map(short);
-    const la = (av.lateOnly  || []).filter(d => dates.includes(d)).map(short);
-    const mi = (av.midOnly   || []).filter(d => dates.includes(d)).map(short);
+  function shiftCat(slotKey) {
+    if (["E1","E2","E3","E4","WE1","WE2","WE3"].includes(slotKey)) return "earlies";
+    if (["M1","M2","M3"].includes(slotKey)) return "mids";
+    if (["L1","L2","L3","L4","WL1","WL2"].includes(slotKey)) return "lates";
+    return null;
+  }
 
-    if (xDates.length) parts.push(`X:${xDates.join(",")}`);
-    if (ea.length) parts.push(`E:${ea.join(",")}`);
-    if (la.length) parts.push(`L:${la.join(",")}`);
-    if (mi.length) parts.push(`M:${mi.join(",")}`);
-    return parts.join("|");
-  }).join("\n");
+  function isBlocked(init, date) {
+    const av = avMap[init] || {};
+    return !!(av.blocked?.includes(date) || postNightBlocked[init]?.has(date));
+  }
 
-  // Targets (day shifts only)
-  const targetLines = staff.map(s => {
-    const t = targets[s.init] || {};
-    return `${s.init}:e${t.earlies||0}m${t.mids||0}l${t.lates||0}w${t.weekends||0}`;
-  }).join(" ");
+  function matchesPref(init, date, slotKey) {
+    const av = avMap[init] || {};
+    const cat = shiftCat(slotKey);
+    if (av.earlyOnly?.includes(date) && cat !== "earlies") return false;
+    if (av.lateOnly?.includes(date)  && cat !== "lates")   return false;
+    if (av.midOnly?.includes(date)   && cat !== "mids")    return false;
+    return true;
+  }
 
-  // Min staffing (exclude night slots)
-  const nightSlots = new Set(["N1","N2","SN","AN"]);
-  const minLines = Object.entries(minStaffing || {})
-    .map(([day, slts]) => `${day}:${slts.filter(s => !nightSlots.has(s)).join(",")}`)
-    .filter(l => !l.endsWith(":"))
-    .join(" | ");
+  function hasEnoughRest(init, date, slotKey) {
+    const last = pState[init].lastShift;
+    if (!last) return true;
+    const gap = restGapMins(last.date, st(last.slotKey), date, st(slotKey));
+    return gap >= minRestHrs * 60;
+  }
 
-  const dr = `${dates[0]} to ${dates[dates.length-1]}`;
-  const cr = contractRules || {};
+  function withinConsecLimit(init, date) {
+    const wd = pState[init].workDates;
+    if (!wd.has(addDays(date, -1))) return true; // didn't work yesterday
+    let streak = 1;
+    let d = addDays(date, -1);
+    while (wd.has(addDays(d, -1)) && streak < maxConsecDays) { d = addDays(d, -1); streak++; }
+    return streak < maxConsecDays;
+  }
 
-  return `NHS ED day-shift rota. Fill ONLY day slots (no nights). Date range: ${dr}.
+  // Slot type for day (excluding nights)
+  function slotsForDay(dt) {
+    if (dt === "weekend") return ["WE1","WE2","WE3","WL1","WL2"];
+    return ["E1","E2","E3","E4","M1","M2","M3","L1","L2","L3","L4"];
+  }
 
-SLOTS
-Weekday: E1 E2 E3 E4(08-16:30) M1 M2 M3(11-20) L1 L2 L3 L4(16-00)
-Weekend: WE1 WE2 WE3(08-18) WL1 WL2(14-00)
-Grade rules: E1-E4,M1-M3,L1-L4,WE1-WE3,WL1-WL2 → any grade OK
+  function requiredForDay(dt) {
+    return ((minStaffing || {})[dt] || []).filter(s => !nightSlots.has(s));
+  }
 
-MIN STAFFING PER DAY: ${minLines}
+  function pickForSlot(date, slotKey, assignedToday) {
+    const gradeOk = new Set((slotGrades || {})[slotKey] || ["ST4+","ST3","ACP","tACP"]);
+    const isWE = dowOf(date) === 0 || dowOf(date) === 6;
+    const cat = shiftCat(slotKey);
 
-HARD RULES:
-- 11h min rest between shifts (so no Late→Early next day)
-- Max 13h shift | Max 7 consec working days
-- 1 slot per person per day
-- X=blocked (SL/unavail/on-nights/post-night-rest) — do NOT assign
+    // Build candidate list (two passes: under target, then anyone)
+    for (const allowOver of [false, true]) {
+      const eligible = staff.filter(s => {
+        if (assignedToday.has(s.init)) return false;
+        if (!gradeOk.has(s.grade)) return false;
+        if (isBlocked(s.init, date)) return false;
+        if (!matchesPref(s.init, date, slotKey)) return false;
+        if (!hasEnoughRest(s.init, date, slotKey)) return false;
+        if (!withinConsecLimit(s.init, date)) return false;
+        // Soft cap: first pass avoids over-target, second pass allows it
+        if (!allowOver && cat) {
+          const over = pState[s.init].counts[cat] - pState[s.init].targets[cat];
+          if (over >= 2) return false; // skip if already 2+ over target
+        }
+        if (!allowOver && isWE) {
+          const wkOver = pState[s.init].counts.weekends - pState[s.init].targets.weekends;
+          if (wkOver >= 2) return false;
+        }
+        return true;
+      });
 
-SOFT: balance toward targets; spread evenly; avoid same slot >3 days running
+      if (!eligible.length) continue;
 
-STAFF (X=blocked E=earlyOnly L=lateOnly M=midOnly):
-${staffLines}
+      eligible.sort((a, b) => {
+        const sa = pState[a.init], sb = pState[b.init];
+        // Primary: highest deficit for this slot category
+        if (cat) {
+          const da = sa.targets[cat] - sa.counts[cat];
+          const db = sb.targets[cat] - sb.counts[cat];
+          if (da !== db) return db - da;
+        }
+        // Weekend deficit
+        if (isWE) {
+          const dwa = sa.targets.weekends - sa.counts.weekends;
+          const dwb = sb.targets.weekends - sb.counts.weekends;
+          if (dwa !== dwb) return dwb - dwa;
+        }
+        // Fallback: fewest total shifts assigned
+        const totA = sa.counts.earlies + sa.counts.mids + sa.counts.lates;
+        const totB = sb.counts.earlies + sb.counts.mids + sb.counts.lates;
+        return totA - totB;
+      });
 
-DAY TARGETS (e=earlies m=mids l=lates w=weekends):
-${targetLines}
+      return eligible[0];
+    }
+    return null;
+  }
 
-Return ONLY valid JSON. Format: {"2026-08-05":{"E1":"MC","L1":"EB","M1":"SJ"},...}
-Use correct slot keys. Weekends: WE1/WE2/WE3/WL1/WL2 only (not E or L). Omit unfillable slots.`;
+  const dayRota = {};
+  const sortedDates = [...dates].sort();
+
+  sortedDates.forEach(date => {
+    const dow = dowOf(date);
+    const isWE = dow === 0 || dow === 6;
+    const dt = (dayTypes || {})[date] ||
+      (isWE ? "weekend" : dow === 1 ? "monday" : dow === 5 ? "friday" : "weekday_other");
+
+    const nightAssigned = new Set(Object.values(nightRota[date] || {}).filter(Boolean));
+    const assignedToday = new Set(nightAssigned);
+    if (!dayRota[date]) dayRota[date] = {};
+
+    const slotList = slotsForDay(dt);
+    const required = new Set(requiredForDay(dt));
+
+    // Fill required slots first, then optional
+    const fillOrder = [
+      ...slotList.filter(s => required.has(s)),
+      ...slotList.filter(s => !required.has(s)),
+    ];
+
+    fillOrder.forEach(slotKey => {
+      const person = pickForSlot(date, slotKey, assignedToday);
+      if (!person) return;
+
+      dayRota[date][slotKey] = person.init;
+      assignedToday.add(person.init);
+
+      const cat = shiftCat(slotKey);
+      if (cat) pState[person.init].counts[cat]++;
+      if (isWE) pState[person.init].counts.weekends++;
+      pState[person.init].lastShift = { date, slotKey };
+      pState[person.init].workDates.add(date);
+    });
+  });
+
+  return dayRota;
 }
 
 // ── Validate merged rota ──────────────────────────────────────────────────────
 
 function validateRota(rota, body) {
-  const { dates, staff, availability, shiftTimes, contractRules } = body;
+  const { staff, availability, shiftTimes, contractRules } = body;
   const conflicts = [];
   const staffMap = Object.fromEntries(staff.map(s => [s.init, s]));
   const postRestHrs = contractRules?.postNightRestHours || 46;
+  const minRestHrs  = contractRules?.minRestHours || 11;
 
-  // Per-person assignment list
-  const personAssignments = {};
-  staff.forEach(s => { personAssignments[s.init] = []; });
+  const personAsgns = {};
+  staff.forEach(s => { personAsgns[s.init] = []; });
 
   Object.entries(rota).forEach(([date, daySlots]) => {
     const seen = {};
     Object.entries(daySlots).forEach(([slotKey, init]) => {
       if (!init) return;
       const person = staffMap[init];
-      if (!person) {
-        conflicts.push({ date, slot: slotKey, init, rule: `Unknown initials`, severity: "error" });
-        return;
-      }
+      if (!person) { conflicts.push({ date, slot: slotKey, init, rule: "Unknown initials", severity: "error" }); return; }
       const av = availability[init] || {};
-      if (av.blocked?.includes(date)) {
-        conflicts.push({ date, slot: slotKey, init, rule: `${init} blocked on ${date}`, severity: "error" });
-      }
-      if (seen[init]) {
-        conflicts.push({ date, slot: slotKey, init, rule: `${init} assigned twice on ${date}`, severity: "error" });
-      }
+      if (av.blocked?.includes(date)) conflicts.push({ date, slot: slotKey, init, rule: `${init} blocked on ${date}`, severity: "error" });
+      if (seen[init]) conflicts.push({ date, slot: slotKey, init, rule: `${init} assigned twice on ${date}`, severity: "error" });
       seen[init] = slotKey;
-
-      const dow = dowOf(date);
-      const isWE = dow === 0 || dow === 6;
       const isNight = ["N1","N2","SN","AN"].includes(slotKey);
-      const dur = shiftTimes?.[slotKey] ? shiftDurationHours(shiftTimes[slotKey]) : 0;
-      if (personAssignments[init]) {
-        personAssignments[init].push({ date, slotKey, isNight, isLong: dur > 10, isWE });
-      }
+      if (personAsgns[init]) personAsgns[init].push({ date, slotKey, isNight });
     });
   });
 
-  // Consecutive nights & post-night rest
+  // Check rest and consecutive nights
   const maxNights = contractRules?.maxConsecNights || 4;
-  Object.entries(personAssignments).forEach(([init, asgns]) => {
+  Object.entries(personAsgns).forEach(([init, asgns]) => {
     const sorted = asgns.sort((a, b) => a.date.localeCompare(b.date));
-    let consecNights = 0;
-    let lastNightDate = null;
+    let consecNights = 0, lastNightDate = null, lastNonNight = null;
 
     sorted.forEach(a => {
       if (a.isNight) {
-        const prev = lastNightDate ? diffDays(lastNightDate, a.date) : null;
-        if (prev === 1) {
-          consecNights++;
-        } else {
-          // New block — check rest
+        const gap = lastNightDate ? diffDays(lastNightDate, a.date) : null;
+        if (gap === 1) { consecNights++; }
+        else {
           if (lastNightDate && consecNights > 0) {
-            const lastNightEndMs = new Date(lastNightDate + "T08:30:00Z").getTime() + 86400000;
-            const newNightStartMs = new Date(a.date + "T22:00:00Z").getTime();
-            const restHrs = (newNightStartMs - lastNightEndMs) / 3600000;
-            if (restHrs < postRestHrs) {
-              conflicts.push({ date: a.date, slot: a.slotKey, init, rule: `Only ${Math.round(restHrs)}h rest after nights (need ${postRestHrs}h)`, severity: "error" });
-            }
+            const restEnd = new Date(lastNightDate + "T08:30:00Z").getTime() + 86400000 + postRestHrs * 3600000;
+            if (new Date(a.date + "T22:00:00Z").getTime() < restEnd)
+              conflicts.push({ date: a.date, slot: a.slotKey, init, rule: `Insufficient post-night rest before new night block`, severity: "error" });
           }
           consecNights = 1;
         }
         lastNightDate = a.date;
-        if (consecNights > maxNights) {
-          conflicts.push({ date: a.date, slot: a.slotKey, init, rule: `${init} has ${consecNights} consecutive nights (max ${maxNights})`, severity: "error" });
-        }
+        if (consecNights > maxNights)
+          conflicts.push({ date: a.date, slot: a.slotKey, init, rule: `${consecNights} consecutive nights (max ${maxNights})`, severity: "error" });
       } else {
-        if (lastNightDate && consecNights > 0) {
-          const lastNightEndMs = new Date(lastNightDate + "T08:30:00Z").getTime() + 86400000;
-          const shiftStartMs = new Date(a.date + "T08:00:00Z").getTime();
-          const restHrs = (shiftStartMs - lastNightEndMs) / 3600000;
-          if (restHrs < postRestHrs) {
-            conflicts.push({ date: a.date, slot: a.slotKey, init, rule: `${init} working only ${Math.round(restHrs)}h after nights (need ${postRestHrs}h)`, severity: "error" });
-          }
+        if (lastNightDate) {
+          const restEnd = new Date(lastNightDate + "T08:30:00Z").getTime() + 86400000 + postRestHrs * 3600000;
+          if (new Date(a.date + "T08:00:00Z").getTime() < restEnd)
+            conflicts.push({ date: a.date, slot: a.slotKey, init, rule: `Working within ${postRestHrs}h post-night rest period`, severity: "error" });
         }
-        consecNights = 0;
-        lastNightDate = null;
+        // Check 11h rest from previous non-night shift
+        if (lastNonNight) {
+          const gap = restGapMins(lastNonNight.date, getTimes(lastNonNight.slotKey, shiftTimes), a.date, getTimes(a.slotKey, shiftTimes));
+          if (gap < minRestHrs * 60)
+            conflicts.push({ date: a.date, slot: a.slotKey, init, rule: `Only ${Math.round(gap/60)}h rest (need ${minRestHrs}h)`, severity: "warning" });
+        }
+        consecNights = 0; lastNightDate = null;
+        lastNonNight = a;
       }
     });
   });
@@ -433,111 +490,44 @@ exports.handler = async function(event) {
       body: "",
     };
   }
-
   if (event.httpMethod !== "POST") return { statusCode: 405, body: "Method Not Allowed" };
-
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    return {
-      statusCode: 500,
-      headers: { "Access-Control-Allow-Origin": "*" },
-      body: JSON.stringify({ error: "ANTHROPIC_API_KEY not set in Netlify environment variables." }),
-    };
-  }
 
   let body;
   try { body = JSON.parse(event.body); }
   catch (e) { return { statusCode: 400, body: JSON.stringify({ error: "Invalid JSON body" }) }; }
 
-  // ── 1. Schedule nights deterministically ──
+  // 1. Schedule nights deterministically
   const nightRota = scheduleNights(body);
 
-  // ── 2. Calculate post-night rest blocked dates ──
+  // 2. Calculate post-night rest blocked dates
   const postNightBlocked = getPostNightBlocked(
     nightRota, body.staff, body.contractRules?.postNightRestHours || 46
   );
 
-  // ── 3. Ask Claude for day shifts only ──
-  const dayPrompt = buildDayPrompt(body, nightRota, postNightBlocked);
+  // 3. Schedule day shifts deterministically
+  const dayRota = scheduleDayShifts(body, nightRota, postNightBlocked);
 
-  let claudeRes;
-  try {
-    claudeRes = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5",
-        max_tokens: 8192,
-        messages: [{ role: "user", content: dayPrompt }],
-      }),
-    });
-  } catch (e) {
-    // Return nights-only rota even if Claude fails
-    const conflicts = validateRota(nightRota, body);
-    return {
-      statusCode: 200,
-      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
-      body: JSON.stringify({ rota: nightRota, conflicts, warning: `Claude unavailable: ${e.message}. Night shifts generated; day shifts not filled.` }),
-    };
-  }
-
-  const claudeData = await claudeRes.json();
-
-  if (!claudeRes.ok) {
-    const conflicts = validateRota(nightRota, body);
-    return {
-      statusCode: 200,
-      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
-      body: JSON.stringify({
-        rota: nightRota,
-        conflicts,
-        warning: `Claude error (${claudeData.error?.type}): ${claudeData.error?.message}. Night shifts generated; day shifts not filled.`,
-      }),
-    };
-  }
-
-  const text = claudeData.content?.[0]?.text || "";
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  let dayRota = {};
-
-  if (jsonMatch) {
-    try { dayRota = JSON.parse(jsonMatch[0]); }
-    catch (e) { /* ignore parse error; use nights only */ }
-  }
-
-  // ── 4. Merge night rota + day rota ──
+  // 4. Merge: night slots + day slots (night slots take priority)
   const requestedDates = new Set(body.dates || []);
   const merged = {};
-
-  // Start with nights
-  Object.entries(nightRota).forEach(([date, slots]) => {
-    if (requestedDates.has(date)) merged[date] = { ...slots };
-  });
-
-  // Add day slots (Claude), skipping any overwriting of nights or blocked staff
   const nightSlotKeys = new Set(["N1","N2","SN","AN"]);
-  Object.entries(dayRota).forEach(([date, slots]) => {
+
+  body.dates.forEach(date => {
     if (!requestedDates.has(date)) return;
-    if (!merged[date]) merged[date] = {};
-    Object.entries(slots).forEach(([slotKey, init]) => {
-      if (!init) return;
-      if (nightSlotKeys.has(slotKey)) return; // nights already assigned
-      // Don't assign someone who's on nights today or in post-night rest
-      const av = (body.availability[init] || {});
-      if (av.blocked?.includes(date)) return;
-      const onNights = Object.values(merged[date] || {}).includes(init) &&
-        Object.keys(merged[date] || {}).some(s => nightSlotKeys.has(s));
-      if (onNights) return;
-      if (postNightBlocked[init]?.has(date)) return;
-      merged[date][slotKey] = init;
+    merged[date] = {
+      ...(dayRota[date] || {}),
+      ...(nightRota[date] || {}), // nights overwrite any day slot collision
+    };
+    // Remove any day slot accidentally assigned to a person also on nights today
+    const nightStaff = new Set(Object.values(nightRota[date] || {}).filter(Boolean));
+    Object.entries(merged[date]).forEach(([slot, init]) => {
+      if (!nightSlotKeys.has(slot) && nightStaff.has(init)) {
+        delete merged[date][slot];
+      }
     });
   });
 
-  // ── 5. Validate ──
+  // 5. Validate
   const conflicts = validateRota(merged, body);
 
   return {
