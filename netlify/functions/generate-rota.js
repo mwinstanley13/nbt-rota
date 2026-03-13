@@ -307,7 +307,15 @@ exports.handler = async function(event) {
     return {
       statusCode: 502,
       headers: { "Access-Control-Allow-Origin": "*" },
-      body: JSON.stringify({ error: `Claude API error: ${claudeData.error?.message || JSON.stringify(claudeData)}` }),
+      body: JSON.stringify({
+        error: `Claude API error: ${claudeData.error?.message || JSON.stringify(claudeData)}`,
+        debug: {
+          httpStatus: claudeRes.status,
+          errorType: claudeData.error?.type,
+          fullError: claudeData,
+          keyPrefix: apiKey ? apiKey.slice(0, 10) + "..." : "NOT SET",
+        }
+      }),
     };
   }
 

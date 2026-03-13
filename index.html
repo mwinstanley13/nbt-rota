@@ -2943,7 +2943,8 @@ function AIRotaView({user,staff,rota,setRota,availability,leaveEntries,quarterSt
       });
       if(!resp.ok) {
         const errData = await resp.json().catch(()=>({error:`HTTP ${resp.status}`}));
-        throw new Error(errData.error||`HTTP ${resp.status}`);
+        const dbg = errData.debug ? ` | HTTP ${errData.debug.httpStatus} | type: ${errData.debug.errorType} | key: ${errData.debug.keyPrefix}` : "";
+        throw new Error((errData.error||`HTTP ${resp.status}`) + dbg);
       }
       const {rota:draft,conflicts:cfls} = await resp.json();
       setDraft(draft||{}); setCfls(cfls||[]); setTab("draft");
