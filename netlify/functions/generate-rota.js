@@ -370,37 +370,51 @@ function scheduleDayShifts(body, nightRota, postNightBlocked) {
   const dayRota = {};
   const sortedDates = [...dates].sort();
 
+  // assignedPerDay tracks who is already working each day (nights + day assignments so far)
+  const assignedPerDay = {};
   sortedDates.forEach(date => {
+    assignedPerDay[date] = new Set(Object.values(nightRota[date] || {}).filter(Boolean));
+    dayRota[date] = {};
+  });
+
+  function assign(date, slotKey, person) {
+    const isWE = dowOf(date) === 0 || dowOf(date) === 6;
+    dayRota[date][slotKey] = person.init;
+    assignedPerDay[date].add(person.init);
+    const cat = shiftCat(slotKey);
+    if (cat) pState[person.init].counts[cat]++;
+    if (isWE) pState[person.init].counts.weekends++;
+    pState[person.init].lastShift = { date, slotKey };
+    pState[person.init].workDates.add(date);
+  }
+
+  function dtFor(date) {
     const dow = dowOf(date);
     const isWE = dow === 0 || dow === 6;
-    const dt = (dayTypes || {})[date] ||
+    return (dayTypes || {})[date] ||
       (isWE ? "weekend" : dow === 1 ? "monday" : dow === 5 ? "friday" : "weekday_other");
+  }
 
-    const nightAssigned = new Set(Object.values(nightRota[date] || {}).filter(Boolean));
-    const assignedToday = new Set(nightAssigned);
-    if (!dayRota[date]) dayRota[date] = {};
+  // ── PASS 1: fill every REQUIRED slot across all dates ──────────────────────
+  // This ensures minimum staffing is guaranteed before any extra shifts are added.
+  sortedDates.forEach(date => {
+    const required = requiredForDay(dtFor(date));
+    required.forEach(slotKey => {
+      if (dayRota[date][slotKey]) return; // already filled
+      const person = pickForSlot(date, slotKey, assignedPerDay[date]);
+      if (person) assign(date, slotKey, person);
+    });
+  });
 
-    const slotList = slotsForDay(dt);
+  // ── PASS 2: fill optional/additional slots to balance workload ─────────────
+  sortedDates.forEach(date => {
+    const dt = dtFor(date);
     const required = new Set(requiredForDay(dt));
-
-    // Fill required slots first, then optional
-    const fillOrder = [
-      ...slotList.filter(s => required.has(s)),
-      ...slotList.filter(s => !required.has(s)),
-    ];
-
-    fillOrder.forEach(slotKey => {
-      const person = pickForSlot(date, slotKey, assignedToday);
-      if (!person) return;
-
-      dayRota[date][slotKey] = person.init;
-      assignedToday.add(person.init);
-
-      const cat = shiftCat(slotKey);
-      if (cat) pState[person.init].counts[cat]++;
-      if (isWE) pState[person.init].counts.weekends++;
-      pState[person.init].lastShift = { date, slotKey };
-      pState[person.init].workDates.add(date);
+    const optional = slotsForDay(dt).filter(s => !required.has(s));
+    optional.forEach(slotKey => {
+      if (dayRota[date][slotKey]) return;
+      const person = pickForSlot(date, slotKey, assignedPerDay[date]);
+      if (person) assign(date, slotKey, person);
     });
   });
 
