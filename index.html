@@ -2,12 +2,12 @@
 <html lang="en-GB">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#0d1b2a" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="RotaHST" />
-  <title>RotaHST 2026/27</title>
+  <title>RotaHST</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
   <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -324,6 +324,10 @@ const getSLHoursDeducted = getLeaveHoursDeducted;
 const getCorrectionsTotal = (init, qid, hoursCorrections) =>
   (hoursCorrections || []).filter(c => c.init === init && c.qid === qid).reduce((a, c) => a + c.amount, 0);
 
+// Total carry-forward corrections for a person/quarter (carryForward:true flag)
+const getCarryForwardTotal = (init, qid, hoursCorrections) =>
+  (hoursCorrections||[]).filter(c=>c.init===init&&c.qid===qid&&c.carryForward).reduce((s,c)=>s+c.amount,0);
+
 // Hours remaining for a person in a quarter
 const getHoursRemaining = (init, grade, qid, wteConfig, staffHours, rota, leaveEntries, hoursCorrections) => {
   const q = QUARTERS.find(x => x.id === qid);
@@ -367,15 +371,15 @@ body{font-family:'DM Sans',sans-serif;background:#f0f4f8;font-size:13px}
 .main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 .hdr{background:white;padding:14px 26px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,.05)}
 .hdr h2{font-family:'Syne',sans-serif;font-size:19px;font-weight:700;color:#0d1b2a}
-.body{flex:1;overflow-y:auto;padding:22px 26px}
-.card{background:white;border-radius:11px;border:1px solid #e2e8f0}
-.ch{padding:13px 17px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.body{flex:1;overflow-y:auto;padding:24px 28px}
+.card{background:white;border-radius:12px;border:1px solid #e2e8f0;box-shadow:0 1px 4px rgba(0,0,0,.05)}
+.ch{padding:14px 18px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;gap:10px}
 .ct{font-family:'Syne',sans-serif;font-size:13.5px;font-weight:700;color:#0d1b2a}
 .cb{padding:16px}
-.sg{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
-.sc{background:white;border-radius:11px;padding:16px;border:1px solid #e2e8f0;border-left:4px solid var(--ac)}
-.sv{font-family:'Syne',sans-serif;font-size:24px;font-weight:800;color:#0d1b2a}
-.sl{font-size:11px;color:#64748b;margin-top:2px;font-weight:500}
+.sg{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+.sc{background:white;border-radius:12px;padding:18px 20px;border:1px solid #e2e8f0;border-left:4px solid var(--ac);box-shadow:0 1px 4px rgba(0,0,0,.05);min-height:0}
+.sv{font-family:'Syne',sans-serif;font-size:28px;font-weight:800;color:#0d1b2a}
+.sl{font-size:11.5px;color:#64748b;margin-top:3px;font-weight:500}
 .btn{padding:6px 13px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:600;border:none;transition:all .15s;display:inline-flex;align-items:center;gap:5px;font-family:'DM Sans',sans-serif}
 .bp{background:#10b981;color:white}.bp:hover{background:#059669}
 .bs{background:white;color:#374151;border:1px solid #d1d5db}.bs:hover{background:#f9fafb}
@@ -504,7 +508,20 @@ body{font-family:'DM Sans',sans-serif;background:#f0f4f8;font-size:13px}
   .bld-wrap{-webkit-overflow-scrolling:touch}
   .tbl{font-size:11.5px}
   .tbl th,.tbl td{padding:7px 8px}
+  .sb-col-btn{display:none}
 }
+.sb-col-btn{position:absolute;bottom:60px;right:-12px;width:24px;height:24px;border-radius:50%;background:white;border:1px solid #e2e8f0;box-shadow:0 1px 4px rgba(0,0,0,.12);cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center;z-index:10;color:#475569;transition:transform .2s}
+.sb-col-btn:hover{background:#f1f5f9}
+.sb.sb-col{width:52px;overflow:hidden}
+.sb.sb-col .sb-logo p,.sb.sb-col .sb-logo h1 span+*,.sb.sb-col .u-info,.sb.sb-col .u-name,.sb.sb-col .u-role,.sb.sb-col .sb-lbl,.sb.sb-col .nb{display:none}
+.sb.sb-col .sb-logo{padding:16px 12px;text-align:center}
+.sb.sb-col .sb-logo h1{justify-content:center;font-size:0}
+.sb.sb-col .sb-logo h1 span{font-size:18px}
+.sb.sb-col .nav-btn{padding:9px 0;justify-content:center;gap:0}
+.sb.sb-col .nav-btn .ni{width:auto;font-size:15px}
+.sb.sb-col .sb-sec{padding:8px 6px 4px}
+.sb.sb-col .sb-user{padding:10px 0;justify-content:center;gap:0}
+.sb.sb-col .u-out{position:static}
 `;
 
 // ═══════════════════════════════════════════════════════════════
@@ -546,7 +563,7 @@ function Login({staff,onLogin}) {
 // SIDEBAR
 // ═══════════════════════════════════════════════════════════════
 
-function Sidebar({user,view,setView,onLogout,pendingCount,hasOpenQ,isOpen,onClose}) {
+function Sidebar({user,view,setView,onLogout,pendingCount,hasOpenQ,isOpen,onClose,collapsed,onToggleCollapse}) {
   const isAdmin=user.role==="admin";
   const items=[
     {id:"dashboard",icon:"📊",label:"Dashboard"},
@@ -560,24 +577,28 @@ function Sidebar({user,view,setView,onLogout,pendingCount,hasOpenQ,isOpen,onClos
       {id:"staff",       icon:"👥",label:"Staff"},
       {id:"reports",     icon:"📈",label:"Reports"},
       {id:"rotaconfig",  icon:"⚙️",label:"Rota Config"},
+      {id:"yearsetup",   icon:"📅",label:"Year Setup"},
       {id:"audit",       icon:"🔍",label:"Audit Log"},
     ]:[{id:"reports",icon:"📈",label:"My Summary"}]),
   ];
   return (
-    <div className={`sb${isOpen?" mob-open":""}`}>
-      <div className="sb-logo"><h1><span>🏥</span>RotaHST</h1><p>Rota Year 2026 / 2027</p></div>
+    <div className={`sb${isOpen?" mob-open":""}${collapsed?" sb-col":""}`} style={{position:"relative",transition:"width .2s"}}>
+      <button className="sb-col-btn" onClick={onToggleCollapse} title={collapsed?"Expand menu":"Collapse menu"}>
+        {collapsed?"▶":"◀"}
+      </button>
+      <div className="sb-logo"><h1><span>🏥</span>{!collapsed&&"RotaHST"}</h1>{!collapsed&&<p>Rota Year 2026 / 2027</p>}</div>
       <div className="sb-sec">
-        <div className="sb-lbl">Menu</div>
+        {!collapsed&&<div className="sb-lbl">Menu</div>}
         {items.map(n=>(
-          <button key={n.id} className={`nav-btn${view===n.id?" act":""}`} onClick={()=>{setView(n.id);onClose&&onClose();}}>
-            <span className="ni">{n.icon}</span>{n.label}
-            {n.badge&&<span className="nb">{n.badge}</span>}
+          <button key={n.id} className={`nav-btn${view===n.id?" act":""}`} onClick={()=>{setView(n.id);onClose&&onClose();}} title={collapsed?n.label:undefined}>
+            <span className="ni">{n.icon}</span>{!collapsed&&n.label}
+            {!collapsed&&n.badge&&<span className="nb">{n.badge}</span>}
           </button>
         ))}
       </div>
       <div className="sb-user">
         <div className="u-av">{user.init.slice(0,2)}</div>
-        <div className="u-info"><div className="u-name">{user.name}</div><div className="u-role">{isAdmin?"Administrator":user.grade}</div></div>
+        {!collapsed&&<div className="u-info"><div className="u-name">{user.name}</div><div className="u-role">{isAdmin?"Administrator":user.grade}</div></div>}
         <button className="u-out" onClick={onLogout} title="Sign out">⏻</button>
       </div>
     </div>
@@ -588,12 +609,13 @@ function Sidebar({user,view,setView,onLogout,pendingCount,hasOpenQ,isOpen,onClos
 // DASHBOARD
 // ═══════════════════════════════════════════════════════════════
 
-function Dashboard({user,staff,rota,requests,dayNotes,availability,quarterStatus}) {
+function Dashboard({user,staff,rota,requests,dayNotes,availability,quarterStatus,quarters}) {
+  const qs = quarters || QUARTERS;
   const today=fmtISO(new Date()), isAdmin=user.role==="admin";
   const todaySlots=rota[today]||{};
   const todayStaffInit=[...new Set(Object.values(todaySlots).filter(Boolean))];
   const pending=requests.filter(r=>r.status==="pending");
-  const openQs=QUARTERS.filter(q=>quarterStatus[q.id]==="open");
+  const openQs=qs.filter(q=>quarterStatus[q.id]==="open");
   const myAvail=availability[user.init]||{};
   const myNextShift=useMemo(()=>{
     if(isAdmin) return null;
@@ -602,10 +624,10 @@ function Dashboard({user,staff,rota,requests,dayNotes,availability,quarterStatus
   },[rota,user,today,isAdmin]);
 
   return (
-    <div>
+    <div style={{maxWidth:920,margin:"0 auto"}}>
       {(dayNotes[today])&&<div className="al al-w" style={{marginBottom:16}}>📌 <strong>Today:</strong> {dayNotes[today]}</div>}
       {!isAdmin&&openQs.length>0&&<div className="al al-i" style={{marginBottom:16}}>📋 Availability open for <strong>{openQs.map(q=>q.id).join(", ")}</strong> — please submit yours.</div>}
-      <div className="sg">
+      <div className="sg" style={{marginBottom:18}}>
         <div className="sc" style={{"--ac":"#10b981"}}><div className="sv">{staff.filter(s=>s.role==="staff"&&s.active).length}</div><div className="sl">Active Staff</div></div>
         <div className="sc" style={{"--ac":"#6366f1"}}><div className="sv">{todayStaffInit.length}</div><div className="sl">On Shift Today</div></div>
         <div className="sc" style={{"--ac":"#f59e0b"}}><div className="sv">{pending.length}</div><div className="sl">Pending Requests</div></div>
@@ -741,7 +763,9 @@ function AvailabilityView({
   setLeaveEntries,
   rota,
   requests,
-  setRequests
+  setRequests,
+  applyCarryForward,
+  quarters
 }) {
   const isAdmin = user.role === "admin";
 
@@ -751,7 +775,8 @@ function AvailabilityView({
   const [viewMonth, setVM] = useState(new Date(2026, 7, 1));
   const [modalDraft, setModalDraft] = useState({ base: "", slots: [] });
 
-  const q = QUARTERS.find(x => x.id === selQ);
+  const activeQs = quarters || QUARTERS;
+  const q = activeQs.find(x => x.id === selQ);
   const myAvail = availability[user.init] || {};
   const qDates = q ? getDatesInRange(q.start, q.end) : [];
   const submittedCount = qDates.filter(d => isMarkedAvailEntry(myAvail[d])).length;
@@ -852,7 +877,7 @@ function AvailabilityView({
     }
 
     // Determine if the quarter is open for this date
-    const dateQuarter = QUARTERS.find(q => date >= q.start && date <= q.end);
+    const dateQuarter = activeQs.find(q => date >= q.start && date <= q.end);
     const isQOpen = dateQuarter ? quarterStatus[dateQuarter.id] === "open" : false;
 
     if (willBeLeave && isQOpen) {
@@ -920,6 +945,13 @@ function AvailabilityView({
   const toggleQStatus = (qid, status) => {
     setQuarterStatus(prev => ({ ...prev, [qid]: status }));
     addAudit(user.init, "Quarter Status", `${qid} set to ${status}`);
+    if (status === "locked" && applyCarryForward) {
+      const qs = quarters || QUARTERS;
+      const nextQ = qs[qs.findIndex(q=>q.id===qid)+1];
+      if (nextQ && confirm(`Apply carry-forward of unworked/overworked hours from ${qid} to ${nextQ.id}?`)) {
+        applyCarryForward(qid);
+      }
+    }
   };
 
   const openDateModal = (date) => {
@@ -946,7 +978,7 @@ function AvailabilityView({
   return (
     <div>
       <div style={{ display: "flex", gap: 8, marginBottom: 18, flexWrap: "wrap" }}>
-        {QUARTERS.map(qv => {
+        {activeQs.map(qv => {
           const st = quarterStatus[qv.id] || "closed";
           return (
             <button
@@ -1184,7 +1216,7 @@ function AvailabilityView({
               )}
 
               {(() => {
-                const dateQuarter = QUARTERS.find(q => pickModal.date >= q.start && pickModal.date <= q.end);
+                const dateQuarter = activeQs.find(q => pickModal.date >= q.start && pickModal.date <= q.end);
                 const isQOpen = dateQuarter ? quarterStatus[dateQuarter.id] === "open" : false;
                 return !isQOpen && (
                   <div className="al al-i" style={{ marginBottom: 12 }}>
@@ -1434,7 +1466,7 @@ function StaffStatsSidebar({staff, rota, wteConfig, staffHours, selQ, leaveEntri
               const hrs = mode==="quarter"
                 ? getHoursRemaining(s.init, s.grade, qid, wteConfig, staffHours, rota, leaveEntries, hoursCorrections)
                 : QUARTERS.reduce((a,q)=>a+(getHoursRemaining(s.init,s.grade,q.id,wteConfig,staffHours,rota,leaveEntries,hoursCorrections)||0),0);
-              const hrsCol = hrs==null?"#94a3b8":hrs>=10?"#16a34a":hrs>=0?"#d97706":"#ef4444";
+              const hrsCol = hrs==null?"#94a3b8":hrs>8?"#d97706":hrs>=-8?"#16a34a":"#ef4444";
               return (
                 <tr key={s.id} style={{borderBottom:"1px solid #f8fafc"}}>
                   <td style={{padding:"4px 8px",fontSize:10,fontWeight:600,color:"#374151",maxWidth:80,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}
@@ -2162,6 +2194,7 @@ function HoursAdjustView({staff,hoursCorrections,setHoursCorrections,addAudit,cu
   const [qid, setQid]               = useState("Q1");
   const [amount, setAmount]         = useState("");
   const [reason, setReason]         = useState("");
+  const [isCarryFwd, setIsCarryFwd] = useState(false);
 
   const activeStaff = staff.filter(s => s.role==="staff" && s.active);
   const visible = [...(hoursCorrections||[])]
@@ -2171,10 +2204,10 @@ function HoursAdjustView({staff,hoursCorrections,setHoursCorrections,addAudit,cu
   const save = () => {
     const num = parseFloat(amount);
     if (isNaN(num) || !reason.trim() || !targetInit) return;
-    const entry = {id:Date.now(),init:targetInit,qid,amount:num,reason:reason.trim(),createdBy:currentUser.init,createdAt:fmtISO(new Date())};
+    const entry = {id:Date.now(),init:targetInit,qid,amount:num,reason:reason.trim(),createdBy:currentUser.init,createdAt:fmtISO(new Date()),carryForward:isCarryFwd};
     setHoursCorrections(p=>[...p,entry]);
-    addAudit(currentUser.init,"Hours Correction",`${targetInit} ${qid} ${num>=0?"+":""}${num}h — ${reason.trim()}`);
-    setAmount(""); setReason("");
+    addAudit(currentUser.init,"Hours Correction",`${targetInit} ${qid} ${num>=0?"+":""}${num}h${isCarryFwd?" [CF]":""} — ${reason.trim()}`);
+    setAmount(""); setReason(""); setIsCarryFwd(false);
   };
 
   const del = (id) => {
@@ -2217,6 +2250,10 @@ function HoursAdjustView({staff,hoursCorrections,setHoursCorrections,addAudit,cu
               Add
             </button>
           </div>
+          <label style={{display:"flex",alignItems:"center",gap:7,marginTop:12,fontSize:12.5,color:"#475569",cursor:"pointer"}}>
+            <input type="checkbox" checked={isCarryFwd} onChange={e=>setIsCarryFwd(e.target.checked)} style={{width:14,height:14}}/>
+            Mark as carry-forward from previous quarter
+          </label>
         </div>
       </div>
 
@@ -2242,7 +2279,7 @@ function HoursAdjustView({staff,hoursCorrections,setHoursCorrections,addAudit,cu
                       <tr key={c.id}>
                         <td style={{fontWeight:600}}>{s?.name||c.init}</td>
                         <td><span className="badge b-staff">{c.qid}</span></td>
-                        <td style={{fontWeight:700,color:c.amount>=0?"#16a34a":"#ef4444"}}>{c.amount>=0?"+":""}{c.amount}h</td>
+                        <td style={{fontWeight:700,color:c.amount>=0?"#16a34a":"#ef4444"}}>{c.amount>=0?"+":""}{c.amount}h{c.carryForward&&<span style={{marginLeft:5,fontSize:9,fontWeight:700,background:"#ede9fe",color:"#4c1d95",padding:"1px 4px",borderRadius:3}}>CF</span>}</td>
                         <td>{c.reason}</td>
                         <td style={{color:"#64748b"}}>{c.createdBy}</td>
                         <td style={{color:"#94a3b8",fontSize:11}}>{c.createdAt}</td>
@@ -2260,6 +2297,132 @@ function HoursAdjustView({staff,hoursCorrections,setHoursCorrections,addAudit,cu
 }
 
 // ═══════════════════════════════════════════════════════════════
+// YEAR SETUP VIEW
+// ═══════════════════════════════════════════════════════════════
+
+function YearSetupView({years,setYears,activeYearId,setActiveYearId,staff,
+  rotaByYear,leaveByYear,availByYear,qStatusByYear,requestsByYear,notesByYear,corrsByYear,staffHoursByYear,
+  setQStatusByYear,addAudit,currentUser}) {
+
+  const addWeeks = (dateStr, weeks) => {
+    const d = new Date(dateStr); d.setDate(d.getDate()+weeks*7); return fmtISO(d);
+  };
+  const addDays = (dateStr, n) => {
+    const d = new Date(dateStr); d.setDate(d.getDate()+n); return fmtISO(d);
+  };
+
+  // Default new year: starts day after current year's Q4 end
+  const latestYear = years.reduce((a,b)=>a.id>b.id?a:b, years[0]);
+  const latestQ4End = latestYear?.quarters?.find(q=>q.id==="Q4")?.end || "2027-08-03";
+  const defQ1Start = addDays(latestQ4End, 1);
+
+  const defQuarters = (q1s) => [
+    {id:"Q1",label:`Q1`,start:q1s,end:addDays(addWeeks(q1s,13),-1)},
+    {id:"Q2",label:`Q2`,start:addWeeks(q1s,13),end:addDays(addWeeks(q1s,26),-1)},
+    {id:"Q3",label:`Q3`,start:addWeeks(q1s,26),end:addDays(addWeeks(q1s,39),-1)},
+    {id:"Q4",label:`Q4`,start:addWeeks(q1s,39),end:addDays(addWeeks(q1s,52),-1)},
+  ];
+
+  const [newLabel, setNewLabel] = useState("");
+  const [newQ1Start, setNewQ1Start] = useState(defQ1Start);
+  const [qs, setQs] = useState(() => defQuarters(defQ1Start));
+
+  const updateQ1Start = (val) => {
+    setNewQ1Start(val);
+    if (val) setQs(defQuarters(val));
+  };
+
+  const createYear = () => {
+    if (!newLabel.trim()) return;
+    const yid = newLabel.trim().replace(/\s+/g,"-").replace(/[^a-zA-Z0-9\-]/g,"");
+    if (years.find(y=>y.id===yid)) { alert("A year with this ID already exists."); return; }
+    const newYear = {id:yid,label:newLabel.trim(),quarters:qs,active:true,archived:false};
+    setYears(p=>[...p,newYear]);
+    setQStatusByYear(p=>({...p,[yid]:{Q1:"open",Q2:"closed",Q3:"closed",Q4:"closed"}}));
+    addAudit(currentUser.init,"Year Created",yid);
+    setActiveYearId(yid);
+    setNewLabel("");
+    setNewQ1Start(defQ1Start);
+  };
+
+  const archiveYear = (yid) => {
+    if (!window.confirm(`Archive "${yid}"? It will be read-only. You can still view and download it.`)) return;
+    setYears(p=>p.map(y=>y.id===yid?{...y,archived:true}:y));
+    if (activeYearId===yid) {
+      const other = years.find(y=>y.id!==yid&&!y.archived);
+      if (other) setActiveYearId(other.id);
+    }
+    addAudit(currentUser.init,"Year Archived",yid);
+  };
+
+  const downloadYear = (yid) => {
+    const yr = years.find(y=>y.id===yid);
+    const data = {year:yr,rota:rotaByYear[yid]||{},leaveEntries:leaveByYear[yid]||{},availability:availByYear[yid]||{},quarterStatus:qStatusByYear[yid]||{},requests:requestsByYear[yid]||[],dayNotes:notesByYear[yid]||{},hoursCorrections:corrsByYear[yid]||[],staffHours:staffHoursByYear[yid]||{},staff};
+    const blob = new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+    const a = document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=`rota-${yid}.json`; a.click();
+  };
+
+  return (
+    <div style={{maxWidth:780,margin:"0 auto"}}>
+      <div className="card" style={{marginBottom:20}}>
+        <div className="ch"><span className="ct">All Years</span></div>
+        <div className="cb">
+          {years.length===0?<p style={{color:"#94a3b8",fontSize:12}}>No years configured.</p>
+          :years.map(y=>(
+            <div key={y.id} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 0",borderBottom:"1px solid #f1f5f9"}}>
+              <div style={{flex:1}}>
+                <div style={{fontWeight:700,fontSize:13}}>{y.label} <span style={{fontSize:11,color:"#94a3b8",fontWeight:400}}>({y.id})</span></div>
+                <div style={{fontSize:11,color:"#64748b",marginTop:2}}>
+                  {y.quarters?.map(q=>`${q.id}: ${q.start}→${q.end}`).join(" · ")}
+                </div>
+              </div>
+              {y.archived
+                ? <span className="badge" style={{background:"#f1f5f9",color:"#64748b"}}>Archived</span>
+                : <span className="badge b-open">{y.id===activeYearId?"Active":"Inactive"}</span>}
+              {!y.archived&&y.id!==activeYearId&&<button className="btn bp bsm" onClick={()=>setActiveYearId(y.id)}>Switch to</button>}
+              {!y.archived&&<button className="btn bw bsm" onClick={()=>archiveYear(y.id)}>Archive</button>}
+              <button className="btn bd bsm" onClick={()=>downloadYear(y.id)}>⬇ Download</button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="ch"><span className="ct">Create New Year</span></div>
+        <div className="cb">
+          <div className="al al-i" style={{marginBottom:16}}>
+            Create a new rota year. Staff are shared across all years. Enter a label (e.g. "2027/28") and the Q1 start date — quarters will be calculated automatically at 13-week intervals.
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
+            <div className="fg" style={{marginBottom:0}}>
+              <label className="fl">Year label</label>
+              <input className="fi" value={newLabel} onChange={e=>setNewLabel(e.target.value)} placeholder="e.g. 2027/28"/>
+            </div>
+            <div className="fg" style={{marginBottom:0}}>
+              <label className="fl">Q1 start date</label>
+              <input type="date" className="fi" value={newQ1Start} onChange={e=>updateQ1Start(e.target.value)}/>
+            </div>
+          </div>
+          <div style={{marginBottom:16}}>
+            <div style={{fontSize:12,fontWeight:600,color:"#374151",marginBottom:8}}>Calculated quarters (edit Q1 start to adjust all):</div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
+              {qs.map((q,i)=>(
+                <div key={q.id} style={{background:"#f8fafc",borderRadius:8,padding:"8px 10px",fontSize:11}}>
+                  <div style={{fontWeight:700,marginBottom:3}}>{q.id}</div>
+                  <div style={{color:"#64748b"}}>{q.start}</div>
+                  <div style={{color:"#94a3b8"}}>→ {q.end}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <button className="btn bp" onClick={createYear} disabled={!newLabel.trim()}>Create Year</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
 // MAIN APP
 // ═══════════════════════════════════════════════════════════════
 
@@ -2267,23 +2430,51 @@ function App() {
   // fsReady: true once Firestore has returned the first snapshot (or errored)
   const [fsReady,setFsReady]   = useState(false);
   const [user,setUser]         = useState(null);
-  const [staff,setStaff]       = useState(()=>lsGet('rhs_staff',INIT_STAFF));
-  const [rota,setRota]         = useState(()=>lsGet('rhs_rota',{}));
-  const [leaveEntries,setLE]   = useState(()=>lsGet('rhs_leave',{}));
-  const [availability,setAvail]= useState(()=>lsGet('rhs_avail',{}));
-  const [quarterStatus,setQS]  = useState(()=>lsGet('rhs_qstatus',{Q1:"open",Q2:"closed",Q3:"closed",Q4:"closed"}));
-  const [requests,setReqs]     = useState(()=>lsGet('rhs_requests',[
-    {id:1,staffInitials:"MC",staffName:"Michael Connolly",type:"SL",startDate:"2026-09-01",endDate:"2026-09-05",reason:"Conference",status:"pending",adminNote:"",createdAt:"2026-08-05"},
-    {id:2,staffInitials:"NW",staffName:"Nat Wright",      type:"SL",startDate:"2026-08-20",endDate:"2026-08-21",reason:"Conference",   status:"approved",adminNote:"Approved",createdAt:"2026-08-03"},
-  ]));
-  const [dayNotes,setNotes]    = useState(()=>lsGet('rhs_notes',{}));
-  const [auditLog,setAudit]    = useState(()=>lsGet('rhs_audit',[{id:1,ts:"2026-08-05 09:00",user:"ADM",action:"System Init",details:"RotaHST 2026/27 initialised"}]));
   const [view,setView]         = useState("dashboard");
   const [viewMonth,setVM]      = useState(new Date(2026,7,1));
-  const [wteConfig,setWteConfig]= useState(()=>lsGet('rhs_wteConfig',INIT_WTE_CONFIG));
-  const [staffHours,setStaffHours] = useState(()=>lsGet('rhs_staffHours',{}));
-  const [hoursCorrections,setHoursCorrections] = useState(()=>lsGet('rhs_corrections',[]));
   const [menuOpen,setMenuOpen] = useState(false);
+  const [sbCollapsed,setSbCollapsed] = useState(false);
+
+  // Global (shared across all years)
+  const [staff,setStaff]           = useState(()=>lsGet('rhs_staff',INIT_STAFF));
+  const [wteConfig,setWteConfig]   = useState(()=>lsGet('rhs_wteConfig',INIT_WTE_CONFIG));
+  const [auditLog,setAudit]        = useState(()=>lsGet('rhs_audit',[{id:1,ts:"2026-08-05 09:00",user:"ADM",action:"System Init",details:"RotaHST 2026/27 initialised"}]));
+
+  // Year management
+  const [years,setYears]           = useState(()=>lsGet('rhs_years',[{id:"2026-27",label:"2026/27",quarters:QUARTERS,active:true,archived:false}]));
+  const [activeYearId,setActiveYearId] = useState(()=>lsGet('rhs_activeYearId',"2026-27"));
+
+  // Per-year data (keyed by year id)
+  const [rotaByYear,setRotaByYear]         = useState(()=>lsGet('rhs_rotaByYear',{}));
+  const [leaveByYear,setLeaveByYear]       = useState(()=>lsGet('rhs_leaveByYear',{}));
+  const [availByYear,setAvailByYear]       = useState(()=>lsGet('rhs_availByYear',{}));
+  const [qStatusByYear,setQStatusByYear]   = useState(()=>lsGet('rhs_qstatusByYear',{}));
+  const [requestsByYear,setReqsByYear]     = useState(()=>lsGet('rhs_requestsByYear',{}));
+  const [notesByYear,setNotesByYear]       = useState(()=>lsGet('rhs_notesByYear',{}));
+  const [corrsByYear,setCorrsByYear]       = useState(()=>lsGet('rhs_corrsByYear',{}));
+  const [staffHoursByYear,setSHByYear]     = useState(()=>lsGet('rhs_staffHoursByYear',{}));
+
+  // Active-year flat accessors (derived from above)
+  const activeYearQuarters = useMemo(()=>(years.find(y=>y.id===activeYearId)||years[0])?.quarters||QUARTERS,[years,activeYearId]);
+  const rota          = rotaByYear[activeYearId]           || {};
+  const leaveEntries  = leaveByYear[activeYearId]          || {};
+  const availability  = availByYear[activeYearId]          || {};
+  const quarterStatus = qStatusByYear[activeYearId]        || {Q1:"open",Q2:"closed",Q3:"closed",Q4:"closed"};
+  const requests      = requestsByYear[activeYearId]       || [{id:1,staffInitials:"MC",staffName:"Michael Connolly",type:"SL",startDate:"2026-09-01",endDate:"2026-09-05",reason:"Conference",status:"pending",adminNote:"",createdAt:"2026-08-05"},{id:2,staffInitials:"NW",staffName:"Nat Wright",type:"SL",startDate:"2026-08-20",endDate:"2026-08-21",reason:"Conference",status:"approved",adminNote:"Approved",createdAt:"2026-08-03"}];
+  const dayNotes      = notesByYear[activeYearId]          || {};
+  const hoursCorrections = corrsByYear[activeYearId]       || [];
+  const staffHours    = staffHoursByYear[activeYearId]     || {};
+
+  // Year-aware setters (same interface as the old flat setters)
+  const yw = (setter, key) => v => setter(p=>({...p,[activeYearId]:typeof v==="function"?v(p[activeYearId]||(key==="arr"?[]:{})):v}));
+  const setRota        = yw(setRotaByYear);
+  const setLE          = yw(setLeaveByYear);
+  const setAvail       = yw(setAvailByYear);
+  const setQS          = yw(setQStatusByYear);
+  const setReqs        = yw(setReqsByYear,"arr");
+  const setNotes       = yw(setNotesByYear);
+  const setHoursCorrections = yw(setCorrsByYear,"arr");
+  const setStaffHours  = yw(setSHByYear);
 
   // ── Subscribe to Firestore on mount (gated behind Anonymous Auth) ────────────
   // onAuthStateChanged fires immediately; if no user, we sign in anonymously.
@@ -2301,12 +2492,38 @@ function App() {
         unsubFirestore = appDoc().onSnapshot(snap => {
           if (snap.exists) {
             const d = snap.data();
-            upd(setStaff)(d.staff);              upd(setRota)(d.rota);
-            upd(setLE)(d.leaveEntries);          upd(setAvail)(d.availability);
-            upd(setQS)(d.quarterStatus);         upd(setReqs)(d.requests);
-            upd(setNotes)(d.dayNotes);           upd(setAudit)(d.auditLog);
-            upd(setWteConfig)(d.wteConfig);      upd(setStaffHours)(d.staffHours);
-            upd(setHoursCorrections)(d.hoursCorrections);
+            // Migration: if old flat data exists but no year-namespaced data, migrate to "2026-27"
+            if (d.rota && !d.rotaByYear) {
+              const yid = "2026-27";
+              upd(setStaff)(d.staff);
+              upd(setWteConfig)(d.wteConfig);
+              upd(setAudit)(d.auditLog);
+              upd(setYears)([{id:yid,label:"2026/27",quarters:QUARTERS,active:true,archived:false}]);
+              upd(setActiveYearId)(yid);
+              upd(setRotaByYear)({[yid]:d.rota||{}});
+              upd(setLeaveByYear)({[yid]:d.leaveEntries||{}});
+              upd(setAvailByYear)({[yid]:d.availability||{}});
+              upd(setQStatusByYear)({[yid]:d.quarterStatus||{Q1:"open",Q2:"closed",Q3:"closed",Q4:"closed"}});
+              upd(setReqsByYear)({[yid]:d.requests||[]});
+              upd(setNotesByYear)({[yid]:d.dayNotes||{}});
+              upd(setCorrsByYear)({[yid]:d.hoursCorrections||[]});
+              upd(setSHByYear)({[yid]:d.staffHours||{}});
+            } else {
+              // Normal multi-year load
+              upd(setStaff)(d.staff);
+              upd(setWteConfig)(d.wteConfig);
+              upd(setAudit)(d.auditLog);
+              upd(setYears)(d.years);
+              upd(setActiveYearId)(d.activeYearId);
+              upd(setRotaByYear)(d.rotaByYear);
+              upd(setLeaveByYear)(d.leaveByYear);
+              upd(setAvailByYear)(d.availByYear);
+              upd(setQStatusByYear)(d.qStatusByYear);
+              upd(setReqsByYear)(d.requestsByYear);
+              upd(setNotesByYear)(d.notesByYear);
+              upd(setCorrsByYear)(d.corrsByYear);
+              upd(setSHByYear)(d.staffHoursByYear);
+            }
           }
           setFsReady(true);
         }, err => { console.error('Firestore:', err); setFsReady(true); });
@@ -2325,22 +2542,39 @@ function App() {
   // Also mirrors to localStorage as an offline / fast-reload cache
   useEffect(() => {
     if (!fsReady) return;
-    const payload = {staff,rota,leaveEntries,availability,quarterStatus,requests,dayNotes,auditLog,wteConfig,staffHours,hoursCorrections};
+    const payload = {staff,auditLog,wteConfig,years,activeYearId,rotaByYear,leaveByYear:leaveByYear,availByYear,qStatusByYear,requestsByYear,notesByYear,corrsByYear,staffHoursByYear};
     appDoc().set(payload).catch(console.error);
-    Object.entries({rhs_staff:staff,rhs_rota:rota,rhs_leave:leaveEntries,rhs_avail:availability,rhs_qstatus:quarterStatus,rhs_requests:requests,rhs_notes:dayNotes,rhs_audit:auditLog,rhs_wteConfig:wteConfig,rhs_staffHours:staffHours,rhs_corrections:hoursCorrections})
+    Object.entries({rhs_staff:staff,rhs_audit:auditLog,rhs_wteConfig:wteConfig,rhs_years:years,rhs_activeYearId:activeYearId,rhs_rotaByYear:rotaByYear,rhs_leaveByYear:leaveByYear,rhs_availByYear:availByYear,rhs_qstatusByYear:qStatusByYear,rhs_requestsByYear:requestsByYear,rhs_notesByYear:notesByYear,rhs_corrsByYear:corrsByYear,rhs_staffHoursByYear:staffHoursByYear})
       .forEach(([k,v])=>lsSave(k,v));
-  },[fsReady,staff,rota,leaveEntries,availability,quarterStatus,requests,dayNotes,auditLog,wteConfig,staffHours,hoursCorrections]);
+  },[fsReady,staff,auditLog,wteConfig,years,activeYearId,rotaByYear,leaveByYear,availByYear,qStatusByYear,requestsByYear,notesByYear,corrsByYear,staffHoursByYear]);
 
   const addAudit=(u,action,details)=>{
     const now=new Date(), ts=`${now.toLocaleDateString("en-GB")} ${now.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}`;
     setAudit(p=>[...p,{id:Date.now(),ts,user:u,action,details}]);
   };
 
+  const applyCarryForward = (closingQid) => {
+    const qIdx = activeYearQuarters.findIndex(q=>q.id===closingQid);
+    const nextQ = activeYearQuarters[qIdx+1];
+    if (!nextQ) return;
+    const activeStaff = staff.filter(s=>s.role==="staff"&&s.active);
+    const newCorr = [];
+    activeStaff.forEach(s => {
+      const hrs = getHoursRemaining(s.init, s.grade, closingQid, wteConfig, staffHours, rota, leaveEntries, hoursCorrections);
+      if (hrs===null || hrs===0) return;
+      newCorr.push({id:Date.now()+Math.random(),init:s.init,qid:nextQ.id,amount:Math.round(hrs*10)/10,reason:`Carry-forward from ${closingQid} (${hrs>0?"unworked":"overworked"} hours)`,createdBy:user.init,createdAt:fmtISO(new Date()),carryForward:true,sourceQid:closingQid});
+    });
+    if (newCorr.length) {
+      setHoursCorrections(prev=>[...prev,...newCorr]);
+      addAudit(user.init,"Carry-Forward Applied",`${closingQid}→${nextQ.id}: ${newCorr.length} staff`);
+    }
+  };
+
   const pendingCount=requests.filter(r=>r.status==="pending").length;
-  const hasOpenQ=QUARTERS.some(q=>quarterStatus[q.id]==="open");
+  const hasOpenQ=activeYearQuarters.some(q=>quarterStatus[q.id]==="open");
   const isAdmin=user?.role==="admin";
 
-  const titles={dashboard:"Dashboard",calendar:"Rota Calendar",myshifts:"My Shifts",availability:"Availability",requests:isAdmin?"Leave Requests":"My Requests",builder:"Rota Builder",adjustments:"Hour Adjustments",staff:"Staff Management",reports:isAdmin?"Reports":"My Summary",rotaconfig:"Rota Config",audit:"Audit Log"};
+  const titles={dashboard:"Dashboard",calendar:"Rota Calendar",myshifts:"My Shifts",availability:"Availability",requests:isAdmin?"Leave Requests":"My Requests",builder:"Rota Builder",adjustments:"Hour Adjustments",staff:"Staff Management",reports:isAdmin?"Reports":"My Summary",rotaconfig:"Rota Config",audit:"Audit Log",yearsetup:"Year Setup"};
 
   if(!fsReady) return(
     <><style>{CSS}</style>
@@ -2357,19 +2591,24 @@ function App() {
     <>
       <style>{CSS}</style>
       <div className="app">
-        <Sidebar user={user} view={view} setView={setView} onLogout={()=>setUser(null)} pendingCount={pendingCount} hasOpenQ={hasOpenQ} isOpen={menuOpen} onClose={()=>setMenuOpen(false)}/>
+        <Sidebar user={user} view={view} setView={setView} onLogout={()=>setUser(null)} pendingCount={pendingCount} hasOpenQ={hasOpenQ} isOpen={menuOpen} onClose={()=>setMenuOpen(false)} collapsed={sbCollapsed} onToggleCollapse={()=>setSbCollapsed(c=>!c)}/>
         {menuOpen&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.4)",zIndex:499}} onClick={()=>setMenuOpen(false)}/>}
         <div className="main">
           <div className="hdr" style={{position:"relative"}}>
             <button className="mob-hbg" onClick={()=>setMenuOpen(m=>!m)}>☰</button>
             <h2>{titles[view]||""}</h2>
-            <div style={{display:"flex",gap:7,alignItems:"center"}}>
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
               {isAdmin&&<span className="badge b-admin">Admin</span>}
-              <span style={{fontSize:11.5,color:"#94a3b8"}}>2026/27</span>
+              <select value={activeYearId}
+                onChange={e=>e.target.value==="__new"?setView("yearsetup"):setActiveYearId(e.target.value)}
+                style={{fontSize:12.5,padding:"3px 8px",borderRadius:6,border:"1px solid #e2e8f0",background:"#f8fafc",cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                {years.filter(y=>!y.archived).map(y=><option key={y.id} value={y.id}>{y.label}</option>)}
+                {isAdmin&&<option value="__new">+ New Year</option>}
+              </select>
             </div>
           </div>
           <div className="body">
-            {view==="dashboard"  &&<Dashboard user={user} staff={staff} rota={rota} requests={requests} dayNotes={dayNotes} availability={availability} quarterStatus={quarterStatus}/>}
+            {view==="dashboard"  &&<Dashboard user={user} staff={staff} rota={rota} requests={requests} dayNotes={dayNotes} availability={availability} quarterStatus={quarterStatus} quarters={activeYearQuarters}/>}
             {view==="calendar"   &&<CalendarView rota={rota} leaveEntries={leaveEntries} dayNotes={dayNotes} staff={staff} viewMonth={viewMonth} setViewMonth={setVM} viewMode="month" setViewMode={()=>{}}/>}
             {view==="myshifts"   &&!isAdmin&&<MyShifts user={user} rota={rota} leaveEntries={leaveEntries} dayNotes={dayNotes}/>}
             {view==="availability"&&(<AvailabilityView
@@ -2385,6 +2624,8 @@ function App() {
                   rota={rota}
                   requests={requests}
                   setRequests={setReqs}
+                  applyCarryForward={applyCarryForward}
+                  quarters={activeYearQuarters}
                 />
               )}
             {view==="requests"   &&<RequestsView user={user} requests={requests} setRequests={setReqs} addAudit={addAudit}/>}
@@ -2394,6 +2635,7 @@ function App() {
             {view==="rotaconfig" &&isAdmin&&<RotaConfig wteConfig={wteConfig} setWteConfig={setWteConfig} staffHours={staffHours} setStaffHours={setStaffHours} staff={staff} addAudit={addAudit}/>}
             {view==="adjustments"&&isAdmin&&<HoursAdjustView staff={staff} hoursCorrections={hoursCorrections} setHoursCorrections={setHoursCorrections} addAudit={addAudit} currentUser={user} wteConfig={wteConfig} staffHours={staffHours} rota={rota} leaveEntries={leaveEntries}/>}
             {view==="audit"      &&isAdmin&&<AuditLog log={auditLog}/>}
+            {view==="yearsetup"  &&isAdmin&&<YearSetupView years={years} setYears={setYears} activeYearId={activeYearId} setActiveYearId={setActiveYearId} staff={staff} rotaByYear={rotaByYear} leaveByYear={leaveByYear} availByYear={availByYear} qStatusByYear={qStatusByYear} requestsByYear={requestsByYear} notesByYear={notesByYear} corrsByYear={corrsByYear} staffHoursByYear={staffHoursByYear} setQStatusByYear={setQStatusByYear} addAudit={addAudit} currentUser={user}/>}
           </div>
         </div>
       </div>
