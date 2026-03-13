@@ -42,112 +42,82 @@ function isNightSlot(slotKey) {
 }
 
 // ── Build prompt ─────────────────────────────────────────────────────────────
+// Short date format MM-DD to save tokens
+const short = d => d.slice(5); // "2026-08-05" → "08-05"
 
 function buildPrompt(body) {
-  const { dates, slots, staff, availability, targets, contractRules, shiftTimes, minStaffing, slotFilter } = body;
+  const { dates, slots, staff, availability, targets, contractRules, minStaffing, slotFilter } = body;
 
-  // Slot grade requirements table
-  const slotLines = Object.entries(slots)
-    .map(([sk, grades]) => `  ${sk.padEnd(4)}: ${grades.join(", ")}`)
+  // Compact grade requirements — group identical-grade sets
+  const gradeMap = {};
+  Object.entries(slots).forEach(([sk, grades]) => {
+    const key = grades.sort().join(",");
+    if (!gradeMap[key]) gradeMap[key] = [];
+    gradeMap[key].push(sk);
+  });
+  const slotLines = Object.entries(gradeMap)
+    .map(([grades, sks]) => `${sks.join(" ")}: ${grades}`)
     .join("\n");
 
-  // Staff + availability lines (compact)
+  // Min staffing compact
+  const minLines = Object.entries(minStaffing || {})
+    .map(([day, slts]) => `${day}:${slts.join(",")}`)
+    .join(" | ");
+
+  // Staff lines — only include availability entries within the date range
+  const dateSet = new Set(dates);
   const staffLines = staff.map(s => {
     const av = availability[s.init] || {};
-    const parts = [`${s.init} (${s.grade}${s.nightBlockPref && s.nightBlockPref !== "any" ? ", " + s.nightBlockPref + "-nights" : ""})`];
-    if (av.blocked?.length)   parts.push(`blocked: ${av.blocked.join(",")}`);
-    if (av.earlyOnly?.length) parts.push(`early-only: ${av.earlyOnly.join(",")}`);
-    if (av.midOnly?.length)   parts.push(`mid-only: ${av.midOnly.join(",")}`);
-    if (av.lateOnly?.length)  parts.push(`late-only: ${av.lateOnly.join(",")}`);
-    if (av.nightOnly?.length) parts.push(`night-only: ${av.nightOnly.join(",")}`);
-    return parts.join(" | ");
+    const parts = [`${s.init}(${s.grade}${s.nightBlockPref && s.nightBlockPref !== "any" ? ","+s.nightBlockPref[0]+"n" : ""})`];
+    const inRange = arr => (arr||[]).filter(d => dateSet.has(d)).map(short);
+    const bl = inRange(av.blocked);
+    const ea = inRange(av.earlyOnly);
+    const ni = inRange(av.nightOnly);
+    const la = inRange(av.lateOnly);
+    const mi = inRange(av.midOnly);
+    if (bl.length) parts.push(`X:${bl.join(",")}`);
+    if (ea.length) parts.push(`E:${ea.join(",")}`);
+    if (ni.length) parts.push(`N:${ni.join(",")}`);
+    if (la.length) parts.push(`L:${la.join(",")}`);
+    if (mi.length) parts.push(`M:${mi.join(",")}`);
+    return parts.join("|");
   }).join("\n");
 
-  // Targets lines
+  // Targets compact
   const targetLines = staff.map(s => {
     const t = targets[s.init] || {};
-    return `  ${s.init}: nights≤${t.nights||0} weekends≤${t.weekends||0} earlies≤${t.earlies||0} mids≤${t.mids||0} lates≤${t.lates||0}`;
-  }).join("\n");
+    return `${s.init}:n${t.nights||0}w${t.weekends||0}e${t.earlies||0}m${t.mids||0}l${t.lates||0}`;
+  }).join(" ");
 
-  // Minimum staffing summary
-  const minLines = Object.entries(minStaffing || {})
-    .map(([day, slts]) => `  ${day}: ${slts.join(", ")}`)
-    .join("\n");
+  const dateRange = dates.length > 0 ? `${dates[0]} to ${dates[dates.length-1]} (${dates.length}d)` : "none";
+  const filterNote = slotFilter==="nights" ? "Fill ONLY night slots N1 N2 SN AN."
+    : slotFilter==="weekends" ? "Fill ONLY weekend+night slots."
+    : "Fill all slots.";
 
-  // Date range summary
-  const dateRange = dates.length > 0 ? `${dates[0]} to ${dates[dates.length-1]} (${dates.length} days)` : "none";
+  const cr = contractRules || {};
 
-  // Slot filter note
-  const filterNote = slotFilter === "nights"
-    ? "Only fill night slots (N1, N2, SN, AN)."
-    : slotFilter === "weekends"
-    ? "Only fill weekend slots (WE1, WE2, WE3, WL1, WL2, N1, N2, SN, AN on Fri/Sat/Sun)."
-    : "Fill all available slots.";
+  return `NHS ED rota scheduler. Generate rota for ${dateRange}. ${filterNote}
 
-  return `You are an NHS Emergency Department rota scheduling assistant.
-Generate a fair, legally-compliant shift rota for ${dateRange}.
+HARD RULES: max shift ${cr.maxShiftHours||13}h | min rest ${cr.minRestHours||11}h | max ${cr.maxConsecNights||4} consec nights | ${cr.postNightRestHours||46}h rest after nights | max ${cr.maxConsecWorkingDays||7} consec days | weekends max 1in2 target 1in3 | 1 slot per person per day
 
-${filterNote}
+MIN STAFFING: ${minLines}
+NIGHT PATTERN: Weekday nights same person Mon-Thu block or 2+2 split. Weekend same person Fri-Sat-Sun.
 
-═══ JUNIOR DOCTORS CONTRACT — HARD RULES (never break) ═══
-1. Max shift length: ${contractRules.maxShiftHours || 13} hours
-2. Min rest between shifts: ${contractRules.minRestHours || 11} hours
-3. Max consecutive night shifts: ${contractRules.maxConsecNights || 4}
-4. After a run of nights: min ${contractRules.postNightRestHours || 46} hours continuous rest before next shift
-5. Max consecutive long day shifts (>10 hrs): ${contractRules.maxConsecLongDays || 5}
-6. Max consecutive working days (any type): ${contractRules.maxConsecWorkingDays || 7}
-7. Min 48 hours continuous rest every 14 days
-8. Weekend frequency: target 1 in 3; max 1 in 2; max ${contractRules.maxConsecWeekends || 4} consecutive weekends
-9. Each person can work ONE slot per day only
-
-═══ MINIMUM DAILY STAFFING (fill these first if staff available) ═══
-${minLines}
-
-═══ NIGHT SHIFT PATTERNS ═══
-- Weekday nights (Mon–Thu): assign the same person for a block of 4 consecutive nights,
-  OR split into 2+2 (e.g. Mon–Tue then Thu–Fri) — respect each doctor's preference where possible
-- Weekend nights: same person covers Fri, Sat, and Sun nights
-- After finishing a night block, that person needs ${contractRules.postNightRestHours || 46}hrs off
-
-═══ SLOT GRADE REQUIREMENTS ═══
+SLOT GRADES:
 ${slotLines}
+Weekday slots: E1-E4(early 08-16:30) M1-M3(mid 11-20) L1-L4(late 16-00) N1 N2(ST4+ 22-08:30) SN(ST3) AN(ACP/tACP)
+Weekend slots: WE1-WE3(08-18) WL1-WL2(14-00) N1 N2 SN AN
 
-═══ WEEKDAY SLOT TYPES ═══
-Early (0800-1630): E1 E2 E3 E4
-Mid (1100-2000): M1 M2 M3
-Late (1600-0000): L1 L2 L3 L4
-Night (2200-0830): N1(ST4+ only) N2(ST4+ only) SN(ST3 only) AN(ACP/tACP only)
-
-═══ WEEKEND SLOT TYPES ═══
-W/E Early (0800-1800): WE1 WE2 WE3
-W/E Late (1400-0000): WL1 WL2
-Night (2200-0830): N1 N2 SN AN
-
-═══ STAFF + AVAILABILITY ═══
+STAFF (format: INIT(grade)|X:blocked|E:earlyOnly|N:nightOnly|L:lateOnly):
 ${staffLines}
 
-═══ QUARTERLY TARGETS ═══
+TARGETS (n=nights w=weekends e=earlies m=mids l=lates):
 ${targetLines}
 
-═══ SOFT RULES (balance fairly) ═══
-- Distribute nights evenly toward each person's target
-- Distribute weekends evenly toward each person's target
-- Avoid giving someone the same shift type more than 3 days in a row
-- When choosing between equally-valid staff for a slot, prefer the one with fewer
-  nights/weekends worked so far in this period
+SOFT: balance nights/weekends toward targets; avoid >3 same type consecutive; prefer lowest-count staff.
 
-═══ OUTPUT FORMAT ═══
-Return ONLY a valid JSON object. No explanation, no markdown, no code blocks.
-Format: {"2026-08-05":{"E1":"MC","L1":"SJ","N1":"NW"},"2026-08-06":{...}}
-
-Rules for output:
-- Only include slots that have a valid assigned person
-- Omit slots you cannot fill (do NOT use null, empty string, or invented initials)
-- Only use initials exactly as listed in the STAFF section
-- Only assign staff to slots their grade is permitted for
-- Never assign a blocked person
-- Weekends use WE/WL slots, not E/M/L slots
-`;
+Return ONLY JSON, no text. Format: {"2026-08-05":{"E1":"MC","N1":"NW"},...}
+Omit unfillable slots. Use exact initials. Weekends use WE/WL not E/M/L.`;
 }
 
 // ── Validate rota returned by AI ──────────────────────────────────────────────
