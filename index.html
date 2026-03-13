@@ -255,31 +255,35 @@ function generateDemoAvailability(staffList, quarters) {
   const dates = getDatesInRange(q1.start, q1.end);
   const avail = {};
 
-  // Split staff into night-workers (~30%) and day-workers (~70%) by pattern
-  // pattern 0 = dedicated night staff; 1 = early-pref; 2 = late-pref; 3 = flexible
+  // pattern 0 = night-pref; 1 = early-pref; 2 = late-pref; 3 = flexible
   staffList.filter(s=>s.role==="staff"&&s.active).forEach(s => {
     avail[s.init] = {};
     const seed = s.id;
     const pattern = seed % 4;
 
-    // Give each person just 1 SL and 1 UNAVAILABLE day for the whole quarter,
-    // staggered by seed so they don't all land on the same day
-    const slIdx = (seed * 17) % dates.length;
-    const unavIdx = (seed * 37 + 13) % dates.length;
-    // 1 in 4 weekends off (not 1 in 3) — pick one weekend per month by seed
-    const unavWeekend = seed % 4; // which weekend-block (mod 4) is off for this person
+    // ~4 staff get a research/fellowship block (~3 weeks) → matches the high-unavail outliers in real data
+    const hasResearchBlock = seed % 7 === 0;
+    const blockStart = 14 + (seed % 12); // varies where in the quarter the block falls
+    const blockEnd   = blockStart + 20;
 
     dates.forEach((date, idx) => {
       const dow = new Date(date).getDay(); // 0=Sun,6=Sat
       const isWE = dow===0||dow===6;
       const weekNum = Math.floor(idx/7);
 
-      // Single SL day
-      if (idx === slIdx) { avail[s.init][date]={base:"SL",slots:[]}; return; }
-      // Single UNAVAILABLE day (avoid weekends, so bump to next weekday if needed)
-      if (idx === unavIdx && !isWE) { avail[s.init][date]={base:"UNAVAILABLE",slots:[]}; return; }
-      // 1 in 4 weekends off
-      if (isWE && weekNum%4===unavWeekend) { avail[s.init][date]={base:"UNAVAILABLE",slots:[]}; return; }
+      // Research/fellowship block: ~3 weeks UNAVAILABLE
+      if (hasResearchBlock && idx >= blockStart && idx <= blockEnd) {
+        avail[s.init][date]={base:"UNAVAILABLE",slots:[]}; return;
+      }
+
+      // SL: ~8 days per quarter on weekdays, staggered by seed
+      if (!isWE && (idx + seed * 3) % 8 === 0) { avail[s.init][date]={base:"SL",slots:[]}; return; }
+
+      // UNAVAILABLE: ~6 days per quarter on weekdays, staggered differently
+      if (!isWE && (idx + seed * 7 + 5) % 11 === 0) { avail[s.init][date]={base:"UNAVAILABLE",slots:[]}; return; }
+
+      // Work 1 in 3 weekends → off 2 in 3 weekends
+      if (isWE && weekNum%3!==(seed%3)) { avail[s.init][date]={base:"UNAVAILABLE",slots:[]}; return; }
 
       // Night-pattern staff: mark Mon–Thu as NIGHT on their night weeks
       if (pattern===0 && dow>=1&&dow<=4 && weekNum%2===(seed%2)) {
