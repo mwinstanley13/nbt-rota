@@ -3675,7 +3675,7 @@ function App() {
   const leaveEntries  = leaveByYear[activeYearId]          || {};
   const availability  = availByYear[activeYearId]          || {};
   const quarterStatus = qStatusByYear[activeYearId]        || {Q1:"open",Q2:"closed",Q3:"closed",Q4:"closed"};
-  const requests      = requestsByYear[activeYearId]       || [{id:1,staffInitials:"MC",staffName:"Michael Connolly",type:"SL",startDate:"2026-09-01",endDate:"2026-09-05",reason:"Conference",status:"pending",adminNote:"",createdAt:"2026-08-05"},{id:2,staffInitials:"NW",staffName:"Nat Wright",type:"SL",startDate:"2026-08-20",endDate:"2026-08-21",reason:"Conference",status:"approved",adminNote:"Approved",createdAt:"2026-08-03"}];
+  const requests      = requestsByYear[activeYearId]       || [];
   const dayNotes      = notesByYear[activeYearId]          || {};
   const hoursCorrections = corrsByYear[activeYearId]       || [];
   const staffHours    = staffHoursByYear[activeYearId]     || {};
@@ -3743,14 +3743,6 @@ function App() {
               upd(setCorrsByYear)({[yid]:d.hoursCorrections||[]});
               upd(setSHByYear)({[yid]:d.staffHours||{}});
             } else {
-              // Filter out any requests/swaps created before go-live date
-              const GO_LIVE = '2026-03-15';
-              const filterReqs = obj => {
-                if(!obj) return {};
-                const out={};
-                Object.entries(obj).forEach(([yr,arr])=>{out[yr]=(arr||[]).filter(r=>r.createdAt&&r.createdAt>=GO_LIVE);});
-                return out;
-              };
               // Normal multi-year load
               upd(setStaff)(patchStaffPw(d.staff));
               upd(setWteConfig)(d.wteConfig);
@@ -3761,11 +3753,11 @@ function App() {
               upd(setLeaveByYear)(d.leaveByYear);
               upd(setAvailByYear)(d.availByYear);
               upd(setQStatusByYear)(d.qStatusByYear);
-              upd(setReqsByYear)(IS_DEMO ? d.requestsByYear : filterReqs(d.requestsByYear));
+              upd(setReqsByYear)(d.requestsByYearV2 || {});
               upd(setNotesByYear)(d.notesByYear);
               upd(setCorrsByYear)(d.corrsByYear);
               upd(setSHByYear)(d.staffHoursByYear);
-              upd(setSwapsByYear)(IS_DEMO ? d.swapsByYear : filterReqs(d.swapsByYear));
+              upd(setSwapsByYear)(d.swapsByYearV2 || {});
               upd(setFixedDaysOff)(d.fixedDaysOff);
               upd(setGenRules)(d.genRules);
               upd(setShiftTimes)(d.shiftTimes);
