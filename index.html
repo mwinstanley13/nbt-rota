@@ -3743,12 +3743,14 @@ function App() {
               upd(setCorrsByYear)({[yid]:d.hoursCorrections||[]});
               upd(setSHByYear)({[yid]:d.staffHours||{}});
             } else {
-              // One-time migration: clear legacy requests/swaps on live version
-              if (!IS_DEMO && !d._reqsCleared) {
-                appDoc().update({requestsByYear:{},swapsByYear:{},_reqsCleared:true}).catch(console.error);
-                upd(setReqsByYear)({});
-                upd(setSwapsByYear)({});
-              }
+              // Filter out any requests/swaps created before go-live date
+              const GO_LIVE = '2026-03-15';
+              const filterReqs = obj => {
+                if(!obj) return {};
+                const out={};
+                Object.entries(obj).forEach(([yr,arr])=>{out[yr]=(arr||[]).filter(r=>r.createdAt&&r.createdAt>=GO_LIVE);});
+                return out;
+              };
               // Normal multi-year load
               upd(setStaff)(patchStaffPw(d.staff));
               upd(setWteConfig)(d.wteConfig);
@@ -3759,11 +3761,11 @@ function App() {
               upd(setLeaveByYear)(d.leaveByYear);
               upd(setAvailByYear)(d.availByYear);
               upd(setQStatusByYear)(d.qStatusByYear);
-              upd(setReqsByYear)(d._reqsCleared ? d.requestsByYear : {});
+              upd(setReqsByYear)(IS_DEMO ? d.requestsByYear : filterReqs(d.requestsByYear));
               upd(setNotesByYear)(d.notesByYear);
               upd(setCorrsByYear)(d.corrsByYear);
               upd(setSHByYear)(d.staffHoursByYear);
-              upd(setSwapsByYear)(d._reqsCleared ? d.swapsByYear : {});
+              upd(setSwapsByYear)(IS_DEMO ? d.swapsByYear : filterReqs(d.swapsByYear));
               upd(setFixedDaysOff)(d.fixedDaysOff);
               upd(setGenRules)(d.genRules);
               upd(setShiftTimes)(d.shiftTimes);
