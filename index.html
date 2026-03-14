@@ -3249,9 +3249,11 @@ function AIRotaView({user,staff,rota,setRota,availability,leaveEntries,quarterSt
   const [overwrite,setOW]      = useState(false);
   const [generating,setGen]    = useState(false);
   const [genError,setErr]      = useState(null);
-  const [rotaDraft,setDraft]   = useState(null);
-  const [conflicts,setCfls]    = useState([]);
+  const [rotaDraft,setDraft]   = useState(()=>lsGet('rotaDraft_'+activeYearId,null));
+  const [conflicts,setCfls]    = useState(()=>lsGet('rotaDraftCfls_'+activeYearId,[]));
   const [accepted,setAccepted] = useState(false);
+  useEffect(()=>{ rotaDraft ? lsSave('rotaDraft_'+activeYearId,rotaDraft) : localStorage.removeItem(LS_PFX+'rotaDraft_'+activeYearId); },[rotaDraft]);
+  useEffect(()=>{ lsSave('rotaDraftCfls_'+activeYearId,conflicts); },[conflicts]);
 
   const activeStaff = staff.filter(s=>s.role==="staff"&&s.active);
   const GRADES = ["ST4+","ST3","ACP","tACP","Military"];
@@ -3390,6 +3392,7 @@ function AIRotaView({user,staff,rota,setRota,availability,leaveEntries,quarterSt
     const filled=Object.values(rotaDraft).reduce((s,sl)=>s+Object.keys(sl).length,0);
     addAudit(user.init,"AI Rota",`Draft accepted: ${selQ}, ${Object.keys(rotaDraft).length} days, ${filled} assignments, ${conflicts.length} conflicts`);
     setDraft(null); setCfls([]); setAccepted(true); setTab("generate");
+    localStorage.removeItem(LS_PFX+'rotaDraft_'+activeYearId); localStorage.removeItem(LS_PFX+'rotaDraftCfls_'+activeYearId);
   };
 
   const errCount   = conflicts.filter(c=>c.severity==="error").length;
