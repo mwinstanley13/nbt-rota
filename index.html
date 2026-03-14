@@ -723,7 +723,7 @@ function Sidebar({user,view,setView,onLogout,pendingCount,hasOpenQ,isOpen,onClos
       <button className="sb-col-btn" onClick={onToggleCollapse} title={collapsed?"Expand menu":"Collapse menu"}>
         {collapsed?"▶":"◀"}
       </button>
-      <div className="sb-logo"><h1><span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:30,height:30,borderRadius:8,background:"linear-gradient(135deg,#3b82f6 0%,#1d4ed8 100%)",color:"white",fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:11,letterSpacing:".5px",flexShrink:0}}>RF</span>{!collapsed&&<span style={{marginLeft:8}}>RotaFlow</span>}</h1>{!collapsed&&<p>Rota Year 2026 / 2027</p>}</div>
+      <div className="sb-logo"><h1><span style={{width:30,height:30,borderRadius:8,overflow:"hidden",display:"inline-flex",flexShrink:0}}><img src="icons/rotaflow_icon_32.png" alt="RF" style={{width:30,height:30,display:"block"}} /></span>{!collapsed&&<span style={{marginLeft:8}}>RotaFlow</span>}</h1>{!collapsed&&<p>Rota Year 2026 / 2027</p>}</div>
       <div className="sb-sec">
         {!collapsed&&<div className="sb-lbl">Menu</div>}
         {items.map(n=>(
