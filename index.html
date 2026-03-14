@@ -3705,6 +3705,14 @@ function App() {
     let unsubFirestore = null;
     const unsubAuth = firebase.auth().onAuthStateChanged(firebaseUser => {
       if (firebaseUser) {
+        // If a reset was requested (flag set in localStorage), write clean state first
+        const RESET_KEY = LS_PFX + 'pendingReset';
+        const pendingReset = localStorage.getItem(RESET_KEY) === 'true';
+        if (pendingReset) {
+          localStorage.removeItem(RESET_KEY);
+          const freshPayload = {staff:INIT_STAFF.filter(s=>s.role==="admin"),auditLog:[],wteConfig:INIT_WTE_CONFIG,years:[{id:"2026-27",label:"2026/27",quarters:QUARTERS,active:true,archived:false}],activeYearId:"2026-27",rotaByYear:{},leaveByYear:{},availByYear:{},qStatusByYear:{},requestsByYear:{},notesByYear:{},corrsByYear:{},staffHoursByYear:{},swapsByYear:{},fixedDaysOff:[],genRules:INIT_GEN_RULES,shiftTimes:DEFAULT_SHIFT_TIMES,staffShiftTimes:{},trainingDays:[],demoMode:false};
+          appDoc().set(freshPayload).catch(console.error);
+        }
         // Authenticated — connect to Firestore
         unsubFirestore = appDoc().onSnapshot(snap => {
           if (!snap.exists && IS_DEMO) {
@@ -3797,13 +3805,11 @@ function App() {
 
   const resetToFresh = () => {
     if (!confirm("Reset to Fresh Start?\n\nThis will:\n• Remove ALL staff\n• Clear ALL rota, availability, leave, requests and corrections\n• Keep year/quarter structure and all config\n\nThis cannot be undone. Continue?")) return;
-    const freshPayload = {staff:ADMIN_ONLY,auditLog:[],wteConfig,years,activeYearId,rotaByYear:{},leaveByYear:{},availByYear:{},qStatusByYear:{},requestsByYear:{},notesByYear:{},corrsByYear:{},staffHoursByYear:{},swapsByYear:{},fixedDaysOff:[],genRules,shiftTimes,staffShiftTimes,trainingDays,demoMode:false};
-    appDoc().set(freshPayload).then(()=>{
-      // Clear localStorage too, then reload so Firestore snapshot serves clean data
-      ['staff','audit','wteConfig','years','activeYearId','rotaByYear','leaveByYear','availByYear','qstatusByYear','requestsByYear','notesByYear','corrsByYear','staffHoursByYear','swapsByYear','fixedDaysOff','genRules','shiftTimes','staffShiftTimes','trainingDays','demoMode']
-        .forEach(k=>localStorage.removeItem(LS_PFX+k));
-      window.location.reload();
-    }).catch(e=>{console.error(e);alert("Reset failed — check your connection and try again.");});
+    // Set flag so clean state is written to Firestore on next load (before snapshot)
+    localStorage.setItem(LS_PFX+'pendingReset','true');
+    ['staff','audit','wteConfig','years','activeYearId','rotaByYear','leaveByYear','availByYear','qstatusByYear','requestsByYear','notesByYear','corrsByYear','staffHoursByYear','swapsByYear','fixedDaysOff','genRules','shiftTimes','staffShiftTimes','trainingDays','demoMode']
+      .forEach(k=>localStorage.removeItem(LS_PFX+k));
+    window.location.reload();
   };
 
   const applyCarryForward = (closingQid) => {
