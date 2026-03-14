@@ -2978,11 +2978,12 @@ function AIRotaView({user,staff,rota,setRota,availability,leaveEntries,quarterSt
         const cfg = wteConfig[s.grade] || wteConfig["ST4+"] || {};
         const wte = ((staffHours||{})[s.init]||{})[selQ] ?? 1.0;
         targets[s.init]={
-          nights:  Math.round((cfg.nights||0)*wte),
-          weekends:Math.round((cfg.weekends||0)*wte),
-          earlies: Math.round((cfg.earlies||0)*wte),
-          mids:    Math.round((cfg.mids||0)*wte),
-          lates:   Math.round((cfg.lates||0)*wte),
+          nights:         Math.round((cfg.nights||0)*wte),
+          weekends:       Math.round((cfg.weekends||0)*wte),
+          earlies:        Math.round((cfg.earlies||0)*wte),
+          mids:           Math.round((cfg.mids||0)*wte),
+          lates:          Math.round((cfg.lates||0)*wte),
+          hoursPerQuarter:Math.round((cfg.hoursPerQuarter||0)*wte),
         };
       });
 
@@ -3050,8 +3051,8 @@ function AIRotaView({user,staff,rota,setRota,availability,leaveEntries,quarterSt
     <div>
       <div className="card" style={{marginBottom:18}}>
         <div className="ch">
-          <span className="ct">🤖 AI Rota Builder</span>
-          <span style={{fontSize:11,color:"#94a3b8",marginLeft:8}}>Powered by Claude — generates a draft rota from availability + your rules</span>
+          <span className="ct">⚙️ Auto Rota Builder</span>
+          <span style={{fontSize:11,color:"#94a3b8",marginLeft:8}}>Generates a draft rota from availability + your rules using the deterministic scheduler</span>
         </div>
         <div className="cb" style={{paddingBottom:0}}>
           <div className="ai-tab-bar">
@@ -3171,7 +3172,7 @@ function AIRotaView({user,staff,rota,setRota,availability,leaveEntries,quarterSt
             </div>
 
             <div style={{background:"#f8fafc",borderRadius:8,padding:14,marginBottom:18,fontSize:12.5,color:"#64748b"}}>
-              <strong>How it works:</strong> Claude reads all staff availability for {selQ}, applies your rules, and returns a full draft rota. You review it on the Draft tab — conflicts are highlighted — then click Accept to merge it in. The existing rota is untouched until you accept.
+              <strong>How it works:</strong> The scheduler reads all staff availability for {selQ}, assigns night blocks first (hard-capped to individual targets, N1 always filled), then fills day shifts to balance hours within ±8h of each person's quarterly target. Review on the Draft tab — conflicts highlighted — then Accept to merge. The existing rota is untouched until you accept.
               {!overwrite&&" Existing slot assignments will be preserved (AI only fills empty slots)."}
               {overwrite&&<span style={{color:"#d97706"}}> ⚠ Overwrite mode: existing assignments will be replaced.</span>}
             </div>
@@ -3179,9 +3180,9 @@ function AIRotaView({user,staff,rota,setRota,availability,leaveEntries,quarterSt
             {genError&&<div className="al al-w" style={{marginBottom:14}}>⚠️ {genError}</div>}
 
             <button className="btn bp" style={{padding:"10px 24px",fontSize:14,gap:8}} onClick={generate} disabled={generating}>
-              {generating?<><span style={{display:"inline-block",animation:"spin 1s linear infinite"}}>⟳</span> Generating…</>:"🤖 Generate Draft"}
+              {generating?<><span style={{display:"inline-block",animation:"spin 1s linear infinite"}}>⟳</span> Generating…</>:"⚙️ Generate Draft"}
             </button>
-            {generating&&<p style={{marginTop:10,fontSize:12,color:"#64748b"}}>Sending availability data to Claude… this usually takes 15–30 seconds.</p>}
+            {generating&&<p style={{marginTop:10,fontSize:12,color:"#64748b"}}>Running deterministic scheduler — this usually takes a few seconds.</p>}
           </div>
         </div>
       )}
