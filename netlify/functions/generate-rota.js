@@ -131,10 +131,35 @@ function scheduleNights(body) {
   // This is an optimistic look-ahead (doesn't account for future assignments to others).
   function futureNightsAvail(init, fromBlockIdx) {
     let total = 0;
+    const remaining = Math.max(0, state[init].target - state[init].nightCount);
     for (let i = fromBlockIdx; i < allBlocksList.length; i++) {
       if (canDoBlock(init, allBlocksList[i])) total += allBlocksList[i].length;
+      if (total >= remaining) break; // no need to count beyond what's still needed
     }
     return total;
+  }
+
+  // Scale down targets proportionally if total demand exceeds available capacity,
+  // so the scheduler can actually achieve a fair distribution.
+  // slotsPerBlock: 2 for n1n2 (N1+N2), 1 for sn/an.
+  function applyEffectiveTargets(pool, slotsPerBlock, totalBlockNights) {
+    const totalCapacity = totalBlockNights * slotsPerBlock;
+    const totalDemand   = pool.reduce((sum, s) => sum + state[s.init].target, 0);
+    if (totalDemand <= totalCapacity) return; // targets already achievable
+    const scale = totalCapacity / totalDemand;
+    let assigned = 0;
+    pool.forEach(s => {
+      state[s.init].target = Math.floor(state[s.init].target * scale);
+      assigned += state[s.init].target;
+    });
+    // Distribute leftover nights to those with highest fractional loss (fairest rounding)
+    const leftover = Math.round(totalCapacity - assigned);
+    const ranked = [...pool]
+      .map(s => ({ init: s.init, frac: (targets[s.init]?.nights || 0) * scale % 1 }))
+      .sort((a, b) => b.frac - a.frac);
+    for (let i = 0; i < leftover && i < ranked.length; i++) {
+      state[ranked[i].init].target++;
+    }
   }
 
   // Urgency-based pick: person with highest (nights_still_needed / nights_still_available)
@@ -169,19 +194,31 @@ function scheduleNights(body) {
       return state[a.init].nightCount - state[b.init].nightCount;
     };
 
-    // Hard cap: only pick people still under their night target
-    const underTarget = pool.filter(s =>
+    // Primary: only pick people where the whole block fits within their remaining target
+    // (prevents overshoot — e.g. target=7, done=5, block=4 would push to 9)
+    const exactFit = pool.filter(s =>
       !exclude.has(s.init) &&
       canDoBlock(s.init, blockDates) &&
-      state[s.init].nightCount < state[s.init].target
+      state[s.init].nightCount + blockDates.length <= state[s.init].target
     );
-    if (underTarget.length) {
-      underTarget.sort(sortFn);
-      return underTarget[0];
+    if (exactFit.length) {
+      exactFit.sort(sortFn);
+      return exactFit[0];
     }
 
-    // Fallback for required slots (N1 / SDM) — anyone physically eligible, fewest nights first
+    // For required slots (N1 / SDM):
+    // Second pass — under target but block would overshoot (still better than anyone over target)
     if (required) {
+      const underTarget = pool.filter(s =>
+        !exclude.has(s.init) &&
+        canDoBlock(s.init, blockDates) &&
+        state[s.init].nightCount < state[s.init].target
+      );
+      if (underTarget.length) {
+        underTarget.sort((a, b) => state[a.init].nightCount - state[b.init].nightCount);
+        return underTarget[0];
+      }
+      // Last resort — anyone physically eligible (already at/over target)
       const fallback = pool.filter(s =>
         !exclude.has(s.init) && canDoBlock(s.init, blockDates)
       );
@@ -203,6 +240,12 @@ function scheduleNights(body) {
     state[person.init].history.sort();
     state[person.init].nightCount += blockDates.length;
   }
+
+  // Scale targets to achievable fair share before scheduling
+  const totalBlockNights = allBlocksList.reduce((sum, bl) => sum + bl.length, 0);
+  applyEffectiveTargets(pools.n1n2, 2, totalBlockNights); // 2 slots per block (N1 + N2)
+  applyEffectiveTargets(pools.sn,   1, totalBlockNights); // 1 slot per block (SN)
+  applyEffectiveTargets(pools.an,   1, totalBlockNights); // 1 slot per block (AN)
 
   const nightRota = {};
   let blockIdx = 0; // tracks position in allBlocksList for urgency look-ahead
