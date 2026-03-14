@@ -252,7 +252,7 @@ function scheduleDayShifts(body, nightRota, postNightBlocked) {
     pState[s.init] = {
       counts:   { earlies:0, mids:0, lates:0, weekends:0 },
       targets:  { earlies: tgt.earlies||0, mids: tgt.mids||0, lates: tgt.lates||0, weekends: tgt.weekends||0 },
-      lastShift: null,   // {date, slotKey}
+      assignments: [],   // sorted [{date, slotKey}] — accurate rest checks across both passes
       workDates: new Set(),
     };
   });
@@ -288,11 +288,38 @@ function scheduleDayShifts(body, nightRota, postNightBlocked) {
     return true;
   }
 
+  // Find the most-recent assignment strictly before `date`
+  function lastAssignmentBefore(init, date) {
+    const asgns = pState[init].assignments;
+    for (let i = asgns.length - 1; i >= 0; i--) {
+      if (asgns[i].date < date) return asgns[i];
+    }
+    return null;
+  }
+
+  // Find the next assignment strictly after `date`
+  function nextAssignmentAfter(init, date) {
+    const asgns = pState[init].assignments;
+    for (let i = 0; i < asgns.length; i++) {
+      if (asgns[i].date > date) return asgns[i];
+    }
+    return null;
+  }
+
   function hasEnoughRest(init, date, slotKey) {
-    const last = pState[init].lastShift;
-    if (!last) return true;
-    const gap = restGapMins(last.date, st(last.slotKey), date, st(slotKey));
-    return gap >= minRestHrs * 60;
+    // Check rest from the previous shift (if any)
+    const prev = lastAssignmentBefore(init, date);
+    if (prev) {
+      const gap = restGapMins(prev.date, st(prev.slotKey), date, st(slotKey));
+      if (gap < minRestHrs * 60) return false;
+    }
+    // Check rest into the next shift (if any) — ensures we don't wedge between two close shifts
+    const next = nextAssignmentAfter(init, date);
+    if (next) {
+      const gap = restGapMins(date, st(slotKey), next.date, st(next.slotKey));
+      if (gap < minRestHrs * 60) return false;
+    }
+    return true;
   }
 
   function withinConsecLimit(init, date) {
@@ -384,7 +411,14 @@ function scheduleDayShifts(body, nightRota, postNightBlocked) {
     const cat = shiftCat(slotKey);
     if (cat) pState[person.init].counts[cat]++;
     if (isWE) pState[person.init].counts.weekends++;
-    pState[person.init].lastShift = { date, slotKey };
+    // Insert into sorted assignments list (binary-search insertion to keep order)
+    const asgns = pState[person.init].assignments;
+    let lo = 0, hi = asgns.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (asgns[mid].date <= date) lo = mid + 1; else hi = mid;
+    }
+    asgns.splice(lo, 0, { date, slotKey });
     pState[person.init].workDates.add(date);
   }
 
