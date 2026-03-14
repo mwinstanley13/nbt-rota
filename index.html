@@ -495,11 +495,11 @@ body{font-family:'DM Sans',sans-serif;background:#f4f6fb;font-size:13px}
 .ct{font-family:'Syne',sans-serif;font-size:13.5px;font-weight:700;color:#0d1b2a}
 .cb{padding:18px}
 .sg{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:22px}
-.sc{border-radius:14px;padding:20px;border:none;box-shadow:0 4px 16px rgba(0,0,0,.1);min-height:0;position:relative;overflow:hidden;background:var(--sc-bg,#fff)}
-.sc::after{content:'';position:absolute;top:-20px;right:-20px;width:80px;height:80px;border-radius:50%;background:rgba(255,255,255,.12);pointer-events:none}
-.sc-icon{font-size:22px;margin-bottom:8px;display:block;filter:drop-shadow(0 1px 2px rgba(0,0,0,.15))}
-.sv{font-family:'Syne',sans-serif;font-size:30px;font-weight:800;color:white;line-height:1;margin-bottom:4px}
-.sl{font-size:11.5px;color:rgba(255,255,255,.8);font-weight:500}
+.sc{border-radius:14px;padding:24px 16px;border:none;box-shadow:0 4px 16px rgba(0,0,0,.1);min-height:140px;position:relative;overflow:hidden;background:var(--sc-bg,#fff);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.sc::after{content:'';position:absolute;top:-20px;right:-20px;width:90px;height:90px;border-radius:50%;background:rgba(255,255,255,.12);pointer-events:none}
+.sc-icon{font-size:26px;margin-bottom:10px;display:block;filter:drop-shadow(0 1px 2px rgba(0,0,0,.15))}
+.sv{font-family:'Syne',sans-serif;font-size:52px;font-weight:800;color:white;line-height:1;margin-bottom:6px}
+.sl{font-size:13px;color:rgba(255,255,255,.9);font-weight:600;letter-spacing:.1px}
 .dash-welcome{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;flex-wrap:wrap;gap:10px}
 .dash-greet{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;color:#0d1b2a;letter-spacing:-.3px}
 .dash-sub{font-size:12.5px;color:#64748b;margin-top:3px}
@@ -2574,7 +2574,7 @@ function StaffMgmt({staff,setStaff,addAudit,currentUser}) {
     <div>
       <div style={{display:"flex",gap:10,marginBottom:14,flexWrap:"wrap"}}>
         <button className="btn bp" onClick={()=>{setForm({name:"",init:"",grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0,nightBlockPref:"any"});setModal("add");}}>＋ Add Staff</button>
-        {show.length===0&&<button className="btn" style={{background:"#f0f9ff",color:"#0369a1",border:"1px solid #bae6fd"}} onClick={()=>{if(!confirm("Load all 32 default NBT staff? This will add them with password rota2026.")) return; const existing=staff.map(s=>s.init); const toAdd=INIT_STAFF.filter(s=>s.role==="staff"&&!existing.includes(s.init)); setStaff(p=>[...p,...toAdd]);}}>📋 Load Default Staff</button>}
+        {show.length===0&&IS_DEMO&&<button className="btn" style={{background:"#f0f9ff",color:"#0369a1",border:"1px solid #bae6fd"}} onClick={()=>{if(!confirm("Load all 32 default NBT staff? This will add them with password rota2026.")) return; const existing=staff.map(s=>s.init); const toAdd=INIT_STAFF.filter(s=>s.role==="staff"&&!existing.includes(s.init)); setStaff(p=>[...p,...toAdd]);}}>📋 Load Default Staff</button>}
       </div>
       <div className="card">
         <table className="tbl">
@@ -3765,7 +3765,7 @@ function AIRotaView({user,staff,rota,setRota,availability,leaveEntries,quarterSt
 function App() {
   // fsReady: true once Firestore has returned the first snapshot (or errored)
   const [fsReady,setFsReady]   = useState(false);
-  const [user,setUser]         = useState(null);
+  const [user,setUser]         = useState(()=>lsGet('session',null));
   const [view,setView]         = useState("dashboard");
   const [viewMonth,setVM]      = useState(new Date(2026,7,1));
   const [menuOpen,setMenuOpen] = useState(false);
@@ -3855,7 +3855,9 @@ function App() {
           if (snap.exists) {
             const d = snap.data();
             // Migration: if old flat data exists but no year-namespaced data, migrate to "2026-27"
-            const patchStaffPw = arr => Array.isArray(arr) ? arr.map(s=>{if(s.pw) return s; const def=INIT_STAFF.find(i=>i.init===s.init); return {...s,pw:def?.pw||(s.role==='admin'?'admin2026':'rota2026')};}) : arr;
+            const patchStaffPw = arr => Array.isArray(arr) ? arr.map(s=>{
+              if(IS_DEMO) return {...s,pw:s.role==='admin'?'demo2026':'rota2026'};
+              if(s.pw) return s; const def=INIT_STAFF.find(i=>i.init===s.init); return {...s,pw:def?.pw||(s.role==='admin'?'admin2026':'rota2026')};}) : arr;
             if (d.rota && !d.rotaByYear) {
               const yid = "2026-27";
               upd(setStaff)(patchStaffPw(d.staff));
@@ -3973,13 +3975,16 @@ function App() {
     </>
   );
 
-  if(!user) return <><style>{CSS}</style><Login staff={staff} onLogin={setUser}/></>;
+  const handleLogin = u => { setUser(u); lsSave('session', u); };
+  const handleLogout = () => { setUser(null); localStorage.removeItem(LS_PFX+'session'); };
+
+  if(!user) return <><style>{CSS}</style><Login staff={staff} onLogin={handleLogin}/></>;
 
   return (
     <>
       <style>{CSS}</style>
       <div className="app">
-        <Sidebar user={user} view={view} setView={setView} onLogout={()=>setUser(null)} pendingCount={pendingCount} hasOpenQ={hasOpenQ} isOpen={menuOpen} onClose={()=>setMenuOpen(false)} collapsed={sbCollapsed} onToggleCollapse={()=>setSbCollapsed(c=>!c)}/>
+        <Sidebar user={user} view={view} setView={setView} onLogout={handleLogout} pendingCount={pendingCount} hasOpenQ={hasOpenQ} isOpen={menuOpen} onClose={()=>setMenuOpen(false)} collapsed={sbCollapsed} onToggleCollapse={()=>setSbCollapsed(c=>!c)}/>
         {menuOpen&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.4)",zIndex:499}} onClick={()=>setMenuOpen(false)}/>}
         <div className="main">
           <div className="hdr" style={{position:"relative"}}>
