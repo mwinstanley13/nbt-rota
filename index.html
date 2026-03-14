@@ -3798,20 +3798,12 @@ function App() {
   const resetToFresh = () => {
     if (!confirm("Reset to Fresh Start?\n\nThis will:\n• Remove ALL staff\n• Clear ALL rota, availability, leave, requests and corrections\n• Keep year/quarter structure and all config\n\nThis cannot be undone. Continue?")) return;
     const freshPayload = {staff:ADMIN_ONLY,auditLog:[],wteConfig,years,activeYearId,rotaByYear:{},leaveByYear:{},availByYear:{},qStatusByYear:{},requestsByYear:{},notesByYear:{},corrsByYear:{},staffHoursByYear:{},swapsByYear:{},fixedDaysOff:[],genRules,shiftTimes,staffShiftTimes,trainingDays,demoMode:false};
-    appDoc().set(freshPayload).catch(console.error);
-    setStaff(ADMIN_ONLY);
-    setRotaByYear({});
-    setLeaveByYear({});
-    setAvailByYear({});
-    setQStatusByYear({});
-    setReqsByYear({});
-    setSwapsByYear({});
-    setNotesByYear({});
-    setCorrsByYear({});
-    setSHByYear({});
-    setFixedDaysOff([]);
-    setAudit([]);
-    setDemoMode(false);
+    appDoc().set(freshPayload).then(()=>{
+      // Clear localStorage too, then reload so Firestore snapshot serves clean data
+      ['staff','audit','wteConfig','years','activeYearId','rotaByYear','leaveByYear','availByYear','qstatusByYear','requestsByYear','notesByYear','corrsByYear','staffHoursByYear','swapsByYear','fixedDaysOff','genRules','shiftTimes','staffShiftTimes','trainingDays','demoMode']
+        .forEach(k=>localStorage.removeItem(LS_PFX+k));
+      window.location.reload();
+    }).catch(e=>{console.error(e);alert("Reset failed — check your connection and try again.");});
   };
 
   const applyCarryForward = (closingQid) => {
