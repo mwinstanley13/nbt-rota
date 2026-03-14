@@ -665,7 +665,7 @@ const Modal = ({title,onClose,children,footer,lg}) => (
 
 function Login({staff,onLogin}) {
   const [u,setU]=useState(""); const [p,setP]=useState(""); const [err,setErr]=useState("");
-  const go=()=>{const f=staff.find(s=>s.init.toLowerCase()===u.toLowerCase().trim()&&s.pw===p.trim());f?onLogin(f):setErr("Invalid username or password.");};
+  const go=()=>{const uTrim=u.toLowerCase().trim(),pTrim=p.trim();const f=staff.find(s=>s.init.toLowerCase()===uTrim);const pw=f?.pw||(INIT_STAFF.find(s=>s.init.toLowerCase()===uTrim)?.pw);(f&&pw===pTrim)?onLogin(f):setErr("Invalid username or password.");};
   return (
     <div className="login-wrap">
       <div className="login-card">
@@ -3692,9 +3692,10 @@ function App() {
           if (snap.exists) {
             const d = snap.data();
             // Migration: if old flat data exists but no year-namespaced data, migrate to "2026-27"
+            const patchStaffPw = arr => Array.isArray(arr) ? arr.map(s=>({...s,pw:s.pw||(INIT_STAFF.find(i=>i.init===s.init)?.pw)||'rota2026'})) : arr;
             if (d.rota && !d.rotaByYear) {
               const yid = "2026-27";
-              upd(setStaff)(d.staff);
+              upd(setStaff)(patchStaffPw(d.staff));
               upd(setWteConfig)(d.wteConfig);
               upd(setAudit)(d.auditLog);
               upd(setYears)([{id:yid,label:"2026/27",quarters:QUARTERS,active:true,archived:false}]);
@@ -3709,7 +3710,7 @@ function App() {
               upd(setSHByYear)({[yid]:d.staffHours||{}});
             } else {
               // Normal multi-year load
-              upd(setStaff)(d.staff);
+              upd(setStaff)(patchStaffPw(d.staff));
               upd(setWteConfig)(d.wteConfig);
               upd(setAudit)(d.auditLog);
               upd(setYears)(d.years);
