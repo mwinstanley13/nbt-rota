@@ -107,21 +107,69 @@ function scheduleNights(body) {
     return false;
   }
 
-  // required=true means this slot must be filled; use fallback if no one is under target
-  function pickFromPool(pool, blockDates, exclude, required = false) {
+  // Group dates by ISO week → weekday (Mon-Thu) and weekend (Fri-Sun) buckets
+  const weekMap = {};
+  [...dates].sort().forEach(d => {
+    const dow = dowOf(d);
+    const monday = addDays(d, -((dow + 6) % 7));
+    if (!weekMap[monday]) weekMap[monday] = { weekday: [], weekend: [] };
+    if (dow >= 1 && dow <= 4) weekMap[monday].weekday.push(d);
+    if (dow === 5 || dow === 6 || dow === 0) weekMap[monday].weekend.push(d);
+  });
+
+  // Flat ordered list of all blocks — used for urgency look-ahead.
+  // Each entry is a sorted date array (unsplit; splitting is handled at assignment time).
+  const allBlocksList = [];
+  Object.keys(weekMap).sort().forEach(wk => {
+    const { weekday, weekend } = weekMap[wk];
+    if (weekday.length) allBlocksList.push(weekday.sort());
+    if (weekend.length) allBlocksList.push(weekend.sort());
+  });
+
+  // How many future nights (from blockIdx onward) can this person potentially work?
+  // Uses current state for rest-gap checks; availability is pre-checked per date.
+  // This is an optimistic look-ahead (doesn't account for future assignments to others).
+  function futureNightsAvail(init, fromBlockIdx) {
+    let total = 0;
+    for (let i = fromBlockIdx; i < allBlocksList.length; i++) {
+      if (canDoBlock(init, allBlocksList[i])) total += allBlocksList[i].length;
+    }
+    return total;
+  }
+
+  // Urgency-based pick: person with highest (nights_still_needed / nights_still_available)
+  // gets priority. This spreads assignments evenly even when all deficits are initially equal,
+  // preventing the same staff from always being picked first due to stable-sort ordering.
+  // required=true: N1 (SDM) must always be filled — use fallback if no one is under target.
+  function pickFromPool(pool, blockDates, exclude, required, blockIdx) {
     const is4 = blockDates.length >= 4;
     const is2 = blockDates.length === 2;
     const prefScore = p => is4 ? (p==="4"?2:p==="any"?1:0) : is2 ? (p==="2+2"?2:p==="any"?1:0) : 1;
 
+    // Pre-compute urgency for each eligible pool member (avoids O(n²) in sort)
+    const urgency = {};
+    pool.forEach(s => {
+      const need  = Math.max(0, state[s.init].target - state[s.init].nightCount);
+      const avail = futureNightsAvail(s.init, blockIdx); // includes current block
+      urgency[s.init] = need / Math.max(avail, 1);
+    });
+
     const sortFn = (a, b) => {
+      // 1. Night-block preference
       const ps = prefScore(b.nightBlockPref||"any") - prefScore(a.nightBlockPref||"any");
       if (ps !== 0) return ps;
-      const da = state[a.init].target - state[a.init].nightCount;
-      const db = state[b.init].target - state[b.init].nightCount;
-      return db !== da ? db - da : state[a.init].nightCount - state[b.init].nightCount;
+      // 2. Urgency descending — who most needs to work NOW relative to remaining opportunities
+      const du = urgency[b.init] - urgency[a.init];
+      if (Math.abs(du) > 0.001) return du;
+      // 3. Absolute deficit descending (nights still owed)
+      const da = (state[a.init].target - state[a.init].nightCount);
+      const db = (state[b.init].target - state[b.init].nightCount);
+      if (da !== db) return db - da;
+      // 4. Fewest nights done (most under-served)
+      return state[a.init].nightCount - state[b.init].nightCount;
     };
 
-    // Hard cap: only pick people who are still under their night target
+    // Hard cap: only pick people still under their night target
     const underTarget = pool.filter(s =>
       !exclude.has(s.init) &&
       canDoBlock(s.init, blockDates) &&
@@ -132,8 +180,7 @@ function scheduleNights(body) {
       return underTarget[0];
     }
 
-    // Fallback for required slots (N1 / SDM only) — pick physically eligible person
-    // even if at/over target; pick whoever has done the fewest nights
+    // Fallback for required slots (N1 / SDM) — anyone physically eligible, fewest nights first
     if (required) {
       const fallback = pool.filter(s =>
         !exclude.has(s.init) && canDoBlock(s.init, blockDates)
@@ -157,17 +204,8 @@ function scheduleNights(body) {
     state[person.init].nightCount += blockDates.length;
   }
 
-  // Group dates by ISO week → weekday (Mon-Thu) and weekend (Fri-Sun) buckets
-  const weekMap = {};
-  [...dates].sort().forEach(d => {
-    const dow = dowOf(d);
-    const monday = addDays(d, -((dow + 6) % 7));
-    if (!weekMap[monday]) weekMap[monday] = { weekday: [], weekend: [] };
-    if (dow >= 1 && dow <= 4) weekMap[monday].weekday.push(d);
-    if (dow === 5 || dow === 6 || dow === 0) weekMap[monday].weekend.push(d);
-  });
-
   const nightRota = {};
+  let blockIdx = 0; // tracks position in allBlocksList for urgency look-ahead
 
   Object.keys(weekMap).sort().forEach(wk => {
     const { weekday, weekend } = weekMap[wk];
@@ -182,28 +220,30 @@ function scheduleNights(body) {
 
       subBlocks.forEach(sub => {
         const used = new Set();
-        const n1 = pickFromPool(pools.n1n2, sub, used, true);  // N1 required — fallback allowed
+        const n1 = pickFromPool(pools.n1n2, sub, used, true,  blockIdx);
         if (n1) { record(n1, sub, "N1", nightRota); used.add(n1.init); }
-        const n2 = pickFromPool(pools.n1n2, sub, used, false); // N2 optional — hard cap
+        const n2 = pickFromPool(pools.n1n2, sub, used, false, blockIdx);
         if (n2) { record(n2, sub, "N2", nightRota); }
-        const sn = pickFromPool(pools.sn, sub, new Set(), false); // SN optional — hard cap
+        const sn = pickFromPool(pools.sn, sub, new Set(), false, blockIdx);
         if (sn) { record(sn, sub, "SN", nightRota); }
-        const an = pickFromPool(pools.an, sub, new Set(), false); // AN optional — hard cap
+        const an = pickFromPool(pools.an, sub, new Set(), false, blockIdx);
         if (an) { record(an, sub, "AN", nightRota); }
       });
+      blockIdx++;
     }
 
     if (weekend.length > 0) {
       const we = weekend.sort();
       const used = new Set();
-      const n1 = pickFromPool(pools.n1n2, we, used, true);  // N1 required
+      const n1 = pickFromPool(pools.n1n2, we, used, true,  blockIdx);
       if (n1) { record(n1, we, "N1", nightRota); used.add(n1.init); }
-      const n2 = pickFromPool(pools.n1n2, we, used, false); // N2 optional
+      const n2 = pickFromPool(pools.n1n2, we, used, false, blockIdx);
       if (n2) { record(n2, we, "N2", nightRota); }
-      const sn = pickFromPool(pools.sn, we, new Set(), false); // SN optional
+      const sn = pickFromPool(pools.sn, we, new Set(), false, blockIdx);
       if (sn) { record(sn, we, "SN", nightRota); }
-      const an = pickFromPool(pools.an, we, new Set(), false); // AN optional
+      const an = pickFromPool(pools.an, we, new Set(), false, blockIdx);
       if (an) { record(an, we, "AN", nightRota); }
+      blockIdx++;
     }
   });
 
