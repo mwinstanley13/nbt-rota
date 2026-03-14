@@ -3368,7 +3368,7 @@ function YearSetupView({years,setYears,activeYearId,setActiveYearId,staff,
 // AI ROTA BUILDER
 // ═══════════════════════════════════════════════════════════════
 
-function AIRotaView({user,staff,rota,setRota,availability,leaveEntries,quarterStatus,wteConfig,staffHours,genRules,setGenRules,shiftTimes,addAudit,quarters}) {
+function AIRotaView({user,staff,rota,setRota,availability,leaveEntries,quarterStatus,wteConfig,staffHours,genRules,setGenRules,shiftTimes,addAudit,quarters,activeYearId}) {
   const [tab,setTab]           = useState("rules");
   const [selQ,setSelQ]         = useState("Q1");
   const [slotFilter,setSF]     = useState("all");
@@ -4036,7 +4036,7 @@ function App() {
             {view==="reports"    &&<Reports user={user} staff={staff} rota={rota} leaveEntries={leaveEntries}/>}
             {view==="fixeddays"  &&isAdmin&&<FixedDaysView fixedDaysOff={fixedDaysOff} setFixedDaysOff={setFixedDaysOff} staff={staff} addAudit={addAudit} currentUser={user}/>}
             {view==="rotaconfig" &&isAdmin&&<RotaConfig wteConfig={wteConfig} setWteConfig={setWteConfig} staffHours={staffHours} setStaffHours={setStaffHours} staff={staff} addAudit={addAudit} shiftTimes={shiftTimes} setShiftTimes={setShiftTimes} staffShiftTimes={staffShiftTimes} setStaffShiftTimes={setSST} trainingDays={trainingDays} setTrainingDays={setTrainingDays}/>}
-{view==="airota"     &&isAdmin&&<AIRotaView user={user} staff={staff} rota={rota} setRota={setRota} availability={availability} leaveEntries={leaveEntries} quarterStatus={quarterStatus} wteConfig={wteConfig} staffHours={staffHours} genRules={genRules} setGenRules={setGenRules} shiftTimes={shiftTimes} addAudit={addAudit} quarters={activeYearQuarters}/>}
+{view==="airota"     &&isAdmin&&<AIRotaView user={user} staff={staff} rota={rota} setRota={setRota} availability={availability} leaveEntries={leaveEntries} quarterStatus={quarterStatus} wteConfig={wteConfig} staffHours={staffHours} genRules={genRules} setGenRules={setGenRules} shiftTimes={shiftTimes} addAudit={addAudit} quarters={activeYearQuarters} activeYearId={activeYearId}/>}
             {view==="adjustments"&&isAdmin&&<HoursAdjustView staff={staff} hoursCorrections={hoursCorrections} setHoursCorrections={setHoursCorrections} addAudit={addAudit} currentUser={user} wteConfig={wteConfig} staffHours={staffHours} rota={rota} leaveEntries={leaveEntries}/>}
             {view==="audit"      &&isAdmin&&<AuditLog log={auditLog}/>}
             {view==="yearsetup"  &&isAdmin&&<YearSetupView years={years} setYears={setYears} activeYearId={activeYearId} setActiveYearId={setActiveYearId} staff={staff} rotaByYear={rotaByYear} leaveByYear={leaveByYear} availByYear={availByYear} qStatusByYear={qStatusByYear} requestsByYear={requestsByYear} notesByYear={notesByYear} corrsByYear={corrsByYear} staffHoursByYear={staffHoursByYear} setQStatusByYear={setQStatusByYear} addAudit={addAudit} currentUser={user}/>}
