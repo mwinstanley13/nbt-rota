@@ -13,6 +13,8 @@
   <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
@@ -463,7 +465,7 @@ const getHoursRemaining = (init, grade, qid, wteConfig, staffHours, rota, leaveE
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Syne:wght@500;700;800&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap');
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'DM Sans',sans-serif;background:#f0f4f8;font-size:13px}
+body{font-family:'DM Sans',sans-serif;background:#f4f6fb;font-size:13px}
 ::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:4px}
 .app{display:flex;height:100vh;overflow:hidden}
 .sb{width:228px;flex-shrink:0;background:linear-gradient(170deg,#0d1b2a,#1a2e45);display:flex;flex-direction:column;overflow-y:auto}
@@ -485,17 +487,25 @@ body{font-family:'DM Sans',sans-serif;background:#f0f4f8;font-size:13px}
 .u-out{background:none;border:none;color:#2d4a5e;cursor:pointer;font-size:16px;transition:color .15s}
 .u-out:hover{color:#ef4444}
 .main{flex:1;display:flex;flex-direction:column;overflow:hidden}
-.hdr{background:white;padding:14px 26px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.hdr{background:white;padding:14px 26px;border-bottom:1px solid #edf0f7;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:0 1px 4px rgba(0,0,0,.06)}
 .hdr h2{font-family:'Syne',sans-serif;font-size:19px;font-weight:700;color:#0d1b2a}
 .body{flex:1;overflow-y:auto;padding:24px 28px}
-.card{background:white;border-radius:12px;border:1px solid #e2e8f0;box-shadow:0 1px 4px rgba(0,0,0,.05)}
-.ch{padding:14px 18px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.card{background:white;border-radius:14px;border:1px solid #e8edf5;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+.ch{padding:15px 20px;border-bottom:1px solid #f0f4f8;display:flex;align-items:center;justify-content:space-between;gap:10px}
 .ct{font-family:'Syne',sans-serif;font-size:13.5px;font-weight:700;color:#0d1b2a}
-.cb{padding:16px}
-.sg{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
-.sc{background:white;border-radius:12px;padding:18px 20px;border:1px solid #e2e8f0;border-left:4px solid var(--ac);box-shadow:0 1px 4px rgba(0,0,0,.05);min-height:0}
-.sv{font-family:'Syne',sans-serif;font-size:28px;font-weight:800;color:#0d1b2a}
-.sl{font-size:11.5px;color:#64748b;margin-top:3px;font-weight:500}
+.cb{padding:18px}
+.sg{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:22px}
+.sc{border-radius:14px;padding:20px;border:none;box-shadow:0 4px 16px rgba(0,0,0,.1);min-height:0;position:relative;overflow:hidden;background:var(--sc-bg,#fff)}
+.sc::after{content:'';position:absolute;top:-20px;right:-20px;width:80px;height:80px;border-radius:50%;background:rgba(255,255,255,.12);pointer-events:none}
+.sc-icon{font-size:22px;margin-bottom:8px;display:block;filter:drop-shadow(0 1px 2px rgba(0,0,0,.15))}
+.sv{font-family:'Syne',sans-serif;font-size:30px;font-weight:800;color:white;line-height:1;margin-bottom:4px}
+.sl{font-size:11.5px;color:rgba(255,255,255,.8);font-weight:500}
+.dash-welcome{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;flex-wrap:wrap;gap:10px}
+.dash-greet{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;color:#0d1b2a;letter-spacing:-.3px}
+.dash-sub{font-size:12.5px;color:#64748b;margin-top:3px}
+.qa-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:22px}
+.qa-btn{display:flex;align-items:center;gap:7px;padding:9px 16px;border-radius:9px;border:1.5px solid #e2e8f0;background:white;color:#374151;font-size:12.5px;font-weight:600;cursor:pointer;transition:all .15s;font-family:'DM Sans',sans-serif;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.qa-btn:hover{border-color:#10b981;color:#10b981;background:#f0fdf4;box-shadow:0 2px 8px rgba(16,185,129,.12)}
 .btn{padding:6px 13px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:600;border:none;transition:all .15s;display:inline-flex;align-items:center;gap:5px;font-family:'DM Sans',sans-serif}
 .bp{background:#10b981;color:white}.bp:hover{background:#059669}
 .bs{background:white;color:#374151;border:1px solid #d1d5db}.bs:hover{background:#f9fafb}
@@ -761,81 +771,135 @@ function Dashboard({user,staff,rota,requests,dayNotes,availability,quarterStatus
       .find(x=>x.d>=today&&x.slots.includes(user.init));
   },[rota,user,today,isAdmin]);
 
+  const hr=new Date().getHours();
+  const greet=hr<12?"Good morning":hr<17?"Good afternoon":"Good evening";
+  const firstName=user.name?.split(" ")[0]||user.init;
+
   return (
-    <div style={{maxWidth:920,margin:"0 auto"}}>
-      {(dayNotes[today])&&<div className="al al-w" style={{marginBottom:16}}>📌 <strong>Today:</strong> {dayNotes[today]}</div>}
-      {!isAdmin&&openQs.length>0&&<div className="al al-i" style={{marginBottom:16}}>📋 Availability open for <strong>{openQs.map(q=>q.id).join(", ")}</strong> — please submit yours.</div>}
-      {!isAdmin&&myPendingSwaps.length>0&&<div className="al al-w" style={{marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+    <div style={{maxWidth:960,margin:"0 auto"}}>
+
+      {/* Welcome banner */}
+      <div className="dash-welcome">
+        <div>
+          <div className="dash-greet">{greet}, {firstName} 👋</div>
+          <div className="dash-sub">{new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"})} · {IS_DEMO?"Demo Environment":"RotaFlow"}</div>
+        </div>
+        {isAdmin&&<div style={{display:"flex",gap:8}}>
+          <button className="qa-btn" onClick={()=>setView&&setView("builder")}>🗂 Build Rota</button>
+          <button className="qa-btn" onClick={()=>setView&&setView("requests")}>📥 Requests{pending.length>0&&<span style={{background:"#ef4444",color:"white",borderRadius:10,padding:"1px 6px",fontSize:10,fontWeight:700,marginLeft:4}}>{pending.length}</span>}</button>
+        </div>}
+      </div>
+
+      {/* Alerts */}
+      {(dayNotes[today])&&<div className="al al-w" style={{marginBottom:14}}>📌 <strong>Today:</strong> {dayNotes[today]}</div>}
+      {!isAdmin&&openQs.length>0&&<div className="al al-i" style={{marginBottom:14}}>📋 Availability open for <strong>{openQs.map(q=>q.id).join(", ")}</strong> — please submit yours.</div>}
+      {!isAdmin&&myPendingSwaps.length>0&&<div className="al al-w" style={{marginBottom:14,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <span>🔄 You have <strong>{myPendingSwaps.length}</strong> shift swap request{myPendingSwaps.length>1?"s":""} awaiting your response.</span>
         {setView&&<button className="btn bsm" style={{marginLeft:12,flexShrink:0}} onClick={()=>setView("requests")}>View</button>}
       </div>}
-      <div className="sg" style={{marginBottom:18}}>
-        <div className="sc" style={{"--ac":"#10b981"}}><div className="sv">{staff.filter(s=>s.role==="staff"&&s.active).length}</div><div className="sl">Active Staff</div></div>
-        <div className="sc" style={{"--ac":"#6366f1"}}><div className="sv">{todayStaffInit.length}</div><div className="sl">On Shift Today</div></div>
-        <div className="sc" style={{"--ac":"#f59e0b"}}><div className="sv">{pending.length}</div><div className="sl">Pending Requests</div></div>
-        <div className="sc" style={{"--ac":"#3b82f6"}}><div className="sv">{openQs.length}</div><div className="sl">Open Availability Q</div></div>
+
+      {/* Stat cards */}
+      <div className="sg">
+        <div className="sc" style={{"--sc-bg":"linear-gradient(135deg,#10b981,#059669)"}}>
+          <span className="sc-icon">👥</span>
+          <div className="sv">{staff.filter(s=>s.role==="staff"&&s.active).length}</div>
+          <div className="sl">Active Staff</div>
+        </div>
+        <div className="sc" style={{"--sc-bg":"linear-gradient(135deg,#6366f1,#4f46e5)"}}>
+          <span className="sc-icon">🏥</span>
+          <div className="sv">{todayStaffInit.length}</div>
+          <div className="sl">On Shift Today</div>
+        </div>
+        <div className="sc" style={{"--sc-bg":"linear-gradient(135deg,#f59e0b,#d97706)"}}>
+          <span className="sc-icon">📋</span>
+          <div className="sv">{pending.length}</div>
+          <div className="sl">Pending Requests</div>
+        </div>
+        <div className="sc" style={{"--sc-bg":"linear-gradient(135deg,#3b82f6,#2563eb)"}}>
+          <span className="sc-icon">📅</span>
+          <div className="sv">{openQs.length}</div>
+          <div className="sl">Open Avail Quarters</div>
+        </div>
       </div>
+
+      {/* Main panels */}
       <div className="dg2">
         <div className="card">
-          <div className="ch"><span className="ct">Today's Shifts</span><span style={{fontSize:10.5,color:"#94a3b8"}}>{fmtDisp(today)}</span></div>
-          <div className="cb" style={{maxHeight:280,overflowY:"auto"}}>
-            {todayStaffInit.length===0?<p style={{color:"#94a3b8",fontSize:12}}>No shifts assigned today.</p>
+          <div className="ch">
+            <span className="ct">Today's Shifts</span>
+            <span style={{fontSize:10.5,color:"#94a3b8",background:"#f1f5f9",padding:"2px 8px",borderRadius:20}}>{fmtDisp(today)}</span>
+          </div>
+          <div className="cb" style={{maxHeight:290,overflowY:"auto"}}>
+            {todayStaffInit.length===0
+              ?<div style={{textAlign:"center",padding:"24px 0",color:"#94a3b8"}}>
+                  <div style={{fontSize:28,marginBottom:8}}>🌙</div>
+                  <div style={{fontSize:12}}>No shifts assigned today</div>
+                </div>
               :todayStaffInit.map(init=>{
                 const s=staff.find(x=>x.init===init);
                 const mySlots=Object.entries(todaySlots).filter(([k,v])=>v===init).map(([k])=>SLOTS.find(sl=>sl.key===k)).filter(Boolean);
                 return (
-                  <div key={init} style={{display:"flex",alignItems:"center",gap:9,padding:"7px 0",borderBottom:"1px solid #f1f5f9"}}>
-                    <div style={{width:28,height:28,borderRadius:"50%",background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,color:"#374151",flexShrink:0}}>{init.slice(0,2)}</div>
-                    <div style={{flex:1}}><div style={{fontSize:12,fontWeight:600}}>{s?.name||init}</div><div style={{fontSize:10,color:"#64748b"}}>{s?.grade}</div></div>
-                    {mySlots.slice(0,2).map(sl=><span key={sl.key} className="chip" style={{background:sl.bg,color:sl.fg,borderColor:sl.bd,fontSize:10}}>{sl.label}</span>)}
+                  <div key={init} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:"1px solid #f4f6fb"}}>
+                    <div style={{width:32,height:32,borderRadius:"50%",background:"linear-gradient(135deg,#10b981,#0284c7)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9.5,fontWeight:800,color:"white",flexShrink:0}}>{init.slice(0,2)}</div>
+                    <div style={{flex:1}}><div style={{fontSize:12.5,fontWeight:600,color:"#0d1b2a"}}>{s?.name||init}</div><div style={{fontSize:10,color:"#94a3b8"}}>{s?.grade}</div></div>
+                    {mySlots.slice(0,2).map(sl=><span key={sl.key} className="chip" style={{background:sl.bg,color:sl.fg,borderColor:sl.bd,fontSize:9.5}}>{sl.label}</span>)}
                   </div>
                 );
               })}
           </div>
         </div>
+
         <div className="card">
           <div className="ch"><span className="ct">{isAdmin?"Pending Requests":"My Overview"}</span></div>
           <div className="cb">
             {isAdmin?(
-              pending.length===0?<div className="al al-s">✓ No pending requests</div>
-              :pending.slice(0,5).map(r=>(
-                <div key={r.id} style={{display:"flex",alignItems:"center",gap:9,padding:"7px 0",borderBottom:"1px solid #f1f5f9"}}>
-                  <div style={{flex:1}}><div style={{fontSize:12,fontWeight:600}}>{r.staffName}</div><div style={{fontSize:10,color:"#64748b"}}>{LEAVE_T[r.type]?.label} — {fmtDisp(r.startDate)}</div></div>
-                  <span className="badge b-pending">Pending</span>
-                </div>
-              ))
+              pending.length===0
+                ?<div style={{textAlign:"center",padding:"24px 0",color:"#94a3b8"}}>
+                    <div style={{fontSize:28,marginBottom:8}}>✅</div>
+                    <div style={{fontSize:12}}>All clear — no pending requests</div>
+                  </div>
+                :pending.slice(0,6).map(r=>(
+                  <div key={r.id} style={{display:"flex",alignItems:"center",gap:9,padding:"8px 0",borderBottom:"1px solid #f4f6fb"}}>
+                    <div style={{width:32,height:32,borderRadius:"50%",background:"#fef3c7",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,flexShrink:0}}>📝</div>
+                    <div style={{flex:1}}><div style={{fontSize:12.5,fontWeight:600,color:"#0d1b2a"}}>{r.staffName}</div><div style={{fontSize:10,color:"#94a3b8"}}>{LEAVE_T[r.type]?.label} · {fmtDisp(r.startDate)}</div></div>
+                    <span className="badge b-pending">Pending</span>
+                  </div>
+                ))
             ):(
               <div>
-                {myNextShift?<div style={{padding:13,background:"#f0fdf4",borderRadius:8,marginBottom:13}}>
-                  <div style={{fontSize:10,color:"#64748b",marginBottom:2}}>Next assigned shift</div>
-                  <div style={{fontSize:18,fontWeight:800,fontFamily:"Syne,sans-serif"}}>{fmtDisp(myNextShift.d)}</div>
-                </div>:<div className="al al-i">No upcoming shifts assigned yet.</div>}
-                <div style={{fontSize:11.5,fontWeight:700,color:"#374151",marginBottom:7}}>My availability status</div>
-                {Object.keys(myAvail).length===0?<p style={{fontSize:12,color:"#94a3b8"}}>No availability submitted yet.</p>
-                  :<div style={{fontSize:12,color:"#64748b"}}>{Object.keys(myAvail).length} dates marked</div>}
+                {myNextShift
+                  ?<div style={{padding:16,background:"linear-gradient(135deg,#f0fdf4,#dcfce7)",borderRadius:10,marginBottom:14,border:"1px solid #bbf7d0"}}>
+                      <div style={{fontSize:10,color:"#16a34a",fontWeight:600,marginBottom:3,textTransform:"uppercase",letterSpacing:".4px"}}>Next Shift</div>
+                      <div style={{fontSize:20,fontWeight:800,fontFamily:"Syne,sans-serif",color:"#14532d"}}>{fmtDisp(myNextShift.d)}</div>
+                    </div>
+                  :<div className="al al-i">No upcoming shifts assigned yet.</div>}
+                <div style={{fontSize:11.5,fontWeight:700,color:"#374151",marginBottom:7}}>Availability submitted</div>
+                {Object.keys(myAvail).length===0
+                  ?<p style={{fontSize:12,color:"#94a3b8"}}>No availability submitted yet.</p>
+                  :<div style={{fontSize:13,fontWeight:700,color:"#10b981"}}>{Object.keys(myAvail).length} <span style={{color:"#64748b",fontWeight:400}}>dates marked</span></div>}
               </div>
             )}
           </div>
         </div>
       </div>
 
-      {/* Data Management — admin only */}
-      {isAdmin&&(
-        <div className="card" style={{marginTop:18,border:"1px solid #fecaca"}}>
-          <div className="ch" style={{background:"#fff7ed"}}>
+      {/* Data Management — demo only */}
+      {isAdmin&&IS_DEMO&&(
+        <div className="card" style={{marginTop:20,border:"1px solid #fecaca"}}>
+          <div className="ch" style={{background:"linear-gradient(90deg,#fff7ed,#fef2f2)"}}>
             <span className="ct" style={{color:"#9a3412"}}>🔧 Data Management</span>
-            <span style={{fontSize:11,color:"#94a3b8",marginLeft:8}}>Admin only</span>
+            <span style={{fontSize:11,color:"#94a3b8",marginLeft:8}}>Demo only</span>
           </div>
           <div className="cb">
             <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
-              <div style={{flex:1,minWidth:220,padding:14,background:"#f0fdf4",borderRadius:8,border:"1px solid #86efac"}}>
+              <div style={{flex:1,minWidth:220,padding:14,background:"#f0fdf4",borderRadius:10,border:"1px solid #86efac"}}>
                 <div style={{fontWeight:700,fontSize:13,marginBottom:4,color:"#14532d"}}>🧪 Load Demo Data</div>
                 <div style={{fontSize:12,color:"#166534",marginBottom:10}}>Loads all default staff with realistic Q1 availability so you can test the AI rota builder straight away.{demoMode&&<span style={{marginLeft:6,fontWeight:700}}> (Active)</span>}</div>
                 <button className="btn bp bsm" onClick={loadDemoData}>{demoMode?"Reload Demo":"Load Demo"}</button>
               </div>
-              <div style={{flex:1,minWidth:220,padding:14,background:"#fff1f2",borderRadius:8,border:"1px solid #fca5a5"}}>
+              <div style={{flex:1,minWidth:220,padding:14,background:"#fff1f2",borderRadius:10,border:"1px solid #fca5a5"}}>
                 <div style={{fontWeight:700,fontSize:13,marginBottom:4,color:"#7f1d1d"}}>🗑 Fresh Start</div>
-                <div style={{fontSize:12,color:"#991b1b",marginBottom:10}}>Removes <strong>all staff and all data</strong>. Keeps year structure and config (shift times, FTE targets, AI rules). Use when ready to go live.</div>
+                <div style={{fontSize:12,color:"#991b1b",marginBottom:10}}>Removes <strong>all staff and all data</strong>. Keeps year structure and config. Use when ready to go live.</div>
                 <button className="btn bsm" style={{background:"#ef4444",color:"white",border:"none",cursor:"pointer",borderRadius:6,padding:"5px 12px",fontWeight:600}} onClick={resetToFresh}>Reset to Fresh Start</button>
               </div>
             </div>
@@ -3172,10 +3236,72 @@ function YearSetupView({years,setYears,activeYearId,setActiveYearId,staff,
   };
 
   const downloadYear = (yid) => {
+    const {jsPDF} = window.jspdf;
+    const doc = new jsPDF({orientation:"landscape",unit:"mm",format:"a4"});
     const yr = years.find(y=>y.id===yid);
-    const data = {year:yr,rota:rotaByYear[yid]||{},leaveEntries:leaveByYear[yid]||{},availability:availByYear[yid]||{},quarterStatus:qStatusByYear[yid]||{},requests:requestsByYear[yid]||[],dayNotes:notesByYear[yid]||{},hoursCorrections:corrsByYear[yid]||[],staffHours:staffHoursByYear[yid]||{},staff};
-    const blob = new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
-    const a = document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=`rota-${yid}.json`; a.click();
+    const rota = rotaByYear[yid]||{};
+    const leave = leaveByYear[yid]||{};
+    const reqs = (requestsByYear[yid]||[]);
+    const activeStaff = staff.filter(s=>s.role==="staff"&&s.active).sort((a,b)=>a.name.localeCompare(b.name));
+    const allDates = Object.keys(rota).sort();
+    const PAGE_W = 277;
+
+    // ── Title page header ──
+    doc.setFillColor(13,27,42); doc.rect(0,0,PAGE_W,22,`F`);
+    doc.setTextColor(255,255,255); doc.setFont("helvetica","bold"); doc.setFontSize(16);
+    doc.text("RotaFlow — Rota Export",10,14);
+    doc.setFontSize(9); doc.setFont("helvetica","normal");
+    doc.text(`Year: ${yr?.label||yid}   |   Generated: ${new Date().toLocaleDateString("en-GB")}   |   Staff: ${activeStaff.length}   |   Dates: ${allDates.length}`,10,20);
+    doc.setTextColor(0,0,0);
+
+    // ── Section 1: Shift assignments ──
+    if(allDates.length>0){
+      doc.setFont("helvetica","bold"); doc.setFontSize(11); doc.text("Shift Assignments",10,30);
+      const slotKeys = [...new Set(Object.values(rota).flatMap(d=>Object.keys(d)))].sort();
+      const head = [["Date","Day",...slotKeys]];
+      const body = allDates.map(d=>{
+        const day = new Date(d).toLocaleDateString("en-GB",{weekday:"short"});
+        const slots = rota[d]||{};
+        return [d,day,...slotKeys.map(k=>slots[k]||"")];
+      });
+      doc.autoTable({startY:33,head,body,styles:{fontSize:6.5,cellPadding:1.2},headStyles:{fillColor:[13,27,42],textColor:255,fontStyle:"bold"},alternateRowStyles:{fillColor:[248,250,252]},margin:{left:10,right:10}});
+    }
+
+    // ── Section 2: Staff shift summary ──
+    doc.addPage();
+    doc.setFillColor(13,27,42); doc.rect(0,0,PAGE_W,14,`F`);
+    doc.setTextColor(255,255,255); doc.setFont("helvetica","bold"); doc.setFontSize(13);
+    doc.text("Staff Shift Summary",10,10); doc.setTextColor(0,0,0);
+    const slotKeys2 = [...new Set(Object.values(rota).flatMap(d=>Object.keys(d)))].sort();
+    const sumHead = [["Name","Init","Grade",...slotKeys2,"Total"]];
+    const sumBody = activeStaff.map(s=>{
+      const counts = {}; slotKeys2.forEach(k=>{counts[k]=0;});
+      Object.values(rota).forEach(day=>{ Object.entries(day).forEach(([k,v])=>{ if(v===s.init&&counts[k]!==undefined) counts[k]++; }); });
+      const total = Object.values(counts).reduce((a,b)=>a+b,0);
+      return [s.name,s.init,s.grade,...slotKeys2.map(k=>counts[k]||""),total];
+    });
+    doc.autoTable({startY:17,head:sumHead,body:sumBody,styles:{fontSize:7,cellPadding:1.3},headStyles:{fillColor:[16,185,129],textColor:255,fontStyle:"bold"},alternateRowStyles:{fillColor:[248,250,252]},margin:{left:10,right:10}});
+
+    // ── Section 3: Leave & requests ──
+    const leaveRows = [];
+    Object.entries(leave).forEach(([date,entries])=>{ (entries||[]).forEach(e=>{ const s=staff.find(x=>x.init===e.init); leaveRows.push([date,s?.name||e.init,e.init,e.type,e.note||""]); }); });
+    if(leaveRows.length>0){
+      doc.addPage();
+      doc.setFillColor(13,27,42); doc.rect(0,0,PAGE_W,14,`F`);
+      doc.setTextColor(255,255,255); doc.setFont("helvetica","bold"); doc.setFontSize(13);
+      doc.text("Leave Entries",10,10); doc.setTextColor(0,0,0);
+      doc.autoTable({startY:17,head:[["Date","Name","Init","Type","Note"]],body:leaveRows.sort((a,b)=>a[0].localeCompare(b[0])),styles:{fontSize:7.5,cellPadding:1.4},headStyles:{fillColor:[99,102,241],textColor:255,fontStyle:"bold"},alternateRowStyles:{fillColor:[248,250,252]},margin:{left:10,right:10}});
+    }
+
+    // ── Section 4: Requests ──
+    if(reqs.length>0){
+      const finalY = doc.lastAutoTable?.finalY||20;
+      const startY = finalY+12 < 180 ? finalY+12 : (()=>{doc.addPage();return 17;})();
+      doc.setFont("helvetica","bold"); doc.setFontSize(11); doc.text("Leave Requests",10,startY-4);
+      doc.autoTable({startY,head:[["Name","Type","From","To","Reason","Status"]],body:reqs.map(r=>[r.staffName||"",r.type||"",r.startDate||"",r.endDate||"",r.reason||"",r.status||""]),styles:{fontSize:7.5,cellPadding:1.4},headStyles:{fillColor:[245,158,11],textColor:255,fontStyle:"bold"},alternateRowStyles:{fillColor:[248,250,252]},margin:{left:10,right:10}});
+    }
+
+    doc.save(`RotaFlow-${yid}-${new Date().toISOString().slice(0,10)}.pdf`);
   };
 
   return (
