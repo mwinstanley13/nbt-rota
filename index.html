@@ -2494,7 +2494,10 @@ function StaffMgmt({staff,setStaff,addAudit,currentUser}) {
   const show=staff.filter(s=>s.role!=="admin");
   return (
     <div>
-      <div style={{display:"flex",gap:10,marginBottom:14}}><button className="btn bp" onClick={()=>{setForm({name:"",init:"",grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0,nightBlockPref:"any"});setModal("add");}}>＋ Add Staff</button></div>
+      <div style={{display:"flex",gap:10,marginBottom:14,flexWrap:"wrap"}}>
+        <button className="btn bp" onClick={()=>{setForm({name:"",init:"",grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0,nightBlockPref:"any"});setModal("add");}}>＋ Add Staff</button>
+        {show.length===0&&<button className="btn" style={{background:"#f0f9ff",color:"#0369a1",border:"1px solid #bae6fd"}} onClick={()=>{if(!confirm("Load all 32 default NBT staff? This will add them with password rota2026.")) return; const existing=staff.map(s=>s.init); const toAdd=INIT_STAFF.filter(s=>s.role==="staff"&&!existing.includes(s.init)); setStaff(p=>[...p,...toAdd]);}}>📋 Load Default Staff</button>}
+      </div>
       <div className="card">
         <table className="tbl">
           <thead><tr><th>Name</th><th>Init</th><th>Grade</th><th>Hrs</th><th>Status</th><th>Actions</th></tr></thead>
@@ -3626,7 +3629,8 @@ function App() {
   const [sbCollapsed,setSbCollapsed] = useState(false);
 
   // Global (shared across all years)
-  const [staff,setStaff]           = useState(()=>lsGet('rhs_staff',INIT_STAFF));
+  const ADMIN_ONLY = INIT_STAFF.filter(s=>s.role==="admin");
+  const [staff,setStaff]           = useState(()=>lsGet('rhs_staff',ADMIN_ONLY));
   const [wteConfig,setWteConfig]   = useState(()=>lsGet('rhs_wteConfig',INIT_WTE_CONFIG));
   const [auditLog,setAudit]        = useState(()=>lsGet('rhs_audit',[{id:1,ts:"2026-08-05 09:00",user:"ADM",action:"System Init",details:"RotaFlow 2026/27 initialised"}]));
   const [fixedDaysOff,setFixedDaysOff] = useState(()=>lsGet('rhs_fixedDaysOff',[]));
@@ -3771,12 +3775,13 @@ function App() {
 
   const resetToFresh = () => {
     if (!confirm("Reset to Fresh Start?\n\nThis will:\n• Remove ALL staff\n• Clear ALL rota, availability, leave, requests and corrections\n• Keep year/quarter structure and all config\n\nThis cannot be undone. Continue?")) return;
-    setStaff([]);
+    setStaff(ADMIN_ONLY);
     setRotaByYear({});
     setLeaveByYear({});
     setAvailByYear({});
     setQStatusByYear({});
     setReqsByYear({});
+    setSwapsByYear({});
     setNotesByYear({});
     setCorrsByYear({});
     setSHByYear({});
