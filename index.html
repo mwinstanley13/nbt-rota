@@ -39,7 +39,9 @@ firebase.initializeApp({
   appId:             "1:15820685494:web:40dd97972ab9ad7c23a617",
 });
 const db      = firebase.firestore();
-const appDoc  = () => db.collection("state").doc("app");
+const IS_DEMO = new URLSearchParams(window.location.search).has('demo');
+const LS_PFX  = IS_DEMO ? 'rhsd_' : 'rhs_';
+const appDoc  = () => db.collection("state").doc(IS_DEMO ? "demo" : "app");
 
 const { useState, useEffect, useMemo, Fragment } = React;
 
@@ -159,8 +161,8 @@ const INIT_GEN_RULES = {
 };
 
 // localStorage helpers — safe read/write with JSON (de)serialisation
-const lsGet = (key, fallback) => { try { const v=localStorage.getItem(key); return v!=null?JSON.parse(v):fallback; } catch{return fallback;} };
-const lsSave = (key, val) => { try { localStorage.setItem(key, JSON.stringify(val)); } catch{} };
+const lsGet = (key, fallback) => { try { const v=localStorage.getItem(LS_PFX+key); return v!=null?JSON.parse(v):fallback; } catch{return fallback;} };
+const lsSave = (key, val) => { try { localStorage.setItem(LS_PFX+key, JSON.stringify(val)); } catch{} };
 
 // Friendly calendar label for a slot object (used when filtering by person)
 const GRP_SHORT = {EARLY:"Early",MID:"Mid",LATE:"Late",WE_EARLY:"W/E Early",WE_LATE:"W/E Late",NIGHT1:"SDM Night 1",NIGHT2:"SDM Night 2",ST3_NIGHT:"ST3 Night",ACP_NIGHT:"ACP Night"};
@@ -669,8 +671,8 @@ const Modal = ({title,onClose,children,footer,lg}) => (
 // LOGIN
 // ═══════════════════════════════════════════════════════════════
 
-function Login({staff,onLogin,onDemoLogin}) {
-  const [u,setU]=useState(""); const [p,setP]=useState(""); const [err,setErr]=useState("");
+function Login({staff,onLogin}) {
+  const [u,setU]=useState(IS_DEMO?"ADM":""); const [p,setP]=useState(IS_DEMO?"demo2026":""); const [err,setErr]=useState("");
   const go=()=>{const uTrim=u.toLowerCase().trim(),pTrim=p.trim();const f=staff.find(s=>s.init.toLowerCase()===uTrim);const pw=f?.pw||(INIT_STAFF.find(s=>s.init.toLowerCase()===uTrim)?.pw);(f&&pw===pTrim)?onLogin(f):setErr("Invalid username or password.");};
   return (
     <div className="login-wrap">
@@ -680,11 +682,13 @@ function Login({staff,onLogin,onDemoLogin}) {
           <h1>RotaFlow</h1>
           <p>Emergency Medicine · North Bristol Trust</p>
         </div>
+        {IS_DEMO&&<div style={{background:"#fef9c3",border:"1px solid #fde68a",borderRadius:9,padding:"10px 14px",marginBottom:14,fontSize:12.5,color:"#92400e",textAlign:"center"}}>
+          <strong>Demo Environment</strong><br/>Use <strong>ADM</strong> / <strong>demo2026</strong> — or any staff initials with <strong>rota2026</strong>
+        </div>}
         {err&&<div className="login-err">⚠️ {err}</div>}
         <div className="fg"><label className="fl">Initials</label><input className="fi" placeholder="e.g. MC" value={u} onChange={e=>setU(e.target.value)} onKeyDown={e=>e.key==="Enter"&&go()} autoFocus/></div>
         <div className="fg" style={{marginBottom:18}}><label className="fl">Password</label><input type="password" className="fi" placeholder="••••••••" value={p} onChange={e=>setP(e.target.value)} onKeyDown={e=>e.key==="Enter"&&go()}/></div>
-        <button className="btn bp" style={{width:"100%",justifyContent:"center",padding:"12px",fontSize:15,borderRadius:10}} onClick={go}>Sign In →</button>
-        {onDemoLogin&&<><div className="login-divider">or</div><button className="login-demo-btn" onClick={onDemoLogin}>🔍 Explore Demo</button></>}
+        <button className="btn bp" style={{width:"100%",justifyContent:"center",padding:"12px",fontSize:15,borderRadius:10}} onClick={go}>{IS_DEMO?"Enter Demo →":"Sign In →"}</button>
       </div>
     </div>
   );
@@ -719,7 +723,7 @@ function Sidebar({user,view,setView,onLogout,pendingCount,hasOpenQ,isOpen,onClos
       <button className="sb-col-btn" onClick={onToggleCollapse} title={collapsed?"Expand menu":"Collapse menu"}>
         {collapsed?"▶":"◀"}
       </button>
-      <div className="sb-logo"><h1><span><img src="icons/icon-192.png" alt="RF" style={{width:24,height:24,borderRadius:5,verticalAlign:"middle"}} /></span>{!collapsed&&<span style={{marginLeft:6}}>RotaFlow</span>}</h1>{!collapsed&&<p>Rota Year 2026 / 2027</p>}</div>
+      <div className="sb-logo"><h1><span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:30,height:30,borderRadius:8,background:"linear-gradient(135deg,#3b82f6 0%,#1d4ed8 100%)",color:"white",fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:11,letterSpacing:".5px",flexShrink:0}}>RF</span>{!collapsed&&<span style={{marginLeft:8}}>RotaFlow</span>}</h1>{!collapsed&&<p>Rota Year 2026 / 2027</p>}</div>
       <div className="sb-sec">
         {!collapsed&&<div className="sb-lbl">Menu</div>}
         {items.map(n=>(
@@ -3640,30 +3644,30 @@ function App() {
 
   // Global (shared across all years)
   const ADMIN_ONLY = INIT_STAFF.filter(s=>s.role==="admin");
-  const [staff,setStaff]           = useState(()=>lsGet('rhs_staff',ADMIN_ONLY));
-  const [wteConfig,setWteConfig]   = useState(()=>lsGet('rhs_wteConfig',INIT_WTE_CONFIG));
-  const [auditLog,setAudit]        = useState(()=>lsGet('rhs_audit',[{id:1,ts:"2026-08-05 09:00",user:"ADM",action:"System Init",details:"RotaFlow 2026/27 initialised"}]));
-  const [fixedDaysOff,setFixedDaysOff] = useState(()=>lsGet('rhs_fixedDaysOff',[]));
-  const [genRules,setGenRules]             = useState(()=>lsGet('rhs_genRules',INIT_GEN_RULES));
-  const [shiftTimes,setShiftTimes]         = useState(()=>lsGet('rhs_shiftTimes',DEFAULT_SHIFT_TIMES));
-  const [staffShiftTimes,setSST]           = useState(()=>lsGet('rhs_staffShiftTimes',{}));
-  const [trainingDays,setTrainingDays]     = useState(()=>lsGet('rhs_trainingDays',[])); // [{id,date,type:"SpR"|"ACP",note}]
-  const [demoMode,setDemoMode]             = useState(()=>lsGet('rhs_demoMode',false));
+  const [staff,setStaff]           = useState(()=>lsGet('staff',ADMIN_ONLY));
+  const [wteConfig,setWteConfig]   = useState(()=>lsGet('wteConfig',INIT_WTE_CONFIG));
+  const [auditLog,setAudit]        = useState(()=>lsGet('audit',[{id:1,ts:"2026-08-05 09:00",user:"ADM",action:"System Init",details:"RotaFlow 2026/27 initialised"}]));
+  const [fixedDaysOff,setFixedDaysOff] = useState(()=>lsGet('fixedDaysOff',[]));
+  const [genRules,setGenRules]             = useState(()=>lsGet('genRules',INIT_GEN_RULES));
+  const [shiftTimes,setShiftTimes]         = useState(()=>lsGet('shiftTimes',DEFAULT_SHIFT_TIMES));
+  const [staffShiftTimes,setSST]           = useState(()=>lsGet('staffShiftTimes',{}));
+  const [trainingDays,setTrainingDays]     = useState(()=>lsGet('trainingDays',[])); // [{id,date,type:"SpR"|"ACP",note}]
+  const [demoMode,setDemoMode]             = useState(()=>lsGet('demoMode',false));
 
   // Year management
-  const [years,setYears]           = useState(()=>lsGet('rhs_years',[{id:"2026-27",label:"2026/27",quarters:QUARTERS,active:true,archived:false}]));
-  const [activeYearId,setActiveYearId] = useState(()=>lsGet('rhs_activeYearId',"2026-27"));
+  const [years,setYears]           = useState(()=>lsGet('years',[{id:"2026-27",label:"2026/27",quarters:QUARTERS,active:true,archived:false}]));
+  const [activeYearId,setActiveYearId] = useState(()=>lsGet('activeYearId',"2026-27"));
 
   // Per-year data (keyed by year id)
-  const [rotaByYear,setRotaByYear]         = useState(()=>lsGet('rhs_rotaByYear',{}));
-  const [leaveByYear,setLeaveByYear]       = useState(()=>lsGet('rhs_leaveByYear',{}));
-  const [availByYear,setAvailByYear]       = useState(()=>lsGet('rhs_availByYear',{}));
-  const [qStatusByYear,setQStatusByYear]   = useState(()=>lsGet('rhs_qstatusByYear',{}));
-  const [requestsByYear,setReqsByYear]     = useState(()=>lsGet('rhs_requestsByYear',{}));
-  const [notesByYear,setNotesByYear]       = useState(()=>lsGet('rhs_notesByYear',{}));
-  const [corrsByYear,setCorrsByYear]       = useState(()=>lsGet('rhs_corrsByYear',{}));
-  const [staffHoursByYear,setSHByYear]     = useState(()=>lsGet('rhs_staffHoursByYear',{}));
-  const [swapsByYear,setSwapsByYear]       = useState(()=>lsGet('rhs_swapsByYear',{}));
+  const [rotaByYear,setRotaByYear]         = useState(()=>lsGet('rotaByYear',{}));
+  const [leaveByYear,setLeaveByYear]       = useState(()=>lsGet('leaveByYear',{}));
+  const [availByYear,setAvailByYear]       = useState(()=>lsGet('availByYear',{}));
+  const [qStatusByYear,setQStatusByYear]   = useState(()=>lsGet('qstatusByYear',{}));
+  const [requestsByYear,setReqsByYear]     = useState(()=>lsGet('requestsByYear',{}));
+  const [notesByYear,setNotesByYear]       = useState(()=>lsGet('notesByYear',{}));
+  const [corrsByYear,setCorrsByYear]       = useState(()=>lsGet('corrsByYear',{}));
+  const [staffHoursByYear,setSHByYear]     = useState(()=>lsGet('staffHoursByYear',{}));
+  const [swapsByYear,setSwapsByYear]       = useState(()=>lsGet('swapsByYear',{}));
 
   // Active-year flat accessors (derived from above)
   const activeYearQuarters = useMemo(()=>(years.find(y=>y.id===activeYearId)||years[0])?.quarters||QUARTERS,[years,activeYearId]);
@@ -3703,10 +3707,18 @@ function App() {
       if (firebaseUser) {
         // Authenticated — connect to Firestore
         unsubFirestore = appDoc().onSnapshot(snap => {
+          if (!snap.exists && IS_DEMO) {
+            // Demo doc doesn't exist yet — seed it with all staff + demo availability
+            const demoStaff = INIT_STAFF.map(s=>({...s,pw:s.role==='admin'?'demo2026':'rota2026'}));
+            const demoAvail = generateDemoAvailability(demoStaff,[...QUARTERS]);
+            const seed={staff:demoStaff,auditLog:[],wteConfig:INIT_WTE_CONFIG,years:[{id:"2026-27",label:"2026/27",quarters:QUARTERS,active:true,archived:false}],activeYearId:"2026-27",rotaByYear:{},leaveByYear:{},availByYear:{"2026-27":demoAvail},qStatusByYear:{"2026-27":{Q1:"open",Q2:"closed",Q3:"closed",Q4:"closed"}},requestsByYear:{},notesByYear:{},corrsByYear:{},staffHoursByYear:{},swapsByYear:{},fixedDaysOff:[],genRules:INIT_GEN_RULES,shiftTimes:DEFAULT_SHIFT_TIMES,staffShiftTimes:{},trainingDays:[],demoMode:true};
+            appDoc().set(seed).catch(console.error);
+            setFsReady(true); return;
+          }
           if (snap.exists) {
             const d = snap.data();
             // Migration: if old flat data exists but no year-namespaced data, migrate to "2026-27"
-            const patchStaffPw = arr => Array.isArray(arr) ? arr.map(s=>({...s,pw:s.pw||(INIT_STAFF.find(i=>i.init===s.init)?.pw)||'rota2026'})) : arr;
+            const patchStaffPw = arr => Array.isArray(arr) ? arr.map(s=>{if(s.pw) return s; const def=INIT_STAFF.find(i=>i.init===s.init); return {...s,pw:def?.pw||(s.role==='admin'?'admin2026':'rota2026')};}) : arr;
             if (d.rota && !d.rotaByYear) {
               const yid = "2026-27";
               upd(setStaff)(patchStaffPw(d.staff));
@@ -3764,7 +3776,7 @@ function App() {
     if (!fsReady) return;
     const payload = {staff,auditLog,wteConfig,years,activeYearId,rotaByYear,leaveByYear:leaveByYear,availByYear,qStatusByYear,requestsByYear,notesByYear,corrsByYear,staffHoursByYear,swapsByYear,fixedDaysOff,genRules,shiftTimes,staffShiftTimes,trainingDays,demoMode};
     appDoc().set(payload).catch(console.error);
-    Object.entries({rhs_staff:staff,rhs_audit:auditLog,rhs_wteConfig:wteConfig,rhs_years:years,rhs_activeYearId:activeYearId,rhs_rotaByYear:rotaByYear,rhs_leaveByYear:leaveByYear,rhs_availByYear:availByYear,rhs_qstatusByYear:qStatusByYear,rhs_requestsByYear:requestsByYear,rhs_notesByYear:notesByYear,rhs_corrsByYear:corrsByYear,rhs_staffHoursByYear:staffHoursByYear,rhs_swapsByYear:swapsByYear,rhs_fixedDaysOff:fixedDaysOff,rhs_genRules:genRules,rhs_shiftTimes:shiftTimes,rhs_staffShiftTimes:staffShiftTimes,rhs_trainingDays:trainingDays,rhs_demoMode:demoMode})
+    Object.entries({staff:staff,audit:auditLog,wteConfig:wteConfig,years:years,activeYearId:activeYearId,rotaByYear:rotaByYear,leaveByYear:leaveByYear,availByYear:availByYear,qstatusByYear:qStatusByYear,requestsByYear:requestsByYear,notesByYear:notesByYear,corrsByYear:corrsByYear,staffHoursByYear:staffHoursByYear,swapsByYear:swapsByYear,fixedDaysOff:fixedDaysOff,genRules:genRules,shiftTimes:shiftTimes,staffShiftTimes:staffShiftTimes,trainingDays:trainingDays,demoMode:demoMode})
       .forEach(([k,v])=>lsSave(k,v));
   },[fsReady,staff,auditLog,wteConfig,years,activeYearId,rotaByYear,leaveByYear,availByYear,qStatusByYear,requestsByYear,notesByYear,corrsByYear,staffHoursByYear,swapsByYear,fixedDaysOff,genRules,shiftTimes,staffShiftTimes,trainingDays,demoMode]);
 
@@ -3785,6 +3797,8 @@ function App() {
 
   const resetToFresh = () => {
     if (!confirm("Reset to Fresh Start?\n\nThis will:\n• Remove ALL staff\n• Clear ALL rota, availability, leave, requests and corrections\n• Keep year/quarter structure and all config\n\nThis cannot be undone. Continue?")) return;
+    const freshPayload = {staff:ADMIN_ONLY,auditLog:[],wteConfig,years,activeYearId,rotaByYear:{},leaveByYear:{},availByYear:{},qStatusByYear:{},requestsByYear:{},notesByYear:{},corrsByYear:{},staffHoursByYear:{},swapsByYear:{},fixedDaysOff:[],genRules,shiftTimes,staffShiftTimes,trainingDays,demoMode:false};
+    appDoc().set(freshPayload).catch(console.error);
     setStaff(ADMIN_ONLY);
     setRotaByYear({});
     setLeaveByYear({});
@@ -3832,8 +3846,7 @@ function App() {
     </>
   );
 
-  const handleDemoLogin=()=>{const base=INIT_STAFF;setStaff(base);const da=generateDemoAvailability(base,activeYearQuarters);setAvail(da);setDemoMode(true);addAudit("ADM","Demo Mode","Demo login via explore button");setUser(INIT_STAFF.find(s=>s.role==="admin"));};
-  if(!user) return <><style>{CSS}</style><Login staff={staff} onLogin={setUser} onDemoLogin={handleDemoLogin}/></>;
+  if(!user) return <><style>{CSS}</style><Login staff={staff} onLogin={setUser}/></>;
 
   return (
     <>
