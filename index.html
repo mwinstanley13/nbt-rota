@@ -2764,112 +2764,153 @@ function FixedDaysView({fixedDaysOff,setFixedDaysOff,staff,addAudit,currentUser}
 // REPORTS
 // ═══════════════════════════════════════════════════════════════
 
-function Reports({user,staff,rota,leaveEntries}) {
+function Reports({user,staff,rota,leaveEntries,requests,quarters}) {
   const isAdmin=user.role==="admin";
+  const qs=quarters||QUARTERS;
   const target=isAdmin?staff.filter(s=>s.role==="staff"&&s.active):staff.filter(s=>s.init===user.init);
 
-  // ISO-week key (Monday-anchored) for grouping weekend units
+  // Quarter selector — default to the current/most recent quarter
+  const todayStr=fmtISO(new Date());
+  const defaultQ=(qs.find(q=>todayStr>=q.start&&todayStr<=q.end)||qs[qs.length-1])?.id||"Q1";
+  const [selQ,setSelQ]=useState(defaultQ);
+  const selQDef=qs.find(q=>q.id===selQ)||qs[0];
+
+  const earlySlots=["E1","E2","E3","E4","WE1","WE2","WE3"];
+  const midSlots  =["M1","M2","M3"];
+  const lateSlots =["L1","L2","L3","L4","WL1","WL2"];
+  const nightSlots=["N1","N2","SN","AN"];
   const weekKey=d=>{const dt=new Date(d);const mon=new Date(dt);mon.setDate(dt.getDate()-((dt.getDay()+6)%7));return mon.toISOString().slice(0,10);};
 
-  const stats=useMemo(()=>target.map(s=>{
-    const mySlots=Object.entries(rota).flatMap(([d,slots])=>Object.entries(slots).filter(([,v])=>v===s.init).map(([sk])=>({d,sk})));
-    const myLeave=Object.entries(leaveEntries).flatMap(([d,es])=>es.filter(e=>e.init===s.init).map(e=>({d,type:e.type})));
-
-    const total=mySlots.length;
-    const nights=mySlots.filter(x=>["N1","N2","SN","AN"].includes(x.sk)).length;
-
-    // Weekends worked: unique ISO weeks where person worked Fri-night, Sat any, or Sun any
-    const weWeeks=new Set();
-    mySlots.forEach(({d,sk})=>{
-      const day=new Date(d).getDay(); // 0=Sun,1=Mon...5=Fri,6=Sat
-      const isFriNight=day===5&&["N1","N2","SN","AN"].includes(sk);
-      const isSat=day===6;
-      const isSun=day===0;
-      if(isFriNight||isSat||isSun) weWeeks.add(weekKey(d));
+  // Build full SL date set for a staff member: leaveEntries + approved requests (expanded)
+  const getSLDates=(init,filterFn)=>{
+    const dates=new Set();
+    // From leaveEntries
+    Object.entries(leaveEntries).forEach(([d,es])=>{
+      if(!filterFn||filterFn(d)) es.filter(e=>e.init===init&&e.type==="SL").forEach(()=>dates.add(d));
     });
-    const weWorked=weWeeks.size;
-
-    // Shift type breakdowns (early/mid/late across week and weekend)
-    const earlySlots=["E1","E2","E3","E4","WE1","WE2","WE3"];
-    const midSlots  =["M1","M2","M3"];
-    const lateSlots =["L1","L2","L3","L4","WL1","WL2"];
-    const earlies=mySlots.filter(x=>earlySlots.includes(x.sk)).length;
-    const mids   =mySlots.filter(x=>midSlots.includes(x.sk)).length;
-    const lates  =mySlots.filter(x=>lateSlots.includes(x.sk)).length;
-
-    const pct=(n)=>total>0?Math.round((n/total)*100):0;
-
-    // Leave taken (unique dates to avoid double-counting auto entries)
-    const slDates  =new Set(myLeave.filter(x=>x.type==="SL").map(x=>x.d));
-    const milDates =new Set(myLeave.filter(x=>x.type==="MILITARY").map(x=>x.d));
-
-    return{
-      ...s, total, nights, weWorked,
-      earlies,mids,lates,
-      pctEarly:pct(earlies), pctMid:pct(mids), pctLate:pct(lates),
-      slTaken:slDates.size,   slEntitlement:s.slDays??30,
-      milTaken:milDates.size, milEntitlement:s.militaryDays??0,
-    };
-  }),[target,rota,leaveEntries]);
-
-  const thStyle={background:"#f8fafc",fontWeight:700,fontSize:11,color:"#475569",padding:"8px 10px",textAlign:"center",borderBottom:"2px solid #e2e8f0",whiteSpace:"nowrap"};
-  const tdStyle={padding:"7px 10px",textAlign:"center",fontSize:12.5,borderBottom:"1px solid #f1f5f9"};
-  const pctCell=(pct)=>{
-    const bg=pct>=30?"#eff6ff":pct>=20?"#f0fdf4":"#fafafa";
-    const fg=pct>=30?"#1d4ed8":pct>=20?"#15803d":"#64748b";
-    return <span style={{padding:"2px 7px",borderRadius:4,background:bg,color:fg,fontWeight:700,fontSize:11}}>{pct}%</span>;
+    // From approved requests (expand date range)
+    (requests||[]).filter(r=>(r.staffInitials===init||r.init===init)&&r.type==="SL"&&r.status==="approved").forEach(r=>{
+      const ds=getDatesInRange(r.startDate,r.endDate);
+      ds.forEach(d=>{if(!filterFn||filterFn(d))dates.add(d);});
+    });
+    return dates;
+  };
+  const getMilDates=(init,filterFn)=>{
+    const dates=new Set();
+    Object.entries(leaveEntries).forEach(([d,es])=>{
+      if(!filterFn||filterFn(d)) es.filter(e=>e.init===init&&e.type==="MILITARY").forEach(()=>dates.add(d));
+    });
+    (requests||[]).filter(r=>(r.staffInitials===init||r.init===init)&&r.type==="MILITARY"&&r.status==="approved").forEach(r=>{
+      const ds=getDatesInRange(r.startDate,r.endDate);
+      ds.forEach(d=>{if(!filterFn||filterFn(d))dates.add(d);});
+    });
+    return dates;
   };
 
+  const calcStats=(init,dateFn)=>{
+    const mySlots=Object.entries(rota).filter(([d])=>!dateFn||dateFn(d)).flatMap(([d,slots])=>Object.entries(slots).filter(([,v])=>v===init).map(([sk])=>({d,sk})));
+    const total=mySlots.length;
+    const nights=mySlots.filter(x=>nightSlots.includes(x.sk)).length;
+    const weWeeks=new Set();
+    mySlots.forEach(({d,sk})=>{const day=new Date(d).getDay();if(day===6||day===0||(day===5&&nightSlots.includes(sk)))weWeeks.add(weekKey(d));});
+    return{total,nights,weWorked:weWeeks.size,earlies:mySlots.filter(x=>earlySlots.includes(x.sk)).length,mids:mySlots.filter(x=>midSlots.includes(x.sk)).length,lates:mySlots.filter(x=>lateSlots.includes(x.sk)).length};
+  };
+
+  const qFilter=d=>selQDef&&d>=selQDef.start&&d<=selQDef.end;
+
+  const stats=useMemo(()=>target.map(s=>{
+    const yr=calcStats(s.init,null);
+    const q=calcStats(s.init,qFilter);
+    const slYr=getSLDates(s.init,null).size;
+    const slQ=getSLDates(s.init,qFilter).size;
+    const milYr=getMilDates(s.init,null).size;
+    const milQ=getMilDates(s.init,qFilter).size;
+    return{...s,yr,q,slYr,slQ,milYr,milQ,slEntitlement:s.slDays??30,milEntitlement:s.militaryDays??0};
+  }),[target,rota,leaveEntries,requests,selQ]);
+
+  const th=(label,sub)=>(
+    <th style={{background:"#f8fafc",fontWeight:700,fontSize:10.5,color:"#475569",padding:"7px 8px",textAlign:"center",borderBottom:"2px solid #e2e8f0",whiteSpace:"nowrap",borderLeft:"1px solid #e2e8f0"}}>
+      {label}{sub&&<div style={{fontSize:9,fontWeight:500,color:"#94a3b8",marginTop:1}}>{sub}</div>}
+    </th>
+  );
+  const QYCell=({q,yr,bold,bg,fg})=>(
+    <td style={{padding:"6px 8px",textAlign:"center",borderBottom:"1px solid #f1f5f9",borderLeft:"1px solid #f4f6fb"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4}}>
+        <span style={{fontWeight:700,fontSize:12.5,color:bold?"#0f172a":fg||"#374151",background:bg,padding:bg?"1px 6px":"0",borderRadius:bg?4:0}}>{q}</span>
+        <span style={{color:"#cbd5e1",fontSize:10}}>/</span>
+        <span style={{fontSize:11,color:"#64748b"}}>{yr}</span>
+      </div>
+    </td>
+  );
+
   return (
-    <div className="card">
-      <div className="ch"><span className="ct">Shift Summary</span><span style={{fontSize:11,color:"#94a3b8",marginLeft:8}}>All assigned shifts in this year's rota</span></div>
-      <div style={{overflowX:"auto"}}>
-        <table className="tbl" style={{minWidth:760}}>
-          <thead>
-            <tr>
-              <th style={{...thStyle,textAlign:"left"}}>Staff</th>
-              <th style={thStyle}>Grade</th>
-              <th style={thStyle}>Total Shifts</th>
-              <th style={thStyle}>W/E Worked</th>
-              <th style={thStyle}>Nights</th>
-              <th style={thStyle}>% Early</th>
-              <th style={thStyle}>% Mid</th>
-              <th style={thStyle}>% Late</th>
-              <th style={thStyle}>SL Taken</th>
-              <th style={thStyle}>Military</th>
-            </tr>
-          </thead>
-          <tbody>{stats.map(s=>(
-            <tr key={s.id} style={{transition:"background .1s"}} onMouseEnter={e=>e.currentTarget.style.background="#f8fafc"} onMouseLeave={e=>e.currentTarget.style.background=""}>
-              <td style={{...tdStyle,textAlign:"left",fontWeight:600}}>{s.name}</td>
-              <td style={tdStyle}><span style={{padding:"2px 7px",borderRadius:4,background:"#f1f5f9",color:"#475569",fontSize:11,fontWeight:600}}>{s.grade}</span></td>
-              <td style={{...tdStyle,fontWeight:700,color:"#0f172a"}}>{s.total}</td>
-              <td style={tdStyle}>{s.weWorked}</td>
-              <td style={tdStyle}>
-                <span style={{padding:"2px 7px",borderRadius:4,background:"#ede9fe",color:"#4c1d95",fontWeight:700,fontSize:11}}>{s.nights}</span>
-              </td>
-              <td style={tdStyle}>{pctCell(s.pctEarly)}</td>
-              <td style={tdStyle}>{pctCell(s.pctMid)}</td>
-              <td style={tdStyle}>{pctCell(s.pctLate)}</td>
-              <td style={tdStyle}>
-                <span style={{padding:"2px 7px",borderRadius:4,fontWeight:700,fontSize:11,
-                  background:s.slTaken>s.slEntitlement?"#fee2e2":s.slTaken===s.slEntitlement?"#fef9c3":"#f1f5f9",
-                  color:s.slTaken>s.slEntitlement?"#7f1d1d":s.slTaken===s.slEntitlement?"#713f12":"#334155"}}>
-                  {s.slTaken}/{s.slEntitlement}
-                </span>
-              </td>
-              <td style={tdStyle}>
-                {s.milEntitlement>0
-                  ? <span style={{padding:"2px 7px",borderRadius:4,fontWeight:700,fontSize:11,
-                      background:s.milTaken>s.milEntitlement?"#fee2e2":"#f0fdf4",
-                      color:s.milTaken>s.milEntitlement?"#7f1d1d":"#166534"}}>
-                      {s.milTaken}/{s.milEntitlement}
-                    </span>
-                  : <span style={{fontSize:11,color:"#cbd5e1"}}>—</span>}
-              </td>
-            </tr>
-          ))}</tbody>
-        </table>
+    <div>
+      <div className="card">
+        <div className="ch">
+          <span className="ct">Shift & Leave Summary</span>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <span style={{fontSize:11,color:"#94a3b8"}}>Quarter:</span>
+            <div className="mtog">
+              {qs.map(q=>(
+                <button key={q.id} className={`mtog-btn${selQ===q.id?" act":""}`} onClick={()=>setSelQ(q.id)}>{q.id}</button>
+              ))}
+            </div>
+            <span style={{fontSize:10,color:"#94a3b8",marginLeft:4}}>Showing <strong>{selQ}</strong> / Year — each cell is <strong>Q / Year</strong></span>
+          </div>
+        </div>
+        <div style={{overflowX:"auto"}}>
+          <table className="tbl" style={{minWidth:820}}>
+            <thead>
+              <tr>
+                <th style={{background:"#f8fafc",fontWeight:700,fontSize:10.5,color:"#475569",padding:"7px 10px",textAlign:"left",borderBottom:"2px solid #e2e8f0",whiteSpace:"nowrap"}}>Staff</th>
+                <th style={{background:"#f8fafc",fontWeight:700,fontSize:10.5,color:"#475569",padding:"7px 8px",textAlign:"center",borderBottom:"2px solid #e2e8f0",whiteSpace:"nowrap"}}>Grade</th>
+                {th("Total","shifts")}
+                {th("W/E","wknds")}
+                {th("Nights","")}
+                {th("Earlies","")}
+                {th("Mids","")}
+                {th("Lates","")}
+                {th("SL Days","")}
+                {th("Military","")}
+              </tr>
+            </thead>
+            <tbody>{stats.map(s=>(
+              <tr key={s.id} onMouseEnter={e=>e.currentTarget.style.background="#f8fafc"} onMouseLeave={e=>e.currentTarget.style.background=""}>
+                <td style={{padding:"6px 10px",fontWeight:600,fontSize:12.5,borderBottom:"1px solid #f1f5f9"}}>{s.name}</td>
+                <td style={{padding:"6px 8px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}>
+                  <span style={{padding:"2px 6px",borderRadius:4,background:"#f1f5f9",color:"#475569",fontSize:10.5,fontWeight:600}}>{s.grade}</span>
+                </td>
+                <QYCell q={s.q.total} yr={s.yr.total} bold/>
+                <QYCell q={s.q.weWorked} yr={s.yr.weWorked}/>
+                <QYCell q={s.q.nights}   yr={s.yr.nights}   bg="#ede9fe" fg="#4c1d95"/>
+                <QYCell q={s.q.earlies}  yr={s.yr.earlies}  bg="#dcfce7" fg="#14532d"/>
+                <QYCell q={s.q.mids}     yr={s.yr.mids}     bg="#dbeafe" fg="#1e3a8a"/>
+                <QYCell q={s.q.lates}    yr={s.yr.lates}    bg="#fef3c7" fg="#78350f"/>
+                <td style={{padding:"6px 8px",textAlign:"center",borderBottom:"1px solid #f1f5f9",borderLeft:"1px solid #f4f6fb"}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4}}>
+                    <span style={{fontWeight:700,fontSize:12,padding:"1px 6px",borderRadius:4,
+                      background:s.slQ>0?"#fef3c7":"#f1f5f9",
+                      color:s.slQ>0?"#92400e":"#64748b"}}>{s.slQ}</span>
+                    <span style={{color:"#cbd5e1",fontSize:10}}>/</span>
+                    <span style={{fontSize:11,color:"#64748b"}}>{s.slYr}</span>
+                  </div>
+                </td>
+                <td style={{padding:"6px 8px",textAlign:"center",borderBottom:"1px solid #f1f5f9",borderLeft:"1px solid #f4f6fb"}}>
+                  {s.milEntitlement>0
+                    ?<div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4}}>
+                        <span style={{fontWeight:700,fontSize:12,padding:"1px 6px",borderRadius:4,background:"#f0fdf4",color:"#166534"}}>{s.milQ}</span>
+                        <span style={{color:"#cbd5e1",fontSize:10}}>/</span>
+                        <span style={{fontSize:11,color:"#64748b"}}>{s.milYr}</span>
+                      </div>
+                    :<span style={{fontSize:11,color:"#cbd5e1"}}>—</span>}
+                </td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+        <div style={{padding:"8px 18px",borderTop:"1px solid #f1f5f9",fontSize:10.5,color:"#94a3b8"}}>
+          Each cell shows <strong style={{color:"#374151"}}>{selQ} count</strong> / <strong style={{color:"#374151"}}>Year total</strong> · SL includes approved requests + leave entries
+        </div>
       </div>
     </div>
   );
@@ -4233,7 +4274,7 @@ function App() {
             {view==="requests"   &&<RequestsView user={user} requests={requests} setRequests={setReqs} addAudit={addAudit} swaps={swaps} setSwaps={setSwaps} rota={rota} setRota={setRota} staff={staff}/>}
             {view==="builder"    &&isAdmin&&<RotaBuilder rota={rota} setRota={setRota} leaveEntries={leaveEntries} setLeaveEntries={setLE} staff={staff} dayNotes={dayNotes} setDayNotes={setNotes} availability={availability} addAudit={addAudit} currentUser={user} wteConfig={wteConfig} staffHours={staffHours} hoursCorrections={hoursCorrections} setHoursCorrections={setHoursCorrections}/>}
             {view==="staff"      &&isAdmin&&<StaffMgmt staff={staff} setStaff={setStaff} addAudit={addAudit} currentUser={user}/>}
-            {view==="reports"    &&<Reports user={user} staff={staff} rota={rota} leaveEntries={leaveEntries}/>}
+            {view==="reports"    &&<Reports user={user} staff={staff} rota={rota} leaveEntries={leaveEntries} requests={requests} quarters={activeYearQuarters}/>}
             {view==="fixeddays"  &&isAdmin&&<FixedDaysView fixedDaysOff={fixedDaysOff} setFixedDaysOff={setFixedDaysOff} staff={staff} addAudit={addAudit} currentUser={user}/>}
             {view==="rotaconfig" &&isAdmin&&<RotaConfig wteConfig={wteConfig} setWteConfig={setWteConfig} staffHours={staffHours} setStaffHours={setStaffHours} staff={staff} addAudit={addAudit} shiftTimes={shiftTimes} setShiftTimes={setShiftTimes} staffShiftTimes={staffShiftTimes} setStaffShiftTimes={setSST} trainingDays={trainingDays} setTrainingDays={setTrainingDays}/>}
 {view==="airota"     &&isAdmin&&<AIRotaView user={user} staff={staff} rota={rota} setRota={setRota} availability={availability} leaveEntries={leaveEntries} quarterStatus={quarterStatus} wteConfig={wteConfig} staffHours={staffHours} genRules={genRules} setGenRules={setGenRules} shiftTimes={shiftTimes} addAudit={addAudit} quarters={activeYearQuarters} activeYearId={activeYearId}/>}
