@@ -15,6 +15,7 @@
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
@@ -3273,6 +3274,7 @@ function HoursAdjustView({staff,hoursCorrections,setHoursCorrections,addAudit,cu
 
 function YearSetupView({years,setYears,activeYearId,setActiveYearId,staff,
   rotaByYear,leaveByYear,availByYear,qStatusByYear,requestsByYear,notesByYear,corrsByYear,staffHoursByYear,
+  swapsByYear,fixedDaysOff,wteConfig,
   setQStatusByYear,addAudit,currentUser}) {
 
   const addWeeks = (dateStr, weeks) => {
@@ -3327,72 +3329,160 @@ function YearSetupView({years,setYears,activeYearId,setActiveYearId,staff,
   };
 
   const downloadYear = (yid) => {
-    const {jsPDF} = window.jspdf;
-    const doc = new jsPDF({orientation:"landscape",unit:"mm",format:"a4"});
-    const yr = years.find(y=>y.id===yid);
-    const rota = rotaByYear[yid]||{};
-    const leave = leaveByYear[yid]||{};
-    const reqs = (requestsByYear[yid]||[]);
-    const activeStaff = staff.filter(s=>s.role==="staff"&&s.active).sort((a,b)=>a.name.localeCompare(b.name));
+    const XLSX = window.XLSX;
+    if (!XLSX) { alert("Excel library not loaded yet — please wait a moment and try again."); return; }
+
+    const yr       = years.find(y=>y.id===yid);
+    const rota     = rotaByYear[yid]||{};
+    const leave    = leaveByYear[yid]||{};
+    const avail    = availByYear[yid]||{};
+    const qStatus  = qStatusByYear[yid]||{};
+    const reqs     = requestsByYear[yid]||[];
+    const swaps    = swapsByYear?.[yid]||[];
+    const qs       = yr?.quarters||QUARTERS;
     const allDates = Object.keys(rota).sort();
-    const PAGE_W = 277;
+    const activeStaff = staff.filter(s=>s.role==="staff"&&s.active).sort((a,b)=>a.name.localeCompare(b.name));
+    const allStaff    = staff.filter(s=>s.role==="staff").sort((a,b)=>a.name.localeCompare(b.name));
+    const wte         = wteConfig||INIT_WTE_CONFIG;
+    const sHours      = staffHoursByYear?.[yid]||{};
+    const genDate     = new Date().toLocaleDateString("en-GB");
+    const wb = XLSX.utils.book_new();
+    const addSheet = (name,rows) => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), name);
 
-    // ── Title page header ──
-    doc.setFillColor(13,27,42); doc.rect(0,0,PAGE_W,22,`F`);
-    doc.setTextColor(255,255,255); doc.setFont("helvetica","bold"); doc.setFontSize(16);
-    doc.text("RotaFlow — Rota Export",10,14);
-    doc.setFontSize(9); doc.setFont("helvetica","normal");
-    doc.text(`Year: ${yr?.label||yid}   |   Generated: ${new Date().toLocaleDateString("en-GB")}   |   Staff: ${activeStaff.length}   |   Dates: ${allDates.length}`,10,20);
-    doc.setTextColor(0,0,0);
+    // helpers
+    const dow = d => new Date(d+"T00:00:00").toLocaleDateString("en-GB",{weekday:"short"});
+    const GRP = {EARLY:"Early",MID:"Mid",LATE:"Late",WE_EARLY:"W/E Early",WE_LATE:"W/E Late",NIGHT1:"Night 1",NIGHT2:"Night 2",ST3_NIGHT:"Night ST3",ACP_NIGHT:"Night ACP"};
+    const cellForStaff = (init,date) => {
+      const sk = Object.entries(rota[date]||{}).find(([,v])=>v===init)?.[0];
+      if(sk){const sl=SLOTS.find(x=>x.key===sk);return GRP[sl?.grp]||sk;}
+      const lv=(leave[date]||[]).find(e=>e.init===init);
+      return lv ? (LEAVE_T[lv.type]?.abbr||lv.type) : "";
+    };
+    const usedSlots = SLOTS.filter(sl=>allDates.some(d=>rota[d]?.[sl.key]));
 
-    // ── Section 1: Shift assignments ──
-    if(allDates.length>0){
-      doc.setFont("helvetica","bold"); doc.setFontSize(11); doc.text("Shift Assignments",10,30);
-      const slotKeys = [...new Set(Object.values(rota).flatMap(d=>Object.keys(d)))].sort();
-      const head = [["Date","Day",...slotKeys]];
-      const body = allDates.map(d=>{
-        const day = new Date(d).toLocaleDateString("en-GB",{weekday:"short"});
-        const slots = rota[d]||{};
-        return [d,day,...slotKeys.map(k=>slots[k]||"")];
-      });
-      doc.autoTable({startY:33,head,body,styles:{fontSize:6.5,cellPadding:1.2},headStyles:{fillColor:[13,27,42],textColor:255,fontStyle:"bold"},alternateRowStyles:{fillColor:[248,250,252]},margin:{left:10,right:10}});
-    }
+    // ── 1. Rota (slot columns) ──────────────────────────────────────
+    addSheet("Rota",[
+      [`RotaFlow Export — ${yr?.label||yid}`,`Generated: ${genDate}`],
+      [],
+      ["Date","Day","BH",...usedSlots.map(s=>s.key)],
+      ...allDates.map(d=>[d,dow(d),BH[d]||"",...usedSlots.map(s=>rota[d]?.[s.key]||"")]),
+    ]);
 
-    // ── Section 2: Staff shift summary ──
-    doc.addPage();
-    doc.setFillColor(13,27,42); doc.rect(0,0,PAGE_W,14,`F`);
-    doc.setTextColor(255,255,255); doc.setFont("helvetica","bold"); doc.setFontSize(13);
-    doc.text("Staff Shift Summary",10,10); doc.setTextColor(0,0,0);
-    const slotKeys2 = [...new Set(Object.values(rota).flatMap(d=>Object.keys(d)))].sort();
-    const sumHead = [["Name","Init","Grade",...slotKeys2,"Total"]];
-    const sumBody = activeStaff.map(s=>{
-      const counts = {}; slotKeys2.forEach(k=>{counts[k]=0;});
-      Object.values(rota).forEach(day=>{ Object.entries(day).forEach(([k,v])=>{ if(v===s.init&&counts[k]!==undefined) counts[k]++; }); });
-      const total = Object.values(counts).reduce((a,b)=>a+b,0);
-      return [s.name,s.init,s.grade,...slotKeys2.map(k=>counts[k]||""),total];
+    // ── 2. Staff View (staff as columns) ───────────────────────────
+    addSheet("Staff View",[
+      [`RotaFlow — Staff View — ${yr?.label||yid}`],
+      [],
+      ["Date","Day",...activeStaff.map(s=>s.name)],
+      ["","Grade",...activeStaff.map(s=>s.grade)],
+      ["","Init",...activeStaff.map(s=>s.init)],
+      ...allDates.map(d=>[d,dow(d),...activeStaff.map(s=>cellForStaff(s.init,d))]),
+    ]);
+
+    // ── 3. Shift Summary (counts per type) ─────────────────────────
+    const grpKeys = Object.keys(GRP);
+    addSheet("Shift Summary",[
+      [`RotaFlow — Shift Summary — ${yr?.label||yid}`],
+      [],
+      ["Name","Initials","Grade","Total",...grpKeys.map(g=>GRP[g])],
+      ...activeStaff.map(s=>{
+        const counts={};grpKeys.forEach(g=>{counts[g]=0;});
+        allDates.forEach(d=>{const sk=Object.entries(rota[d]||{}).find(([,v])=>v===s.init)?.[0];if(sk){const sl=SLOTS.find(x=>x.key===sk);if(sl?.grp)counts[sl.grp]=(counts[sl.grp]||0)+1;}});
+        const tot=Object.values(counts).reduce((a,b)=>a+b,0);
+        return [s.name,s.init,s.grade,tot,...grpKeys.map(g=>counts[g]||"")];
+      }),
+    ]);
+
+    // ── 4. Staff ────────────────────────────────────────────────────
+    addSheet("Staff",[
+      [`RotaFlow — Staff List — ${yr?.label||yid}`],
+      [],
+      ["Name","Initials","Grade","Role","Active","Q1 WTE","Q2 WTE","Q3 WTE","Q4 WTE"],
+      ...allStaff.map(s=>[s.name,s.init,s.grade||"",s.role,s.active?"Yes":"No",
+        sHours[s.init]?.Q1??1.0,sHours[s.init]?.Q2??1.0,sHours[s.init]?.Q3??1.0,sHours[s.init]?.Q4??1.0]),
+    ]);
+
+    // ── 5. Leave ────────────────────────────────────────────────────
+    const leaveRows=[["Date","Day","Name","Initials","Grade","Type","Note"]];
+    Object.entries(leave).sort(([a],[b])=>a.localeCompare(b)).forEach(([date,entries])=>{
+      (entries||[]).forEach(e=>{const s=staff.find(x=>x.init===e.init);leaveRows.push([date,dow(date),s?.name||e.init,e.init,s?.grade||"",e.type,e.note||""]);});
     });
-    doc.autoTable({startY:17,head:sumHead,body:sumBody,styles:{fontSize:7,cellPadding:1.3},headStyles:{fillColor:[16,185,129],textColor:255,fontStyle:"bold"},alternateRowStyles:{fillColor:[248,250,252]},margin:{left:10,right:10}});
+    addSheet("Leave",[[`RotaFlow — Leave — ${yr?.label||yid}`],[],[...leaveRows[0]],...leaveRows.slice(1)]);
 
-    // ── Section 3: Leave & requests ──
-    const leaveRows = [];
-    Object.entries(leave).forEach(([date,entries])=>{ (entries||[]).forEach(e=>{ const s=staff.find(x=>x.init===e.init); leaveRows.push([date,s?.name||e.init,e.init,e.type,e.note||""]); }); });
-    if(leaveRows.length>0){
-      doc.addPage();
-      doc.setFillColor(13,27,42); doc.rect(0,0,PAGE_W,14,`F`);
-      doc.setTextColor(255,255,255); doc.setFont("helvetica","bold"); doc.setFontSize(13);
-      doc.text("Leave Entries",10,10); doc.setTextColor(0,0,0);
-      doc.autoTable({startY:17,head:[["Date","Name","Init","Type","Note"]],body:leaveRows.sort((a,b)=>a[0].localeCompare(b[0])),styles:{fontSize:7.5,cellPadding:1.4},headStyles:{fillColor:[99,102,241],textColor:255,fontStyle:"bold"},alternateRowStyles:{fillColor:[248,250,252]},margin:{left:10,right:10}});
-    }
+    // ── 6. Leave Requests ───────────────────────────────────────────
+    const reqRows=[["Name","Initials","Type","From","To","Days","Reason","Status","Submitted"]];
+    [...reqs].sort((a,b)=>(a.startDate||"").localeCompare(b.startDate||"")).forEach(r=>{
+      reqRows.push([r.staffName||"",r.init||"",r.type||"",r.startDate||"",r.endDate||"",r.days||1,r.reason||"",r.status||"",r.createdAt||""]);
+    });
+    addSheet("Leave Requests",[[`RotaFlow — Leave Requests — ${yr?.label||yid}`],[],[...reqRows[0]],...reqRows.slice(1)]);
 
-    // ── Section 4: Requests ──
-    if(reqs.length>0){
-      const finalY = doc.lastAutoTable?.finalY||20;
-      const startY = finalY+12 < 180 ? finalY+12 : (()=>{doc.addPage();return 17;})();
-      doc.setFont("helvetica","bold"); doc.setFontSize(11); doc.text("Leave Requests",10,startY-4);
-      doc.autoTable({startY,head:[["Name","Type","From","To","Reason","Status"]],body:reqs.map(r=>[r.staffName||"",r.type||"",r.startDate||"",r.endDate||"",r.reason||"",r.status||""]),styles:{fontSize:7.5,cellPadding:1.4},headStyles:{fillColor:[245,158,11],textColor:255,fontStyle:"bold"},alternateRowStyles:{fillColor:[248,250,252]},margin:{left:10,right:10}});
-    }
+    // ── 7. Swaps ────────────────────────────────────────────────────
+    const swapRows=[["Date","Slot","From Init","From Name","To Init","To Name","Status","Requested"]];
+    [...swaps].sort((a,b)=>(a.date||"").localeCompare(b.date||"")).forEach(sw=>{
+      const fS=staff.find(s=>s.init===sw.fromInit),tS=staff.find(s=>s.init===sw.toInit);
+      swapRows.push([sw.date||"",sw.slotKey||"",sw.fromInit||"",fS?.name||"",sw.toInit||"",tS?.name||"",sw.status||"",sw.createdAt||""]);
+    });
+    addSheet("Swaps",[[`RotaFlow — Shift Swaps — ${yr?.label||yid}`],[],[...swapRows[0]],...swapRows.slice(1)]);
 
-    doc.save(`RotaFlow-${yid}-${new Date().toISOString().slice(0,10)}.pdf`);
+    // ── 8. Fixed Days Off ───────────────────────────────────────────
+    const fdRows=[["Name","Initials","Day of Week","Reason"]];
+    (fixedDaysOff||[]).forEach(f=>{fdRows.push([f.name||"",f.init||"",f.dayOfWeek||"",f.reason||""]);});
+    addSheet("Fixed Days Off",[[`RotaFlow — Fixed Days Off`],[],[...fdRows[0]],...fdRows.slice(1)]);
+
+    // ── 9. Availability ─────────────────────────────────────────────
+    const qDates=qs.flatMap(q=>getDatesInRange(q.start,q.end));
+    addSheet("Availability",[
+      [`RotaFlow — Availability — ${yr?.label||yid}`],
+      [],
+      ["Date","Day","Quarter",...activeStaff.map(s=>s.name)],
+      ["","","Init",...activeStaff.map(s=>s.init)],
+      ...qDates.map(d=>{
+        const q=qs.find(q=>d>=q.start&&d<=q.end);
+        return [d,dow(d),q?.id||"",...activeStaff.map(s=>{
+          const e=normaliseAvailEntry((avail[s.init]||{})[d]);
+          return (e&&e.base&&e.base!=="ANY")?e.base:"";
+        })];
+      }),
+    ]);
+
+    // ── 10. Hour Adjustments ────────────────────────────────────────
+    const corrections = corrsByYear?.[yid]||[];
+    const corrRows=[["Quarter","Name","Initials","Amount (hrs)","Reason","Carry Forward","Created By","Date"]];
+    [...corrections].sort((a,b)=>(a.qid||"").localeCompare(b.qid||"")).forEach(c=>{
+      const s=staff.find(x=>x.init===c.init);
+      corrRows.push([c.qid||"",s?.name||c.init||"",c.init||"",c.amount||0,c.reason||"",c.carryForward?"Yes":"No",c.createdBy||"",c.createdAt||""]);
+    });
+    addSheet("Hour Adjustments",[[`RotaFlow — Hour Adjustments — ${yr?.label||yid}`],[],[...corrRows[0]],...corrRows.slice(1)]);
+
+    // ── 11. Day Notes ────────────────────────────────────────────────
+    const notesData = notesByYear?.[yid]||{};
+    const noteRows=[["Date","Day","Note"]];
+    Object.entries(notesData).sort(([a],[b])=>a.localeCompare(b)).forEach(([date,note])=>{
+      if(note) noteRows.push([date,dow(date),note]);
+    });
+    addSheet("Day Notes",[[`RotaFlow — Day Notes — ${yr?.label||yid}`],[],[...noteRows[0]],...noteRows.slice(1)]);
+
+    // ── 12. Config ──────────────────────────────────────────────────
+    addSheet("Config",[
+      ["RotaFlow Configuration","",`Year: ${yr?.label||yid}`,"",`Generated: ${genDate}`],
+      [],
+      ["=== QUARTERS ==="],
+      ["Quarter","Start","End","Status"],
+      ...qs.map(q=>[q.id,q.start,q.end,qStatus[q.id]||"open"]),
+      [],
+      ["=== WTE REFERENCE TARGETS (per quarter at 1.0 WTE) ==="],
+      ["Grade","Nights","Weekends","Earlies","Mids","Lates","Hours/Q"],
+      ...Object.entries(wte).map(([grade,cfg])=>[grade,cfg.nights||"",cfg.weekends||"",cfg.earlies||"",cfg.mids||"",cfg.lates||"",cfg.hoursPerQuarter||""]),
+      [],
+      ["=== SHIFT SLOTS ==="],
+      ["Key","Label","Group","Weekday","Weekend"],
+      ...SLOTS.map(s=>[s.key,s.label,s.grp,s.wd?"Yes":"No",s.we?"Yes":"No"]),
+      [],
+      ["=== LEAVE TYPES ==="],
+      ["Code","Label"],
+      ...Object.entries(LEAVE_T).map(([k,v])=>[k,v.label]),
+    ]);
+
+    XLSX.writeFile(wb,`RotaFlow-${yid}-${new Date().toISOString().slice(0,10)}.xlsx`);
   };
 
   return (
@@ -4149,7 +4239,7 @@ function App() {
 {view==="airota"     &&isAdmin&&<AIRotaView user={user} staff={staff} rota={rota} setRota={setRota} availability={availability} leaveEntries={leaveEntries} quarterStatus={quarterStatus} wteConfig={wteConfig} staffHours={staffHours} genRules={genRules} setGenRules={setGenRules} shiftTimes={shiftTimes} addAudit={addAudit} quarters={activeYearQuarters} activeYearId={activeYearId}/>}
             {view==="adjustments"&&isAdmin&&<HoursAdjustView staff={staff} hoursCorrections={hoursCorrections} setHoursCorrections={setHoursCorrections} addAudit={addAudit} currentUser={user} wteConfig={wteConfig} staffHours={staffHours} rota={rota} leaveEntries={leaveEntries}/>}
             {view==="audit"      &&isAdmin&&<AuditLog log={auditLog}/>}
-            {view==="yearsetup"  &&isAdmin&&<YearSetupView years={years} setYears={setYears} activeYearId={activeYearId} setActiveYearId={setActiveYearId} staff={staff} rotaByYear={rotaByYear} leaveByYear={leaveByYear} availByYear={availByYear} qStatusByYear={qStatusByYear} requestsByYear={requestsByYear} notesByYear={notesByYear} corrsByYear={corrsByYear} staffHoursByYear={staffHoursByYear} setQStatusByYear={setQStatusByYear} addAudit={addAudit} currentUser={user}/>}
+            {view==="yearsetup"  &&isAdmin&&<YearSetupView years={years} setYears={setYears} activeYearId={activeYearId} setActiveYearId={setActiveYearId} staff={staff} rotaByYear={rotaByYear} leaveByYear={leaveByYear} availByYear={availByYear} qStatusByYear={qStatusByYear} requestsByYear={requestsByYear} notesByYear={notesByYear} corrsByYear={corrsByYear} staffHoursByYear={staffHoursByYear} swapsByYear={swapsByYear} fixedDaysOff={fixedDaysOff} wteConfig={wteConfig} setQStatusByYear={setQStatusByYear} addAudit={addAudit} currentUser={user}/>}
           </div>
         </div>
       </div>
