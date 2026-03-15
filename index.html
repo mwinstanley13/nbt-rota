@@ -463,14 +463,14 @@ const getHoursRemaining = (init, grade, qid, wteConfig, staffHours, rota, leaveE
 // ═══════════════════════════════════════════════════════════════
 
 const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@500;700;800&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@300;400;500;600&display=swap');
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'DM Sans',sans-serif;background:#f4f6fb;font-size:13px}
+body{font-family:'Inter',sans-serif;background:#f4f6fb;font-size:13px}
 ::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:4px}
 .app{display:flex;height:100vh;overflow:hidden}
 .sb{width:228px;flex-shrink:0;background:linear-gradient(170deg,#0d1b2a,#1a2e45);display:flex;flex-direction:column;overflow-y:auto}
 .sb-logo{padding:20px 18px 16px;border-bottom:1px solid rgba(255,255,255,.07)}
-.sb-logo h1{font-family:'Syne',sans-serif;font-size:16px;font-weight:800;color:#e8f4f0;display:flex;align-items:center;gap:7px}
+.sb-logo h1{font-family:'Plus Jakarta Sans',sans-serif;font-size:16px;font-weight:800;color:#e8f4f0;display:flex;align-items:center;gap:7px}
 .sb-logo p{font-size:10.5px;color:#3a5a6e;margin-top:2px}
 .sb-sec{padding:10px 8px 4px}
 .sb-lbl{font-size:9px;font-weight:700;letter-spacing:1.2px;color:#2d4a5e;text-transform:uppercase;padding:5px 8px 3px}
@@ -488,25 +488,25 @@ body{font-family:'DM Sans',sans-serif;background:#f4f6fb;font-size:13px}
 .u-out:hover{color:#ef4444}
 .main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 .hdr{background:white;padding:14px 26px;border-bottom:1px solid #edf0f7;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:0 1px 4px rgba(0,0,0,.06)}
-.hdr h2{font-family:'Syne',sans-serif;font-size:19px;font-weight:700;color:#0d1b2a}
+.hdr h2{font-family:'Plus Jakarta Sans',sans-serif;font-size:19px;font-weight:700;color:#0d1b2a}
 .body{flex:1;overflow-y:auto;padding:24px 28px}
 .card{background:white;border-radius:14px;border:1px solid #e8edf5;box-shadow:0 2px 8px rgba(0,0,0,.06)}
 .ch{padding:15px 20px;border-bottom:1px solid #f0f4f8;display:flex;align-items:center;justify-content:space-between;gap:10px}
-.ct{font-family:'Syne',sans-serif;font-size:13.5px;font-weight:700;color:#0d1b2a}
+.ct{font-family:'Plus Jakarta Sans',sans-serif;font-size:13.5px;font-weight:700;color:#0d1b2a}
 .cb{padding:18px}
 .sg{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:22px}
-.sc{border-radius:14px;padding:24px 16px;border:none;box-shadow:0 4px 16px rgba(0,0,0,.1);min-height:140px;position:relative;overflow:hidden;background:var(--sc-bg,#fff);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.sc{border-radius:14px;padding:20px 16px;border:none;box-shadow:0 4px 16px rgba(0,0,0,.1);min-height:150px;position:relative;overflow:hidden;background:var(--sc-bg,#fff);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:4px}
 .sc::after{content:'';position:absolute;top:-20px;right:-20px;width:90px;height:90px;border-radius:50%;background:rgba(255,255,255,.12);pointer-events:none}
-.sc-icon{font-size:26px;margin-bottom:10px;display:block;filter:drop-shadow(0 1px 2px rgba(0,0,0,.15))}
-.sv{font-family:'Syne',sans-serif;font-size:52px;font-weight:800;color:white;line-height:1;margin-bottom:6px}
-.sl{font-size:13px;color:rgba(255,255,255,.9);font-weight:600;letter-spacing:.1px}
+.sc-icon{font-size:24px;display:block;filter:drop-shadow(0 1px 2px rgba(0,0,0,.15))}
+.sv{font-family:'Plus Jakarta Sans',sans-serif;font-size:58px;font-weight:800;color:white;line-height:1.05;letter-spacing:-2px}
+.sl{font-size:13.5px;color:rgba(255,255,255,.92);font-weight:600;letter-spacing:.1px;margin-top:2px}
 .dash-welcome{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;flex-wrap:wrap;gap:10px}
-.dash-greet{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;color:#0d1b2a;letter-spacing:-.3px}
+.dash-greet{font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;font-weight:800;color:#0d1b2a;letter-spacing:-.3px}
 .dash-sub{font-size:12.5px;color:#64748b;margin-top:3px}
 .qa-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:22px}
-.qa-btn{display:flex;align-items:center;gap:7px;padding:9px 16px;border-radius:9px;border:1.5px solid #e2e8f0;background:white;color:#374151;font-size:12.5px;font-weight:600;cursor:pointer;transition:all .15s;font-family:'DM Sans',sans-serif;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.qa-btn{display:flex;align-items:center;gap:7px;padding:9px 16px;border-radius:9px;border:1.5px solid #e2e8f0;background:white;color:#374151;font-size:12.5px;font-weight:600;cursor:pointer;transition:all .15s;font-family:'Inter',sans-serif;box-shadow:0 1px 3px rgba(0,0,0,.05)}
 .qa-btn:hover{border-color:#10b981;color:#10b981;background:#f0fdf4;box-shadow:0 2px 8px rgba(16,185,129,.12)}
-.btn{padding:6px 13px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:600;border:none;transition:all .15s;display:inline-flex;align-items:center;gap:5px;font-family:'DM Sans',sans-serif}
+.btn{padding:6px 13px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:600;border:none;transition:all .15s;display:inline-flex;align-items:center;gap:5px;font-family:'Inter',sans-serif}
 .bp{background:#10b981;color:white}.bp:hover{background:#059669}
 .bs{background:white;color:#374151;border:1px solid #d1d5db}.bs:hover{background:#f9fafb}
 .bd{background:#ef4444;color:white}.bd:hover{background:#dc2626}
@@ -523,15 +523,15 @@ body{font-family:'DM Sans',sans-serif;background:#f4f6fb;font-size:13px}
 .tbl tr:hover td{background:#fafbfc}
 .fg{margin-bottom:13px}
 .fl{display:block;font-size:11px;font-weight:600;color:#374151;margin-bottom:4px}
-.fi{width:100%;padding:7px 10px;border-radius:7px;border:1px solid #d1d5db;font-size:12.5px;color:#0d1b2a;background:white;outline:none;font-family:'DM Sans',sans-serif;transition:border-color .15s}
+.fi{width:100%;padding:7px 10px;border-radius:7px;border:1px solid #d1d5db;font-size:12.5px;color:#0d1b2a;background:white;outline:none;font-family:'Inter',sans-serif;transition:border-color .15s}
 .fi:focus{border-color:#10b981;box-shadow:0 0 0 3px rgba(16,185,129,.1)}
-.fta{width:100%;padding:7px 10px;border-radius:7px;border:1px solid #d1d5db;font-size:12.5px;color:#0d1b2a;resize:vertical;min-height:64px;outline:none;font-family:'DM Sans',sans-serif;transition:border-color .15s}
+.fta{width:100%;padding:7px 10px;border-radius:7px;border:1px solid #d1d5db;font-size:12.5px;color:#0d1b2a;resize:vertical;min-height:64px;outline:none;font-family:'Inter',sans-serif;transition:border-color .15s}
 .fta:focus{border-color:#10b981;box-shadow:0 0 0 3px rgba(16,185,129,.1)}
 .mbk{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;display:flex;align-items:center;justify-content:center;padding:16px}
 .mbox{background:white;border-radius:14px;width:100%;max-width:500px;box-shadow:0 24px 60px rgba(0,0,0,.25);overflow:hidden;max-height:90vh;display:flex;flex-direction:column}
 .mbox-lg{max-width:720px}
 .mh{padding:16px 20px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
-.mt{font-family:'Syne',sans-serif;font-size:15px;font-weight:700;color:#0d1b2a}
+.mt{font-family:'Plus Jakarta Sans',sans-serif;font-size:15px;font-weight:700;color:#0d1b2a}
 .mc{background:none;border:none;font-size:20px;cursor:pointer;color:#94a3b8;line-height:1}
 .mc:hover{color:#374151}
 .mb{padding:20px;overflow-y:auto;flex:1}
@@ -541,7 +541,7 @@ body{font-family:'DM Sans',sans-serif;background:#f4f6fb;font-size:13px}
 .login-wrap::after{content:'';position:absolute;width:400px;height:400px;border-radius:50%;background:radial-gradient(circle,rgba(99,102,241,.06) 0%,transparent 70%);bottom:-100px;left:-100px;pointer-events:none}
 .login-card{background:white;border-radius:24px;padding:44px 40px 36px;width:100%;max-width:400px;box-shadow:0 40px 100px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.05);position:relative;z-index:1}
 .login-hed{text-align:center;margin-bottom:30px}
-.login-hed h1{font-family:'Syne',sans-serif;font-size:26px;font-weight:800;color:#0d1b2a;margin-top:14px;letter-spacing:-.3px}
+.login-hed h1{font-family:'Plus Jakarta Sans',sans-serif;font-size:26px;font-weight:800;color:#0d1b2a;margin-top:14px;letter-spacing:-.3px}
 .login-hed p{color:#64748b;margin-top:5px;font-size:12.5px;letter-spacing:.2px}
 .login-err{background:#fee2e2;color:#7f1d1d;padding:9px 13px;border-radius:8px;font-size:12px;margin-bottom:14px;border-left:3px solid #ef4444}
 .login-divider{display:flex;align-items:center;gap:12px;margin:18px 0;color:#cbd5e1;font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase}
@@ -557,9 +557,9 @@ body{font-family:'DM Sans',sans-serif;background:#f4f6fb;font-size:13px}
 .cal-nav{display:flex;align-items:center;gap:7px}
 .cal-nav button{background:white;border:1px solid #e2e8f0;padding:5px 10px;border-radius:7px;cursor:pointer;font-size:15px;color:#475569}
 .cal-nav button:hover{background:#f1f5f9}
-.cal-mo{font-family:'Syne',sans-serif;font-size:15px;font-weight:700;color:#0d1b2a;min-width:160px;text-align:center}
+.cal-mo{font-family:'Plus Jakarta Sans',sans-serif;font-size:15px;font-weight:700;color:#0d1b2a;min-width:160px;text-align:center}
 .mtog{display:flex;background:#f1f5f9;border-radius:7px;padding:2px}
-.mtog-btn{padding:5px 12px;border-radius:5px;border:none;cursor:pointer;font-size:12px;font-weight:600;background:none;color:#64748b;transition:all .15s;font-family:'DM Sans',sans-serif}
+.mtog-btn{padding:5px 12px;border-radius:5px;border:none;cursor:pointer;font-size:12px;font-weight:600;background:none;color:#64748b;transition:all .15s;font-family:'Inter',sans-serif}
 .mtog-btn.act{background:white;color:#0d1b2a;box-shadow:0 1px 3px rgba(0,0,0,.1)}
 .cg{display:grid;grid-template-columns:repeat(7,1fr)}
 .cdow{text-align:center;padding:8px 4px;font-size:9.5px;font-weight:700;letter-spacing:.5px;color:#64748b;text-transform:uppercase;background:#f8fafc;border-bottom:2px solid #e2e8f0}
@@ -870,7 +870,7 @@ function Dashboard({user,staff,rota,requests,dayNotes,availability,quarterStatus
                 {myNextShift
                   ?<div style={{padding:16,background:"linear-gradient(135deg,#f0fdf4,#dcfce7)",borderRadius:10,marginBottom:14,border:"1px solid #bbf7d0"}}>
                       <div style={{fontSize:10,color:"#16a34a",fontWeight:600,marginBottom:3,textTransform:"uppercase",letterSpacing:".4px"}}>Next Shift</div>
-                      <div style={{fontSize:20,fontWeight:800,fontFamily:"Syne,sans-serif",color:"#14532d"}}>{fmtDisp(myNextShift.d)}</div>
+                      <div style={{fontSize:20,fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif",color:"#14532d"}}>{fmtDisp(myNextShift.d)}</div>
                     </div>
                   :<div className="al al-i">No upcoming shifts assigned yet.</div>}
                 <div style={{fontSize:11.5,fontWeight:700,color:"#374151",marginBottom:7}}>Availability submitted</div>
@@ -1749,7 +1749,7 @@ function StaffStatsSidebar({staff, rota, wteConfig, staffHours, selQ, leaveEntri
   return (
     <div style={{width:300,flexShrink:0,background:"white",borderRadius:11,border:"1px solid #e2e8f0",overflow:"hidden",position:"sticky",top:0,maxHeight:"calc(100vh - 120px)",display:"flex",flexDirection:"column"}}>
       <div style={{padding:"10px 14px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
-        <span style={{fontFamily:"Syne,sans-serif",fontSize:12,fontWeight:700,color:"#0d1b2a"}}>Shift Counts</span>
+        <span style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:12,fontWeight:700,color:"#0d1b2a"}}>Shift Counts</span>
         <div style={{display:"flex",background:"#f1f5f9",borderRadius:6,padding:2,gap:1}}>
           {[["quarter","Q: "+(currentQ?.id||"—")],["year","Year"]].map(([k,lbl])=>(
             <button key={k} onClick={()=>setMode(k)}
@@ -2121,7 +2121,7 @@ function MyShifts({user,rota,leaveEntries,dayNotes}) {
               :upcoming.map((x,i)=>{const dt=new Date(x.date+"T00:00:00"),note=dayNotes[x.date];return(
                 <div key={i} style={{display:"flex",alignItems:"center",gap:11,padding:"8px 0",borderBottom:"1px solid #f1f5f9"}}>
                   <div style={{textAlign:"center",width:36,flexShrink:0}}>
-                    <div style={{fontSize:17,fontWeight:800,fontFamily:"Syne,sans-serif",color:"#0d1b2a"}}>{dt.getDate()}</div>
+                    <div style={{fontSize:17,fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif",color:"#0d1b2a"}}>{dt.getDate()}</div>
                     <div style={{fontSize:9,color:"#64748b"}}>{dt.toLocaleDateString("en-GB",{month:"short"})}</div>
                   </div>
                   <div style={{flex:1}}>
