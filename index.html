@@ -575,6 +575,19 @@ body{font-family:'Inter',sans-serif;background:#f4f6fb;font-size:13px}
 .more{font-size:9px;color:#6366f1;font-weight:600;padding:1px 3px;cursor:pointer}
 .dg2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 
+/* ── Rota List View ── */
+.list-wrap{overflow-x:auto;border-radius:14px;border:1px solid #e8edf5;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+.list-tbl{border-collapse:collapse;min-width:100%;background:white;font-size:11.5px}
+.list-tbl thead tr{background:#f8fafc;border-bottom:2px solid #e2e8f0}
+.list-th-date{position:sticky;left:0;z-index:3;background:#f8fafc;padding:9px 12px;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#64748b;white-space:nowrap;border-right:2px solid #e2e8f0;min-width:90px}
+.list-th-day{position:sticky;left:90px;z-index:3;background:#f8fafc;padding:9px 10px;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#64748b;white-space:nowrap;border-right:1px solid #e2e8f0;min-width:46px}
+.list-th-staff{padding:6px 8px;font-size:10.5px;text-align:center;border-right:1px solid #f0f4f8;min-width:80px;max-width:100px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.list-td-date{position:sticky;left:0;z-index:2;padding:7px 12px;white-space:nowrap;border-right:2px solid #e2e8f0;border-bottom:1px solid #f1f5f9;font-size:11.5px;font-weight:500}
+.list-td-day{position:sticky;left:90px;z-index:2;padding:7px 10px;font-size:11px;font-weight:600;border-right:1px solid #e2e8f0;border-bottom:1px solid #f1f5f9;min-width:46px}
+.list-td-cell{padding:4px 5px;text-align:center;border-right:1px solid #f0f4f8;border-bottom:1px solid #f1f5f9;vertical-align:middle}
+.list-tbl tr:last-child td{border-bottom:none}
+.list-chip{display:inline-block;padding:2px 6px;border-radius:5px;font-size:10px;font-weight:700;border:1px solid;white-space:nowrap;letter-spacing:.1px}
+
 /* ── Availability Calendar ── */
 .av-cal{display:grid;grid-template-columns:repeat(7,1fr);border-left:1px solid #e2e8f0;border-top:1px solid #e2e8f0}
 .av-dow{text-align:center;padding:7px 3px;font-size:9.5px;font-weight:700;color:#64748b;background:#f8fafc;border-right:1px solid #e2e8f0;border-bottom:2px solid #e2e8f0;text-transform:uppercase}
@@ -914,15 +927,23 @@ function Dashboard({user,staff,rota,requests,dayNotes,availability,quarterStatus
 // CALENDAR VIEW (read-only, derived from rota slot data)
 // ═══════════════════════════════════════════════════════════════
 
+// Short label for list view cells — group name only (Early / Mid / Late etc.)
+const LIST_GRP_LABEL = {
+  EARLY:"Early", MID:"Mid", LATE:"Late",
+  WE_EARLY:"W/E Early", WE_LATE:"W/E Late",
+  NIGHT1:"Night 1", NIGHT2:"Night 2",
+  ST3_NIGHT:"Night ST3", ACP_NIGHT:"Night ACP"
+};
+
 function CalendarView({rota,leaveEntries,dayNotes,staff,viewMonth,setViewMonth,viewMode,setViewMode,trainingDays}) {
   const [fStaff,setFS]=useState(""), [dayModal,setDM]=useState(null);
+  const [isList,setIsList]=useState(false);
   const today=fmtISO(new Date()), yr=viewMonth.getFullYear(), mo=viewMonth.getMonth();
   const tdMap=useMemo(()=>Object.fromEntries((trainingDays||[]).map(t=>[t.date,t])),[trainingDays]);
   const days=useMemo(()=>getMonthDays(yr,mo),[yr,mo]);
   const DOW=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
   const activeStaff=staff.filter(s=>s.role==="staff"&&s.active);
 
-  // Derive initials→slots for a date
   const getDateStaff=(d)=>{
     const result=[];
     const slots=rota[d]||{};
@@ -931,17 +952,84 @@ function CalendarView({rota,leaveEntries,dayNotes,staff,viewMonth,setViewMonth,v
     return result;
   };
 
+  // For list view: get a single cell value for one staff member on one date
+  const getCell=(init,date)=>{
+    const rotaDay=rota[date]||{};
+    const sk=Object.entries(rotaDay).find(([,v])=>v===init)?.[0];
+    if(sk){const sl=SLOTS.find(s=>s.key===sk);if(sl)return{text:LIST_GRP_LABEL[sl.grp]||sl.label,bg:sl.bg,fg:sl.fg,bd:sl.bd};}
+    const lv=(leaveEntries[date]||[]).find(e=>e.init===init);
+    if(lv){const lt=LEAVE_T[lv.type];if(lt)return{text:lt.abbr||lv.type,bg:lt.bg,fg:lt.fg,bd:lt.bd};}
+    return null;
+  };
+
   const nav=delta=>{const d=new Date(viewMonth);d.setMonth(d.getMonth()+delta);setViewMonth(d);};
   const label=viewMonth.toLocaleDateString("en-GB",{month:"long",year:"numeric"});
+  const visStaff=fStaff?activeStaff.filter(s=>s.init===fStaff):activeStaff;
+  const monthDays=days.filter(d=>d.inMonth);
 
   return (
     <div>
+      {/* Top bar */}
       <div className="cal-top">
         <div className="cal-nav"><button onClick={()=>nav(-1)}>‹</button><div className="cal-mo">{label}</div><button onClick={()=>nav(1)}>›</button></div>
-        <select className="fi" style={{width:150}} value={fStaff} onChange={e=>setFS(e.target.value)}>
+        <select className="fi" style={{width:160}} value={fStaff} onChange={e=>setFS(e.target.value)}>
           <option value="">All Staff</option>{activeStaff.map(s=><option key={s.id} value={s.init}>{s.name}</option>)}
         </select>
+        <div className="mtog">
+          <button className={`mtog-btn${!isList?" act":""}`} onClick={()=>setIsList(false)}>📅 Calendar</button>
+          <button className={`mtog-btn${isList?" act":""}`} onClick={()=>setIsList(true)}>📋 List</button>
+        </div>
       </div>
+
+      {/* ── LIST VIEW ── */}
+      {isList?(
+        <div className="list-wrap">
+          <table className="list-tbl">
+            <thead>
+              <tr>
+                <th className="list-th-date">Date</th>
+                <th className="list-th-day">Day</th>
+                {visStaff.map(s=>(
+                  <th key={s.init} className="list-th-staff">
+                    <div style={{fontSize:9.5,fontWeight:600,color:"#374151",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:90}}>{s.name.split(" ").slice(-1)[0]}</div>
+                    <div style={{color:"#6366f1",fontWeight:800,fontSize:11.5}}>{s.init}</div>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {monthDays.map(({date})=>{
+                const isWE=isWeekend(date),isBH=!!BH[date],isToday=date===today;
+                const rowBg=isToday?"#f0fdf4":isBH?"#fffbeb":isWE?"#f8f7ff":"white";
+                const stickyBg=isToday?"#e8faf3":isBH?"#fef9e7":isWE?"#f4f3ff":"white";
+                const dayNum=new Date(date+"T00:00:00");
+                return (
+                  <tr key={date} style={{background:rowBg}}>
+                    <td className="list-td-date" style={{background:stickyBg}}>
+                      <span style={{fontWeight:isToday?700:500,color:isToday?"#059669":"#0d1b2a",fontSize:11.5}}>
+                        {dayNum.toLocaleDateString("en-GB",{day:"2-digit",month:"short"})}
+                      </span>
+                      {isBH&&<span className="bh-tag" style={{marginLeft:5}}>BH</span>}
+                    </td>
+                    <td className="list-td-day" style={{background:stickyBg,color:isWE?"#7c3aed":isToday?"#059669":"#64748b",fontWeight:isWE||isToday?700:500}}>
+                      {getDayName(date).slice(0,3)}
+                    </td>
+                    {visStaff.map(s=>{
+                      const cell=getCell(s.init,date);
+                      return (
+                        <td key={s.init} className="list-td-cell" style={{background:rowBg}}>
+                          {cell&&<span className="list-chip" style={{background:cell.bg,color:cell.fg,borderColor:cell.bd}}>{cell.text}</span>}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ):(
+      /* ── CALENDAR VIEW ── */
       <div className="card">
         <div className="cg">
           {DOW.map(d=><div key={d} className="cdow">{d}</div>)}
@@ -964,6 +1052,9 @@ function CalendarView({rota,leaveEntries,dayNotes,staff,viewMonth,setViewMonth,v
           })}
         </div>
       </div>
+      )}
+
+      {/* Day modal (calendar view only) */}
       {dayModal&&(
         <Modal title={`${getDayName(dayModal)}, ${fmtDisp(dayModal)}${BH[dayModal]?" · "+BH[dayModal]:""}`} onClose={()=>setDM(null)} footer={<button className="btn bs" onClick={()=>setDM(null)}>Close</button>}>
           {dayNotes[dayModal]&&<div className="al al-w">📌 {dayNotes[dayModal]}</div>}
