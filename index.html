@@ -2990,8 +2990,8 @@ function Reports({user,staff,rota,leaveEntries,requests,quarters,availability}) 
                 {th("Earlies","")}
                 {th("Mids","")}
                 {th("Lates","")}
-                {th("SL Days","")}
-                {th("Military","")}
+                {th("SL Days","year total")}
+                {th("Military","year total")}
               </tr>
             </thead>
             <tbody>{stats.map(s=>(
@@ -3008,19 +3008,17 @@ function Reports({user,staff,rota,leaveEntries,requests,quarters,availability}) 
                 <QYCell q={s.q.lates}    yr={s.yr.lates}    bg="#fef3c7" fg="#78350f"/>
                 <td style={{padding:"6px 8px",textAlign:"center",borderBottom:"1px solid #f1f5f9",borderLeft:"1px solid #f4f6fb"}}>
                   <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4}}>
-                    <span style={{fontWeight:700,fontSize:12,padding:"1px 6px",borderRadius:4,
-                      background:s.slQ>0?"#fef3c7":"#f1f5f9",
-                      color:s.slQ>0?"#92400e":"#64748b"}}>{s.slQ}</span>
-                    <span style={{color:"#cbd5e1",fontSize:10}}>/</span>
-                    <span style={{fontSize:11,color:"#64748b"}}>{s.slYr}</span>
+                    <span style={{fontWeight:700,fontSize:13,padding:"2px 8px",borderRadius:4,
+                      background:s.slYr>0?"#fef3c7":"#f1f5f9",
+                      color:s.slYr>0?"#92400e":"#94a3b8"}}>{s.slYr}</span>
+                    {s.slEntitlement>0&&<span style={{fontSize:10,color:"#94a3b8"}}>/ {s.slEntitlement}</span>}
                   </div>
                 </td>
                 <td style={{padding:"6px 8px",textAlign:"center",borderBottom:"1px solid #f1f5f9",borderLeft:"1px solid #f4f6fb"}}>
                   {s.milEntitlement>0
                     ?<div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4}}>
-                        <span style={{fontWeight:700,fontSize:12,padding:"1px 6px",borderRadius:4,background:"#f0fdf4",color:"#166534"}}>{s.milQ}</span>
-                        <span style={{color:"#cbd5e1",fontSize:10}}>/</span>
-                        <span style={{fontSize:11,color:"#64748b"}}>{s.milYr}</span>
+                        <span style={{fontWeight:700,fontSize:13,padding:"2px 8px",borderRadius:4,background:s.milYr>0?"#dcfce7":"#f1f5f9",color:s.milYr>0?"#166534":"#94a3b8"}}>{s.milYr}</span>
+                        <span style={{fontSize:10,color:"#94a3b8"}}>/ {s.milEntitlement}</span>
                       </div>
                     :<span style={{fontSize:11,color:"#cbd5e1"}}>—</span>}
                 </td>
@@ -3029,7 +3027,7 @@ function Reports({user,staff,rota,leaveEntries,requests,quarters,availability}) 
           </table>
         </div>
         <div style={{padding:"8px 18px",borderTop:"1px solid #f1f5f9",fontSize:10.5,color:"#94a3b8"}}>
-          Each cell shows <strong style={{color:"#374151"}}>{selQ} count</strong> / <strong style={{color:"#374151"}}>Year total</strong> · SL/Military includes leave entries, availability entries &amp; approved requests
+          Shifts show <strong style={{color:"#374151"}}>{selQ} count</strong> / <strong style={{color:"#374151"}}>Year total</strong> · SL &amp; Military show year totals only (annual entitlement) · includes leave entries, availability entries &amp; approved requests
         </div>
       </div>
     </div>
