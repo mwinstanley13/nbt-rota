@@ -3941,6 +3941,13 @@ function App() {
             const demoAvail = generateDemoAvailability(demoStaff,[...QUARTERS]);
             const seed={staff:demoStaff,auditLog:[],wteConfig:INIT_WTE_CONFIG,years:[{id:"2026-27",label:"2026/27",quarters:QUARTERS,active:true,archived:false}],activeYearId:"2026-27",rotaByYear:{},leaveByYear:{},availByYear:{"2026-27":demoAvail},qStatusByYear:{"2026-27":{Q1:"open",Q2:"closed",Q3:"closed",Q4:"closed"}},requestsByYear:{},notesByYear:{},corrsByYear:{},staffHoursByYear:{},swapsByYear:{},fixedDaysOff:[],genRules:INIT_GEN_RULES,shiftTimes:DEFAULT_SHIFT_TIMES,staffShiftTimes:{},trainingDays:[],demoMode:true};
             appDoc().set(seed).catch(console.error);
+            // Set state directly so login works immediately (don't wait for snapshot round-trip)
+            setStaff(demoStaff);
+            setWteConfig(INIT_WTE_CONFIG);
+            setYears([{id:"2026-27",label:"2026/27",quarters:QUARTERS,active:true,archived:false}]);
+            setActiveYearId("2026-27");
+            setAvailByYear({"2026-27":demoAvail});
+            setQStatusByYear({"2026-27":{Q1:"open",Q2:"closed",Q3:"closed",Q4:"closed"}});
             setFsReady(true); return;
           }
           if (snap.exists) {
@@ -3949,6 +3956,18 @@ function App() {
             const patchStaffPw = arr => Array.isArray(arr) ? arr.map(s=>{
               if(IS_DEMO) return {...s,pw:s.role==='admin'?'demo2026':'rota2026'};
               if(s.pw) return s; const def=INIT_STAFF.find(i=>i.init===s.init); return {...s,pw:def?.pw||(s.role==='admin'?'admin2026':'rota2026')};}) : arr;
+            // Re-validate & refresh the in-memory session user from the loaded staff list
+            setUser(prev => {
+              if (!prev) return prev;
+              const fresh = (IS_DEMO
+                ? (d.staff||[]).map(s=>({...s,pw:s.role==='admin'?'demo2026':'rota2026'}))
+                : (d.staff||[])
+              ).find(s=>s.init===prev.init);
+              if (!fresh) return prev; // keep old session if not found yet (still loading)
+              const updated = {...fresh};
+              lsSave('session', updated);
+              return updated;
+            });
             if (d.rota && !d.rotaByYear) {
               const yid = "2026-27";
               upd(setStaff)(patchStaffPw(d.staff));
@@ -4061,7 +4080,7 @@ function App() {
     <><style>{CSS}</style>
       <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100vh",gap:14,background:"#f0f4f8"}}>
         <div className="fs-spinner"/>
-        <p style={{color:"#64748b",fontSize:14,fontFamily:"'DM Sans',sans-serif",margin:0}}>Loading rota data…</p>
+        <p style={{color:"#64748b",fontSize:14,fontFamily:"'Inter',sans-serif",margin:0}}>Loading rota data…</p>
       </div>
     </>
   );
@@ -4085,7 +4104,7 @@ function App() {
               {isAdmin&&<span className="badge b-admin">Admin</span>}
               <select value={activeYearId}
                 onChange={e=>e.target.value==="__new"?setView("yearsetup"):setActiveYearId(e.target.value)}
-                style={{fontSize:12.5,padding:"3px 8px",borderRadius:6,border:"1px solid #e2e8f0",background:"#f8fafc",cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                style={{fontSize:12.5,padding:"3px 8px",borderRadius:6,border:"1px solid #e2e8f0",background:"#f8fafc",cursor:"pointer",fontFamily:"'Inter',sans-serif"}}>
                 {years.filter(y=>!y.archived).map(y=><option key={y.id} value={y.id}>{y.label}</option>)}
                 {isAdmin&&<option value="__new">+ New Year</option>}
               </select>
