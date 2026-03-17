@@ -632,6 +632,7 @@ body{font-family:'Inter',sans-serif;background:#f4f6fb;font-size:13px}
 .rpt-vert-sub{font-size:10px;color:#94a3b8;margin-top:1px}
 
 /* ── Slot-based Builder ── */
+.bld-layout{display:flex;gap:12px;align-items:flex-start}
 .bld-wrap{overflow-x:auto}
 .bld-tbl{border-collapse:collapse;min-width:100%}
 .bld-tbl th{padding:5px 3px;font-size:9px;font-weight:700;text-align:center;border:1px solid #e2e8f0;white-space:nowrap;position:sticky;top:0;z-index:3}
@@ -681,7 +682,8 @@ body{font-family:'Inter',sans-serif;background:#f4f6fb;font-size:13px}
   .sv{font-size:42px;letter-spacing:-1px}
   .dg2{grid-template-columns:1fr}
   .mbox{max-width:calc(100vw - 16px);width:calc(100vw - 16px)}
-  .stats-sb{display:none}
+  .bld-layout{flex-direction:column}
+  .stats-sb{width:100%!important;max-height:400px!important;position:static!important;flex-shrink:unset!important}
   .bld-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
   .bld-tbl{font-size:10px}
   .bld-date-col{min-width:70px;max-width:70px}
@@ -2144,7 +2146,7 @@ function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,s
         </div>
       </div>
 
-      <div style={{display:"flex",gap:12,alignItems:"flex-start"}}>
+      <div className="bld-layout">
       <div className="bld-wrap" style={{flex:1,minWidth:0,overflowY:"auto",maxHeight:"calc(100vh - 180px)"}}>
         <table className="bld-tbl">
           <thead>
