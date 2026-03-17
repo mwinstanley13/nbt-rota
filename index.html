@@ -620,6 +620,17 @@ body{font-family:'Inter',sans-serif;background:#f4f6fb;font-size:13px}
 .prog-bar{flex:1;height:6px;background:#f1f5f9;border-radius:3px;overflow:hidden}
 .prog-fill{height:100%;border-radius:3px;background:#10b981;transition:width .4s}
 
+/* ── Reports vertical/transposed layout for single-person mobile view ── */
+.rpt-wide{display:block}
+.rpt-vertical{display:none}
+.rpt-vert-row{display:flex;align-items:center;padding:10px 16px;border-bottom:1px solid #f1f5f9}
+.rpt-vert-row:last-child{border-bottom:none}
+.rpt-vert-label{flex:1;font-size:13px;font-weight:600;color:#374151}
+.rpt-vert-vals{display:flex;align-items:center;gap:10px}
+.rpt-vert-q{font-weight:700;font-size:14px;padding:3px 10px;border-radius:6px}
+.rpt-vert-yr{font-size:12px;color:#64748b}
+.rpt-vert-sub{font-size:10px;color:#94a3b8;margin-top:1px}
+
 /* ── Slot-based Builder ── */
 .bld-wrap{overflow-x:auto}
 .bld-tbl{border-collapse:collapse;min-width:100%}
@@ -674,6 +685,8 @@ body{font-family:'Inter',sans-serif;background:#f4f6fb;font-size:13px}
   .bld-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
   .bld-tbl{font-size:10px}
   .bld-date-col{min-width:70px;max-width:70px}
+  .rpt-wide{display:none}
+  .rpt-vertical{display:block}
   .tbl{font-size:11.5px}
   .tbl th,.tbl td{padding:6px 6px}
   .card{border-radius:10px;margin-bottom:12px}
@@ -1945,7 +1958,7 @@ function StaffStatsSidebar({staff, rota, wteConfig, staffHours, selQ, leaveEntri
   }, [staff, dates, rota]);
 
   return (
-    <div style={{width:300,flexShrink:0,background:"white",borderRadius:11,border:"1px solid #e2e8f0",overflow:"hidden",position:"sticky",top:0,maxHeight:"calc(100vh - 120px)",display:"flex",flexDirection:"column"}}>
+    <div className="stats-sb" style={{width:300,flexShrink:0,background:"white",borderRadius:11,border:"1px solid #e2e8f0",overflow:"hidden",position:"sticky",top:0,maxHeight:"calc(100vh - 120px)",display:"flex",flexDirection:"column"}}>
       <div style={{padding:"10px 14px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
         <span style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:12,fontWeight:700,color:"#0d1b2a"}}>Shift Counts</span>
         <div style={{display:"flex",background:"#f1f5f9",borderRadius:6,padding:2,gap:1}}>
@@ -3430,71 +3443,123 @@ function Reports({user,staff,rota,leaveEntries,requests,quarters,availability}) 
     </td>
   );
 
+  const qSel = (
+    <div style={{display:"flex",alignItems:"center",gap:8}}>
+      <span style={{fontSize:11,color:"#94a3b8"}}>Quarter:</span>
+      <div className="mtog">
+        {qs.map(q=>(
+          <button key={q.id} className={`mtog-btn${selQ===q.id?" act":""}`} onClick={()=>setSelQ(q.id)}>{q.id}</button>
+        ))}
+      </div>
+    </div>
+  );
+
   return (
     <div>
       <div className="card">
         <div className="ch">
-          <span className="ct">Shift & Leave Summary</span>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <span style={{fontSize:11,color:"#94a3b8"}}>Quarter:</span>
-            <div className="mtog">
-              {qs.map(q=>(
-                <button key={q.id} className={`mtog-btn${selQ===q.id?" act":""}`} onClick={()=>setSelQ(q.id)}>{q.id}</button>
-              ))}
+          <span className="ct">Shift &amp; Leave Summary</span>
+          {qSel}
+        </div>
+
+        {/* ── Vertical (transposed) layout — shown on mobile, and always for single-person staff view ── */}
+        {!isAdmin&&stats.length===1&&stats.map(s=>(
+          <div key={s.id} className="rpt-vertical">
+            <div style={{padding:"12px 16px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",gap:10}}>
+              <div>
+                <div style={{fontWeight:700,fontSize:15,color:"#0d1b2a"}}>{s.name}</div>
+                <div style={{fontSize:11,color:"#64748b",marginTop:2}}><span style={{padding:"2px 6px",borderRadius:4,background:"#f1f5f9",color:"#475569",fontSize:11,fontWeight:600}}>{s.grade}</span></div>
+              </div>
+              <div style={{marginLeft:"auto",textAlign:"right",fontSize:10,color:"#94a3b8",lineHeight:1.5}}><strong style={{color:"#374151"}}>{selQ}</strong> / Year</div>
             </div>
-            <span style={{fontSize:10,color:"#94a3b8",marginLeft:4}}>Showing <strong>{selQ}</strong> / Year — each cell is <strong>Q / Year</strong></span>
+            {[
+              {label:"Total Shifts",     qv:s.q.total,    yv:s.yr.total,    bg:"#f1f5f9", fg:"#0f172a"},
+              {label:"Weekends",         qv:s.q.weWorked, yv:s.yr.weWorked, bg:"#f1f5f9", fg:"#0f172a"},
+              {label:"Night Shifts",     qv:s.q.nights,   yv:s.yr.nights,   bg:"#ede9fe", fg:"#4c1d95"},
+              {label:"Early Shifts",     qv:s.q.earlies,  yv:s.yr.earlies,  bg:"#dcfce7", fg:"#14532d"},
+              {label:"Mid Shifts",       qv:s.q.mids,     yv:s.yr.mids,     bg:"#dbeafe", fg:"#1e3a8a"},
+              {label:"Late Shifts",      qv:s.q.lates,    yv:s.yr.lates,    bg:"#fef3c7", fg:"#78350f"},
+            ].map(row=>(
+              <div key={row.label} className="rpt-vert-row">
+                <div className="rpt-vert-label">{row.label}</div>
+                <div className="rpt-vert-vals">
+                  <span className="rpt-vert-q" style={{background:row.bg,color:row.fg}}>{row.qv}</span>
+                  <span className="rpt-vert-yr">/ {row.yv}</span>
+                </div>
+              </div>
+            ))}
+            <div className="rpt-vert-row">
+              <div className="rpt-vert-label">Study Leave<div className="rpt-vert-sub">year total</div></div>
+              <div className="rpt-vert-vals">
+                <span className="rpt-vert-q" style={{background:s.slYr>0?"#fef3c7":"#f1f5f9",color:s.slYr>0?"#92400e":"#94a3b8"}}>{s.slYr}</span>
+                {s.slEntitlement>0&&<span className="rpt-vert-yr">/ {s.slEntitlement} days</span>}
+              </div>
+            </div>
+            {s.milEntitlement>0&&(
+              <div className="rpt-vert-row">
+                <div className="rpt-vert-label">Military Leave<div className="rpt-vert-sub">year total</div></div>
+                <div className="rpt-vert-vals">
+                  <span className="rpt-vert-q" style={{background:s.milYr>0?"#dcfce7":"#f1f5f9",color:s.milYr>0?"#166534":"#94a3b8"}}>{s.milYr}</span>
+                  <span className="rpt-vert-yr">/ {s.milEntitlement} days</span>
+                </div>
+              </div>
+            )}
           </div>
-        </div>
-        <div style={{overflowX:"auto"}}>
-          <table className="tbl" style={{minWidth:820}}>
-            <thead>
-              <tr>
-                <th style={{background:"#f8fafc",fontWeight:700,fontSize:10.5,color:"#475569",padding:"7px 10px",textAlign:"left",borderBottom:"2px solid #e2e8f0",whiteSpace:"nowrap"}}>Staff</th>
-                <th style={{background:"#f8fafc",fontWeight:700,fontSize:10.5,color:"#475569",padding:"7px 8px",textAlign:"center",borderBottom:"2px solid #e2e8f0",whiteSpace:"nowrap"}}>Grade</th>
-                {th("Total","shifts")}
-                {th("W/E","wknds")}
-                {th("Nights","")}
-                {th("Earlies","")}
-                {th("Mids","")}
-                {th("Lates","")}
-                {th("SL Days","year total")}
-                {th("Military","year total")}
-              </tr>
-            </thead>
-            <tbody>{stats.map(s=>(
-              <tr key={s.id} onMouseEnter={e=>e.currentTarget.style.background="#f8fafc"} onMouseLeave={e=>e.currentTarget.style.background=""}>
-                <td style={{padding:"6px 10px",fontWeight:600,fontSize:12.5,borderBottom:"1px solid #f1f5f9"}}>{s.name}</td>
-                <td style={{padding:"6px 8px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}>
-                  <span style={{padding:"2px 6px",borderRadius:4,background:"#f1f5f9",color:"#475569",fontSize:10.5,fontWeight:600}}>{s.grade}</span>
-                </td>
-                <QYCell q={s.q.total} yr={s.yr.total} bold/>
-                <QYCell q={s.q.weWorked} yr={s.yr.weWorked}/>
-                <QYCell q={s.q.nights}   yr={s.yr.nights}   bg="#ede9fe" fg="#4c1d95"/>
-                <QYCell q={s.q.earlies}  yr={s.yr.earlies}  bg="#dcfce7" fg="#14532d"/>
-                <QYCell q={s.q.mids}     yr={s.yr.mids}     bg="#dbeafe" fg="#1e3a8a"/>
-                <QYCell q={s.q.lates}    yr={s.yr.lates}    bg="#fef3c7" fg="#78350f"/>
-                <td style={{padding:"6px 8px",textAlign:"center",borderBottom:"1px solid #f1f5f9",borderLeft:"1px solid #f4f6fb"}}>
-                  <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4}}>
-                    <span style={{fontWeight:700,fontSize:13,padding:"2px 8px",borderRadius:4,
-                      background:s.slYr>0?"#fef3c7":"#f1f5f9",
-                      color:s.slYr>0?"#92400e":"#94a3b8"}}>{s.slYr}</span>
-                    {s.slEntitlement>0&&<span style={{fontSize:10,color:"#94a3b8"}}>/ {s.slEntitlement}</span>}
-                  </div>
-                </td>
-                <td style={{padding:"6px 8px",textAlign:"center",borderBottom:"1px solid #f1f5f9",borderLeft:"1px solid #f4f6fb"}}>
-                  {s.milEntitlement>0
-                    ?<div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4}}>
-                        <span style={{fontWeight:700,fontSize:13,padding:"2px 8px",borderRadius:4,background:s.milYr>0?"#dcfce7":"#f1f5f9",color:s.milYr>0?"#166534":"#94a3b8"}}>{s.milYr}</span>
-                        <span style={{fontSize:10,color:"#94a3b8"}}>/ {s.milEntitlement}</span>
-                      </div>
-                    :<span style={{fontSize:11,color:"#cbd5e1"}}>—</span>}
-                </td>
-              </tr>
-            ))}</tbody>
-          </table>
-        </div>
-        <div style={{padding:"8px 18px",borderTop:"1px solid #f1f5f9",fontSize:10.5,color:"#94a3b8"}}>
-          Shifts show <strong style={{color:"#374151"}}>{selQ} count</strong> / <strong style={{color:"#374151"}}>Year total</strong> · SL &amp; Military show year totals only (annual entitlement) · includes leave entries, availability entries &amp; approved requests
+        ))}
+
+        {/* ── Horizontal table — shown on desktop for admin, hidden on mobile for staff ── */}
+        <div className={isAdmin?"":"rpt-wide"}>
+          <div style={{overflowX:"auto"}}>
+            <table className="tbl" style={{minWidth:820}}>
+              <thead>
+                <tr>
+                  <th style={{background:"#f8fafc",fontWeight:700,fontSize:10.5,color:"#475569",padding:"7px 10px",textAlign:"left",borderBottom:"2px solid #e2e8f0",whiteSpace:"nowrap"}}>Staff</th>
+                  <th style={{background:"#f8fafc",fontWeight:700,fontSize:10.5,color:"#475569",padding:"7px 8px",textAlign:"center",borderBottom:"2px solid #e2e8f0",whiteSpace:"nowrap"}}>Grade</th>
+                  {th("Total","shifts")}
+                  {th("W/E","wknds")}
+                  {th("Nights","")}
+                  {th("Earlies","")}
+                  {th("Mids","")}
+                  {th("Lates","")}
+                  {th("SL Days","year total")}
+                  {th("Military","year total")}
+                </tr>
+              </thead>
+              <tbody>{stats.map(s=>(
+                <tr key={s.id} onMouseEnter={e=>e.currentTarget.style.background="#f8fafc"} onMouseLeave={e=>e.currentTarget.style.background=""}>
+                  <td style={{padding:"6px 10px",fontWeight:600,fontSize:12.5,borderBottom:"1px solid #f1f5f9"}}>{s.name}</td>
+                  <td style={{padding:"6px 8px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}>
+                    <span style={{padding:"2px 6px",borderRadius:4,background:"#f1f5f9",color:"#475569",fontSize:10.5,fontWeight:600}}>{s.grade}</span>
+                  </td>
+                  <QYCell q={s.q.total} yr={s.yr.total} bold/>
+                  <QYCell q={s.q.weWorked} yr={s.yr.weWorked}/>
+                  <QYCell q={s.q.nights}   yr={s.yr.nights}   bg="#ede9fe" fg="#4c1d95"/>
+                  <QYCell q={s.q.earlies}  yr={s.yr.earlies}  bg="#dcfce7" fg="#14532d"/>
+                  <QYCell q={s.q.mids}     yr={s.yr.mids}     bg="#dbeafe" fg="#1e3a8a"/>
+                  <QYCell q={s.q.lates}    yr={s.yr.lates}    bg="#fef3c7" fg="#78350f"/>
+                  <td style={{padding:"6px 8px",textAlign:"center",borderBottom:"1px solid #f1f5f9",borderLeft:"1px solid #f4f6fb"}}>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4}}>
+                      <span style={{fontWeight:700,fontSize:13,padding:"2px 8px",borderRadius:4,
+                        background:s.slYr>0?"#fef3c7":"#f1f5f9",
+                        color:s.slYr>0?"#92400e":"#94a3b8"}}>{s.slYr}</span>
+                      {s.slEntitlement>0&&<span style={{fontSize:10,color:"#94a3b8"}}>/ {s.slEntitlement}</span>}
+                    </div>
+                  </td>
+                  <td style={{padding:"6px 8px",textAlign:"center",borderBottom:"1px solid #f1f5f9",borderLeft:"1px solid #f4f6fb"}}>
+                    {s.milEntitlement>0
+                      ?<div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4}}>
+                          <span style={{fontWeight:700,fontSize:13,padding:"2px 8px",borderRadius:4,background:s.milYr>0?"#dcfce7":"#f1f5f9",color:s.milYr>0?"#166534":"#94a3b8"}}>{s.milYr}</span>
+                          <span style={{fontSize:10,color:"#94a3b8"}}>/ {s.milEntitlement}</span>
+                        </div>
+                      :<span style={{fontSize:11,color:"#cbd5e1"}}>—</span>}
+                  </td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+          <div style={{padding:"8px 18px",borderTop:"1px solid #f1f5f9",fontSize:10.5,color:"#94a3b8"}}>
+            Shifts show <strong style={{color:"#374151"}}>{selQ} count</strong> / <strong style={{color:"#374151"}}>Year total</strong> · SL &amp; Military show year totals only · includes leave entries, availability entries &amp; approved requests
+          </div>
         </div>
       </div>
     </div>
