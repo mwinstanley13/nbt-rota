@@ -231,7 +231,7 @@ const INIT_STAFF = [
   {id:30,name:"Harriet Jones",        init:"HJ",  grade:"ST3", hrs:41.75,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0,nightBlockPref:"any"},
   {id:31,name:"Jack Sadler",          init:"JS2", grade:"ST3", hrs:41.75,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0,nightBlockPref:"any"},
   {id:32,name:"Nikki Mavel",          init:"NM",  grade:"ACP", hrs:37.5, pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0,nightBlockPref:"any"},
-  {id:99,name:"Rota Admin",           init:"ADM", grade:"Admin",hrs:0,   pw:"admin2026",role:"admin",active:true,slDays:0,militaryDays:0,nightBlockPref:"any"},
+  {id:99,name:"Rota Admin",           init:"ADM", grade:"Admin",hrs:0,   pw:"admin2026",role:"admin",active:true,slDays:0,militaryDays:0,nightBlockPref:"any",isOwner:true},
 ];
 
 // ═══════════════════════════════════════════════════════════════
@@ -774,6 +774,7 @@ function Sidebar({user,view,setView,onLogout,pendingCount,hasOpenQ,isOpen,onClos
     ...(!isAdmin?[{id:"myshifts",icon:"👤",label:"My Shifts"},{id:"myrecords",icon:"📒",label:"My Leave Records"}]:[]),
     {id:"availability",icon:"📋",label:"Availability",badge:!isAdmin&&hasOpenQ?"!":null},
     {id:"requests",icon:"📝",label:isAdmin?"Requests":"My Requests",badge:isAdmin&&pendingCount>0?pendingCount:null},
+    {id:"rotarules",icon:"📜",label:"Rota Rules"},
     ...(isAdmin?[
       {id:"airota",      icon:"🤖",label:"AI Rota Builder"},
       {id:"builder",     icon:"🔧",label:"Rota Builder"},
@@ -1158,6 +1159,9 @@ function AvailabilityView({
   const [pickModal, setPickModal] = useState(null); // { date }
   const [viewMonth, setVM] = useState(new Date(2026, 7, 1));
   const [modalDraft, setModalDraft] = useState({ base: "", slots: [] });
+  // Fixed days off local state (lifted from IIFE to avoid hooks-in-conditional)
+  const [fdDay, setFdDay] = useState("Monday");
+  const [fdReason, setFdReason] = useState("Research");
 
   const activeQs = quarters || QUARTERS;
   const q = activeQs.find(x => x.id === selQ);
@@ -1455,17 +1459,9 @@ function AvailabilityView({
                   </div>
                 </div>
 
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
-                  <span className="chip" style={{ background: "#dcfce7", color: "#166534", borderColor: "#166534", borderWidth: 1, fontSize: 10.5 }}>Any</span>
-                  <span className="chip" style={{ background: "#d1fae5", color: "#065f46", borderColor: "#065f46", borderWidth: 1, fontSize: 10.5 }}>✓ Specific shifts</span>
-                  <span className="chip" style={{ background: "#fee2e2", color: "#7f1d1d", borderColor: "#7f1d1d", borderWidth: 1, fontSize: 10.5 }}>✗ Unavailable</span>
-                  <span className="chip" style={{ background: "#f1f5f9", color: "#334155", borderColor: "#334155", borderWidth: 1, fontSize: 10.5 }}>SL Study Leave</span>
-                  <span className="chip" style={{ background: "#f8fafc", color: "#94a3b8", borderColor: "#e2e8f0", fontSize: 10.5 }}>⬚ Not marked</span>
-                </div>
-
-                <div style={{ fontSize: 11.5, color: "#64748b" }}>
-                  Choose <strong>Any</strong>, <strong>Unavailable</strong>, <strong>SL</strong>, or pick <strong>one or more specific shifts</strong>.
-                </div>
+                <p style={{ margin: 0, fontSize: 13.5, color: "#374151", fontFamily:"'DM Sans',sans-serif", lineHeight: 1.7, fontWeight: 400 }}>
+                  Tap any date to record your availability. Choose <strong>Any shift</strong> if you're happy to work that day, <strong>Unavailable</strong> if you cannot work, <strong>SL</strong> for study leave, or select a <strong>specific shift type</strong> (Early, Mid, Late, or Night) if you have a preference. Unmarked days are treated as no preference.
+                </p>
               </div>
             </div>
 
@@ -1475,9 +1471,9 @@ function AvailabilityView({
               if (!me || !["ST4+","ST3","ACP","tACP"].includes(me.grade)) return null;
               const pref = me.nightBlockPref || "any";
               const opts = [
-                { val:"any",  label:"No preference",      desc:"System decides based on staffing needs" },
-                { val:"4",    label:"4 nights (Mon–Thu)",  desc:"Prefer to do all 4 weekday nights in one block" },
-                { val:"2+2",  label:"Split 2+2",           desc:"Prefer to split into Mon–Tue and Wed–Thu" },
+                { val:"any", label:"No preference",      desc:"System will schedule you for any night block" },
+                { val:"4",   label:"4 nights (Mon–Thu)", desc:"Prefer a full 4-night weekday block" },
+                { val:"2",   label:"2 nights",           desc:"Prefer shorter 2-night weekday blocks" },
               ];
               const save = (val) => {
                 if (setStaff) setStaff(prev => prev.map(s => s.init === user.init ? {...s, nightBlockPref: val} : s));
@@ -1507,6 +1503,89 @@ function AvailabilityView({
               );
             })()}
           </div>
+    {/* ── Fixed Days Off — between night pref and calendar ── */}
+    {!isAdmin && fixedDaysOff && setFixedDaysOff && (()=>{
+      const DAY_NAMES_FD = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+      const REASONS_FD   = ["Research","Fellow Day","PHEM"];
+      const FIXED_LEAVE_TYPE_FD = {"Research":"RESEARCH","Fellow Day":"FELLOW","PHEM":"PHEM"};
+      const myFixed = fixedDaysOff.filter(f=>f.init===user.init);
+      const addFixed = () => {
+        if (myFixed.some(f=>f.dayOfWeek===fdDay&&f.reason===fdReason)) return;
+        setFixedDaysOff(prev=>[...prev,{id:Date.now(),init:user.init,name:user.name,dayOfWeek:fdDay,reason:fdReason,addedDate:fmtISO(new Date())}]);
+        const allDates = [];
+        (quarters||QUARTERS).forEach(q => getDatesInRange(q.start,q.end).forEach(d=>{
+          if (new Date(d+"T00:00:00").toLocaleDateString("en-GB",{weekday:"long"})===fdDay) allDates.push(d);
+        }));
+        setAvailability(prev=>{
+          const next={...prev,[user.init]:{...(prev[user.init]||{})}};
+          allDates.forEach(d=>{
+            const ex=next[user.init][d];
+            if(!ex||!ex.base||ex.base==="ANY"||ex.autoFromFixed) next[user.init][d]={base:"UNAVAILABLE",slots:[],autoFromFixed:true};
+          });
+          return next;
+        });
+        const lt=FIXED_LEAVE_TYPE_FD[fdReason];
+        if(lt) setLeaveEntries(prev=>{
+          const next={...prev};
+          allDates.forEach(d=>{
+            const day=next[d]||[];
+            if(!day.some(e=>e.init===user.init&&e.type===lt&&e.autoFromFixed))
+              next[d]=[...day,{id:Date.now()+Math.random(),init:user.init,type:lt,note:"Auto-added from fixed day off",autoFromFixed:true}];
+          });
+          return next;
+        });
+        addAudit(user.init,"Fixed Day Off",`${user.init} added fixed ${fdReason}: ${fdDay}`);
+      };
+      const removeFixed = (f) => {
+        setFixedDaysOff(prev=>prev.filter(x=>x.id!==f.id));
+        setAvailability(prev=>{
+          const next={...prev,[f.init]:{...(prev[f.init]||{})}};
+          Object.keys(next[f.init]).forEach(d=>{ if(next[f.init][d]?.autoFromFixed) delete next[f.init][d]; });
+          return next;
+        });
+        const lt=FIXED_LEAVE_TYPE_FD[f.reason];
+        if(lt) setLeaveEntries(prev=>{
+          const next={};
+          Object.entries(prev).forEach(([d,es])=>{ const fi=es.filter(e=>!(e.init===f.init&&e.type===lt&&e.autoFromFixed)); if(fi.length) next[d]=fi; });
+          return next;
+        });
+        addAudit(user.init,"Fixed Day Off",`${user.init} removed fixed ${f.reason}: ${f.dayOfWeek}`);
+      };
+      return (
+        <div className="card" style={{marginBottom:16}}>
+          <div className="ch"><span className="ct">📆 Fixed Days Off</span></div>
+          <div className="cb">
+            <div className="al al-i" style={{marginBottom:12,fontSize:12.5}}>
+              Fixed days off are only for agreed posts (e.g. Research, Fellow Day, PHEM). Please use <strong>Unavailability</strong> for LTFT arrangements and we will attempt to accommodate everyone's requests.
+            </div>
+            {myFixed.length===0&&<p style={{fontSize:12.5,color:"#94a3b8",margin:"8px 0"}}>No fixed days off set.</p>}
+            {myFixed.map(f=>(
+              <div key={f.id} style={{display:"flex",alignItems:"center",gap:10,padding:"6px 0",borderBottom:"1px solid #f1f5f9"}}>
+                <span style={{flex:1,fontSize:13,fontWeight:600}}>{f.dayOfWeek}</span>
+                <span style={{padding:"2px 8px",borderRadius:4,background:"#eff6ff",color:"#1d4ed8",fontSize:11,fontWeight:600}}>{f.reason}</span>
+                <button className="btn bs bsm" style={{color:"#ef4444",borderColor:"#ef4444"}} onClick={()=>removeFixed(f)}>Remove</button>
+              </div>
+            ))}
+            <div style={{display:"flex",gap:8,marginTop:12,flexWrap:"wrap",alignItems:"flex-end"}}>
+              <div className="fg" style={{margin:0}}>
+                <label className="fl">Day</label>
+                <select className="fi" style={{padding:"5px 8px"}} value={fdDay} onChange={e=>setFdDay(e.target.value)}>
+                  {DAY_NAMES_FD.map(d=><option key={d}>{d}</option>)}
+                </select>
+              </div>
+              <div className="fg" style={{margin:0}}>
+                <label className="fl">Reason</label>
+                <select className="fi" style={{padding:"5px 8px"}} value={fdReason} onChange={e=>setFdReason(e.target.value)}>
+                  {REASONS_FD.map(r=><option key={r}>{r}</option>)}
+                </select>
+              </div>
+              <button className="btn bp" style={{height:34,alignSelf:"flex-end"}} onClick={addFixed}>＋ Add</button>
+            </div>
+          </div>
+        </div>
+      );
+    })()}
+
         ) : (
           <div className="al al-w">
             ⏳ Availability for <strong>{q?.label}</strong> is not yet open. Your admin will open it when ready.
@@ -1695,105 +1774,6 @@ function AvailabilityView({
           );
         })()}
 
-    {/* ── Fixed Days Off ── */}
-    {!isAdmin && fixedDaysOff && setFixedDaysOff && (() => {
-      const DAY_NAMES = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
-      const REASONS   = ["Research","Fellow Day","PHEM"];
-      const FIXED_LEAVE_TYPE = {"Research":"RESEARCH","Fellow Day":"FELLOW","PHEM":"PHEM"};
-      const myFixed   = fixedDaysOff.filter(f=>f.init===user.init);
-      const [fdDay, setFdDay] = React.useState("Monday");
-      const [fdReason, setFdReason] = React.useState("Research");
-      const addFixed = () => {
-        if (myFixed.some(f=>f.dayOfWeek===fdDay&&f.reason===fdReason)) return;
-        setFixedDaysOff(prev=>[...prev,{id:Date.now(),init:user.init,name:user.name,dayOfWeek:fdDay,reason:fdReason,addedDate:fmtISO(new Date())}]);
-        // Collect all matching dates across the year
-        const allDates = [];
-        (quarters||QUARTERS).forEach(q => getDatesInRange(q.start,q.end).forEach(d=>{
-          if (new Date(d+"T00:00:00").toLocaleDateString("en-GB",{weekday:"long"})===fdDay) allDates.push(d);
-        }));
-        // Auto-set availability to UNAVAILABLE for those dates (so AI generator respects them)
-        setAvailability(prev=>{
-          const next={...prev, [user.init]:{...(prev[user.init]||{})}};
-          allDates.forEach(d=>{
-            const existing = next[user.init][d];
-            // Only overwrite if not already manually set to something specific
-            if (!existing || !existing.base || existing.base==="ANY" || existing.autoFromFixed) {
-              next[user.init][d]={base:"UNAVAILABLE",slots:[],autoFromFixed:true};
-            }
-          });
-          return next;
-        });
-        // Auto-add leave entries so the reason shows on the rota/calendar
-        const leaveType = FIXED_LEAVE_TYPE[fdReason];
-        if (leaveType) {
-          setLeaveEntries(prev=>{
-            const next={...prev};
-            allDates.forEach(d=>{
-              const day=next[d]||[];
-              if (!day.some(e=>e.init===user.init&&e.type===leaveType&&e.autoFromFixed)) {
-                next[d]=[...day,{id:Date.now()+Math.random(),init:user.init,type:leaveType,note:"Auto-added from fixed day off",autoFromFixed:true}];
-              }
-            });
-            return next;
-          });
-        }
-        addAudit(user.init,"Fixed Day Off",`${user.init} added fixed ${fdReason} day: ${fdDay} (availability + leave auto-populated)`);
-      };
-      const removeFixed = (f) => {
-        setFixedDaysOff(prev=>prev.filter(x=>x.id!==f.id));
-        // Clear auto-set availability entries
-        setAvailability(prev=>{
-          const next={...prev, [f.init]:{...(prev[f.init]||{})}};
-          Object.keys(next[f.init]).forEach(d=>{
-            if (next[f.init][d]?.autoFromFixed) delete next[f.init][d];
-          });
-          return next;
-        });
-        // Remove auto-added leave entries
-        const leaveType = FIXED_LEAVE_TYPE[f.reason];
-        if (leaveType) {
-          setLeaveEntries(prev=>{
-            const next={};
-            Object.entries(prev).forEach(([d,entries])=>{
-              const filtered=entries.filter(e=>!(e.init===f.init&&e.type===leaveType&&e.autoFromFixed));
-              if (filtered.length>0) next[d]=filtered;
-            });
-            return next;
-          });
-        }
-        addAudit(user.init,"Fixed Day Off",`${user.init} removed fixed ${f.reason}: ${f.dayOfWeek}`);
-      };
-      return (
-        <div className="card" style={{marginTop:18}}>
-          <div className="ch"><span className="ct">Fixed Days Off</span><span style={{fontSize:11,color:"#94a3b8",marginLeft:8}}>Regular non-working days — leave entries auto-populated for the year</span></div>
-          <div className="cb">
-            {myFixed.length===0&&<p style={{fontSize:12.5,color:"#94a3b8",margin:"8px 0"}}>No fixed days off set.</p>}
-            {myFixed.map(f=>(
-              <div key={f.id} style={{display:"flex",alignItems:"center",gap:10,padding:"6px 0",borderBottom:"1px solid #f1f5f9"}}>
-                <span style={{flex:1,fontSize:13,fontWeight:600}}>{f.dayOfWeek}</span>
-                <span style={{padding:"2px 8px",borderRadius:4,background:"#eff6ff",color:"#1d4ed8",fontSize:11,fontWeight:600}}>{f.reason}</span>
-                <button className="btn bs bsm" style={{color:"#ef4444",borderColor:"#ef4444"}} onClick={()=>removeFixed(f)}>Remove</button>
-              </div>
-            ))}
-            <div style={{display:"flex",gap:8,marginTop:12,flexWrap:"wrap",alignItems:"flex-end"}}>
-              <div className="fg" style={{margin:0}}>
-                <label className="fl">Day</label>
-                <select className="fi" style={{padding:"5px 8px"}} value={fdDay} onChange={e=>setFdDay(e.target.value)}>
-                  {DAY_NAMES.map(d=><option key={d}>{d}</option>)}
-                </select>
-              </div>
-              <div className="fg" style={{margin:0}}>
-                <label className="fl">Reason</label>
-                <select className="fi" style={{padding:"5px 8px"}} value={fdReason} onChange={e=>setFdReason(e.target.value)}>
-                  {REASONS.map(r=><option key={r}>{r}</option>)}
-                </select>
-              </div>
-              <button className="btn bp" style={{height:34,alignSelf:"flex-end"}} onClick={addFixed}>＋ Add</button>
-            </div>
-          </div>
-        </div>
-      );
-    })()}
 
     </div>
   );
@@ -2935,50 +2915,177 @@ function RequestsView({user,requests,setRequests,addAudit,swaps,setSwaps,rota,se
 }
 
 // ═══════════════════════════════════════════════════════════════
+// ROTA RULES
+// ═══════════════════════════════════════════════════════════════
+
+function RotaRulesView({rotaRulesText,setRotaRulesText,addAudit,currentUser,isAdmin}) {
+  const [editing,setEditing]=useState(false);
+  const [draft,setDraft]=useState(rotaRulesText||"");
+
+  const save=()=>{
+    setRotaRulesText(draft);
+    addAudit(currentUser.init,"Rota Rules","Rota rules text updated");
+    setEditing(false);
+  };
+  const cancel=()=>{setDraft(rotaRulesText||"");setEditing(false);};
+
+  // Render plain text with line-breaks preserved
+  const renderText=txt=>{
+    if(!txt||!txt.trim()) return <p style={{color:"#94a3b8",fontStyle:"italic",margin:0}}>No rota rules have been published yet.</p>;
+    return txt.split("\n").map((line,i)=>{
+      // Render lines starting with # as headings
+      if(line.startsWith("### ")) return <h4 key={i} style={{margin:"18px 0 6px",fontSize:14,fontWeight:700,color:"#1e293b"}}>{line.slice(4)}</h4>;
+      if(line.startsWith("## "))  return <h3 key={i} style={{margin:"22px 0 8px",fontSize:16,fontWeight:700,color:"#0f172a",borderBottom:"1px solid #e2e8f0",paddingBottom:6}}>{line.slice(3)}</h3>;
+      if(line.startsWith("# "))   return <h2 key={i} style={{margin:"24px 0 10px",fontSize:19,fontWeight:800,color:"#0f172a"}}>{line.slice(2)}</h2>;
+      if(line.startsWith("- ")||line.startsWith("• ")) return <div key={i} style={{display:"flex",gap:8,padding:"2px 0",fontSize:13.5,color:"#374151"}}><span style={{color:"#6366f1",flexShrink:0,marginTop:2}}>•</span><span>{line.slice(2)}</span></div>;
+      if(line.trim()==="") return <div key={i} style={{height:10}}/>;
+      return <p key={i} style={{margin:"4px 0",fontSize:13.5,color:"#374151",lineHeight:1.65}}>{line}</p>;
+    });
+  };
+
+  return (
+    <div style={{maxWidth:800}}>
+      <div className="card">
+        <div className="ch" style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <span className="ct">📜 Rota Rules</span>
+          {isAdmin&&!editing&&<button className="btn bp bsm" onClick={()=>{setDraft(rotaRulesText||"");setEditing(true);}}>✏️ Edit</button>}
+        </div>
+        <div className="cb">
+          {isAdmin&&editing?(
+            <>
+              <div className="al al-i" style={{marginBottom:12,fontSize:12.5}}>
+                Use <strong># Heading</strong>, <strong>## Section</strong>, <strong>### Sub-section</strong> for headings. Use <strong>- item</strong> for bullet points. Blank lines create spacing.
+              </div>
+              <textarea
+                value={draft}
+                onChange={e=>setDraft(e.target.value)}
+                rows={20}
+                style={{width:"100%",fontFamily:"'DM Sans',sans-serif",fontSize:13.5,lineHeight:1.6,padding:"12px 14px",border:"1px solid #e2e8f0",borderRadius:8,resize:"vertical",color:"#374151",background:"#f8fafc",boxSizing:"border-box"}}
+                placeholder={"# Rota Rules 2026/27\n\n## Overview\nWrite an overview of how the rota works...\n\n## Shift Types\n- Early: 08:00–16:00\n- Mid: 12:00–20:00\n- Late: 14:00–22:00\n\n## Night Blocks\n..."}
+              />
+              <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:12}}>
+                <button className="btn bs" onClick={cancel}>Cancel</button>
+                <button className="btn bp" onClick={save}>Save Rules</button>
+              </div>
+            </>
+          ):(
+            <div style={{fontFamily:"'DM Sans',sans-serif",lineHeight:1.65}}>
+              {renderText(rotaRulesText||"")}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
 // STAFF MANAGEMENT
 // ═══════════════════════════════════════════════════════════════
 
 function StaffMgmt({staff,setStaff,addAudit,currentUser}) {
   const [modal,setModal]=useState(null); const [form,setForm]=useState({});
   const [pwModal,setPwM]=useState(null); const [newPw,setNPw]=useState("");
+  const isOwner=!!currentUser.isOwner;
+
   const save=()=>{
     const rec={...form,slDays:parseInt(form.slDays)||0,militaryDays:parseInt(form.militaryDays)||0};
     modal==="add"?setStaff(p=>[...p,{...rec,id:Date.now()}]):setStaff(p=>p.map(s=>s.id===modal.id?{...s,...rec}:s));
     addAudit(currentUser.init,"Staff",`${form.name} ${modal==="add"?"added":"updated"}`);setModal(null);
   };
-  const show=staff.filter(s=>s.role!=="admin");
+
+  const promoteToAdmin = s => {
+    if(!confirm(`Promote ${s.name} to Admin? They will gain full administrative access.`)) return;
+    setStaff(p=>p.map(x=>x.id===s.id?{...x,role:"admin"}:x));
+    addAudit(currentUser.init,"Staff Role","Promoted "+s.name+" to Admin");
+  };
+  const demoteToStaff = s => {
+    if(!confirm(`Remove admin access from ${s.name}? They will become a regular staff member.`)) return;
+    setStaff(p=>p.map(x=>x.id===s.id?{...x,role:"staff"}:x));
+    addAudit(currentUser.init,"Staff Role","Demoted "+s.name+" to Staff");
+  };
+
+  // Staff table: all non-admin, plus non-owner admins if viewer is owner
+  const staffMembers = staff.filter(s=>s.role==="staff");
+  const adminMembers = isOwner ? staff.filter(s=>s.role==="admin"&&!s.isOwner) : [];
+  const allShow = staffMembers; // main table always shows staff
+  const demoLoadable = allShow.length===0&&IS_DEMO;
+
+  const StaffRow = ({s, showRole=false}) => (
+    <tr key={s.id}>
+      <td style={{fontWeight:600}}>{s.name}</td>
+      <td><code style={{background:"#f1f5f9",padding:"1px 5px",borderRadius:4,fontSize:11}}>{s.init}</code></td>
+      <td>{s.grade}{s.military&&<span className="badge b-admin" style={{marginLeft:4,fontSize:9,padding:"1px 5px"}}>MIL</span>}</td>
+      <td>{s.hrs}</td>
+      {showRole&&<td><span className={`badge ${s.role==="admin"?"b-admin":"b-approved"}`}>{s.role==="admin"?"Admin":"Staff"}</span></td>}
+      <td><span className={`badge ${s.active?"b-approved":"b-rejected"}`}>{s.active?"Active":"Inactive"}</span></td>
+      <td><div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+        <button className="btn bs bsm" onClick={()=>{setForm({...s});setModal(s);}}>Edit</button>
+        <button className="btn bs bsm" onClick={()=>{setPwM(s);setNPw("");}}>🔑</button>
+        {isOwner&&s.role==="staff"&&<button className="btn bsm" style={{background:"#ede9fe",color:"#5b21b6",border:"1px solid #c4b5fd"}} onClick={()=>promoteToAdmin(s)}>Make Admin</button>}
+        {isOwner&&s.role==="admin"&&<button className="btn bsm" style={{background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d"}} onClick={()=>demoteToStaff(s)}>Make Staff</button>}
+        <button className={`btn bsm ${s.active?"bd":"bp"}`} onClick={()=>{setStaff(p=>p.map(x=>x.id===s.id?{...x,active:!x.active}:x));addAudit(currentUser.init,"Staff",`${s.name} ${s.active?"deactivated":"activated"}`);}}>
+          {s.active?"Deactivate":"Activate"}
+        </button>
+      </div></td>
+    </tr>
+  );
+
   return (
     <div>
       <div style={{display:"flex",gap:10,marginBottom:14,flexWrap:"wrap"}}>
         <button className="btn bp" onClick={()=>{setForm({name:"",init:"",grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0,nightBlockPref:"any",military:false});setModal("add");}}>＋ Add Staff</button>
-        {show.length===0&&IS_DEMO&&<button className="btn" style={{background:"#f0f9ff",color:"#0369a1",border:"1px solid #bae6fd"}} onClick={()=>{if(!confirm("Load all 32 default NBT staff? This will add them with password rota2026.")) return; const existing=staff.map(s=>s.init); const toAdd=INIT_STAFF.filter(s=>s.role==="staff"&&!existing.includes(s.init)); setStaff(p=>[...p,...toAdd]);}}>📋 Load Default Staff</button>}
+        {isOwner&&<button className="btn" style={{background:"#ede9fe",color:"#5b21b6",border:"1px solid #c4b5fd"}} onClick={()=>{setForm({name:"",init:"",grade:"Admin",hrs:0,pw:"admin2026",role:"admin",active:true,slDays:0,militaryDays:0,nightBlockPref:"any",military:false});setModal("add");}}>＋ Add Admin</button>}
+        {demoLoadable&&<button className="btn" style={{background:"#f0f9ff",color:"#0369a1",border:"1px solid #bae6fd"}} onClick={()=>{if(!confirm("Load all 32 default NBT staff? This will add them with password rota2026.")) return; const existing=staff.map(s=>s.init); const toAdd=INIT_STAFF.filter(s=>s.role==="staff"&&!existing.includes(s.init)); setStaff(p=>[...p,...toAdd]);}}>📋 Load Default Staff</button>}
       </div>
-      <div className="card">
+
+      {/* Main staff table */}
+      <div className="card" style={{marginBottom:16}}>
+        <div className="ch"><span className="ct">Staff Members</span><span style={{fontSize:12,color:"#6b7280",fontWeight:400}}>{staffMembers.length} members</span></div>
         <table className="tbl">
           <thead><tr><th>Name</th><th>Init</th><th>Grade</th><th>Hrs</th><th>Status</th><th>Actions</th></tr></thead>
-          <tbody>{show.map(s=>(
-            <tr key={s.id}>
-              <td style={{fontWeight:600}}>{s.name}</td>
-              <td><code style={{background:"#f1f5f9",padding:"1px 5px",borderRadius:4,fontSize:11}}>{s.init}</code></td>
-              <td>{s.grade}{s.military&&<span className="badge b-admin" style={{marginLeft:4,fontSize:9,padding:"1px 5px"}}>MIL</span>}</td><td>{s.hrs}</td>
-              <td><span className={`badge ${s.active?"b-approved":"b-rejected"}`}>{s.active?"Active":"Inactive"}</span></td>
-              <td><div style={{display:"flex",gap:5}}>
-                <button className="btn bs bsm" onClick={()=>{setForm({...s});setModal(s);}}>Edit</button>
-                <button className="btn bs bsm" onClick={()=>{setPwM(s);setNPw("");}}>🔑</button>
-                <button className={`btn bsm ${s.active?"bd":"bp"}`} onClick={()=>{setStaff(p=>p.map(x=>x.id===s.id?{...x,active:!x.active}:x));addAudit(currentUser.init,"Staff",`${s.name} ${s.active?"deactivated":"activated"}`);}}>
-                  {s.active?"Deactivate":"Activate"}
-                </button>
-              </div></td>
-            </tr>
-          ))}</tbody>
+          <tbody>{allShow.map(s=><StaffRow key={s.id} s={s} showRole={false}/>)}</tbody>
         </table>
       </div>
+
+      {/* Admin members table — owner only */}
+      {isOwner&&(
+        <div className="card">
+          <div className="ch"><span className="ct">Admin Users</span><span style={{fontSize:12,color:"#6b7280",fontWeight:400}}>{adminMembers.length+1} admins (incl. you)</span></div>
+          <div className="cb" style={{paddingTop:0,paddingBottom:0}}>
+            {/* Owner row — read only */}
+            <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 0",borderBottom:adminMembers.length?"1px solid #f1f5f9":"none"}}>
+              <div style={{flex:1,fontWeight:600,fontSize:13.5}}>{currentUser.name}</div>
+              <code style={{background:"#f1f5f9",padding:"1px 5px",borderRadius:4,fontSize:11}}>{currentUser.init}</code>
+              <span className="badge b-admin" style={{fontSize:10}}>Owner</span>
+              <span style={{fontSize:12,color:"#94a3b8",marginLeft:"auto"}}>Cannot be changed</span>
+            </div>
+            {adminMembers.map((s,i)=>(
+              <div key={s.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 0",borderBottom:i<adminMembers.length-1?"1px solid #f1f5f9":"none",flexWrap:"wrap"}}>
+                <div style={{flex:1,fontWeight:600,fontSize:13.5}}>{s.name}</div>
+                <code style={{background:"#f1f5f9",padding:"1px 5px",borderRadius:4,fontSize:11}}>{s.init}</code>
+                <span className={`badge ${s.active?"b-approved":"b-rejected"}`}>{s.active?"Active":"Inactive"}</span>
+                <div style={{display:"flex",gap:5,marginLeft:"auto"}}>
+                  <button className="btn bs bsm" onClick={()=>{setForm({...s});setModal(s);}}>Edit</button>
+                  <button className="btn bs bsm" onClick={()=>{setPwM(s);setNPw("");}}>🔑</button>
+                  <button className="btn bsm" style={{background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d"}} onClick={()=>demoteToStaff(s)}>Make Staff</button>
+                  <button className={`btn bsm ${s.active?"bd":"bp"}`} onClick={()=>{setStaff(p=>p.map(x=>x.id===s.id?{...x,active:!x.active}:x));addAudit(currentUser.init,"Staff",`${s.name} ${s.active?"deactivated":"activated"}`);}}>
+                    {s.active?"Deactivate":"Activate"}
+                  </button>
+                </div>
+              </div>
+            ))}
+            {adminMembers.length===0&&<div style={{padding:"12px 0",color:"#94a3b8",fontSize:13,fontStyle:"italic"}}>No additional admin users. Use "Add Admin" above to grant admin access.</div>}
+          </div>
+        </div>
+      )}
+
       {modal&&<Modal title={modal==="add"?"Add Staff":"Edit Staff"} onClose={()=>setModal(null)}
         footer={<><button className="btn bs" onClick={()=>setModal(null)}>Cancel</button><button className="btn bp" onClick={save}>Save</button></>}>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
           <div className="fg"><label className="fl">Full Name</label><input className="fi" value={form.name||""} onChange={e=>setForm(f=>({...f,name:e.target.value}))}/></div>
           <div className="fg"><label className="fl">Initials</label><input className="fi" value={form.init||""} onChange={e=>setForm(f=>({...f,init:e.target.value.toUpperCase()}))}/></div>
-          <div className="fg"><label className="fl">Grade</label><select className="fi" value={form.grade||"ST4+"} onChange={e=>setForm(f=>({...f,grade:e.target.value}))}>
+          {form.role!=="admin"&&<><div className="fg"><label className="fl">Grade</label><select className="fi" value={form.grade||"ST4+"} onChange={e=>setForm(f=>({...f,grade:e.target.value}))}>
             <option>ST4+</option><option>ST3</option><option>ACP</option><option>tACP</option><option>PHEM Fellow</option><option>Research Fellow</option>
           </select></div>
           <div className="fg"><label className="fl">Hours/Week</label><input type="number" className="fi" value={form.hrs||45.25} onChange={e=>setForm(f=>({...f,hrs:parseFloat(e.target.value)||0}))}/></div>
@@ -2986,9 +3093,9 @@ function StaffMgmt({staff,setStaff,addAudit,currentUser}) {
           <div className="fg"><label className="fl">Military Days / yr</label><input type="number" className="fi" value={form.militaryDays??0} onChange={e=>setForm(f=>({...f,militaryDays:e.target.value}))}/></div>
           <div className="fg"><label className="fl">Night Block Preference</label>
             <select className="fi" value={form.nightBlockPref||"any"} onChange={e=>setForm(f=>({...f,nightBlockPref:e.target.value}))}>
-              <option value="any">Any / No preference</option>
-              <option value="full">Full block (4 nights Mon–Thu)</option>
-              <option value="split">Split block (2+2 nights)</option>
+              <option value="any">No preference</option>
+              <option value="4">4 nights (Mon–Thu)</option>
+              <option value="2">2 nights</option>
             </select>
           </div>
           <div className="fg" style={{gridColumn:"1/-1"}}>
@@ -2996,8 +3103,8 @@ function StaffMgmt({staff,setStaff,addAudit,currentUser}) {
               <input type="checkbox" checked={!!form.military} onChange={e=>setForm(f=>({...f,military:e.target.checked}))} style={{width:16,height:16,accentColor:"#10b981"}}/>
               Military contract — uses Military hours targets but keeps grade for shift eligibility
             </label>
-          </div>
-          {modal==="add"&&<div className="fg"><label className="fl">Password</label><input className="fi" value={form.pw||"rota2026"} onChange={e=>setForm(f=>({...f,pw:e.target.value}))}/></div>}
+          </div></>}
+          {modal==="add"&&<div className="fg"><label className="fl">Password</label><input className="fi" value={form.pw||(form.role==="admin"?"admin2026":"rota2026")} onChange={e=>setForm(f=>({...f,pw:e.target.value}))}/></div>}
         </div>
       </Modal>}
       {pwModal&&<Modal title={`Reset Password — ${pwModal.name}`} onClose={()=>setPwM(null)}
@@ -3372,7 +3479,7 @@ function Reports({user,staff,rota,leaveEntries,requests,quarters,availability}) 
 
   // Quarter selector — default to the current/most recent quarter
   const todayStr=fmtISO(new Date());
-  const defaultQ=(qs.find(q=>todayStr>=q.start&&todayStr<=q.end)||qs[qs.length-1])?.id||"Q1";
+  const defaultQ=(qs.find(q=>todayStr>=q.start&&todayStr<=q.end)||qs.find(q=>todayStr<q.start)||qs[qs.length-1])?.id||"Q1";
   const [selQ,setSelQ]=useState(defaultQ);
   const selQDef=qs.find(q=>q.id===selQ)||qs[0];
 
@@ -4823,6 +4930,7 @@ function App() {
   const [demoMode,setDemoMode]             = useState(()=>lsGet('demoMode',false));
   const [constraintRules,setConstraintRules] = useState(()=>lsGet('constraintRules',[])); // global, not per-year
   const [sysRules,setSysRules]               = useState(()=>lsGet('sysRules',DEFAULT_SYS_RULES)); // global toggleable system rules
+  const [rotaRulesText,setRotaRulesText]     = useState(()=>lsGet('rotaRulesText',''));
 
   // Year management
   const [years,setYears]           = useState(()=>lsGet('years',[{id:"2026-27",label:"2026/27",quarters:QUARTERS,active:true,archived:false}]));
@@ -4960,6 +5068,7 @@ function App() {
               upd(setTrainingDays)(d.trainingDays);
               upd(setConstraintRules)(d.constraintRules || []);
               if (d.sysRules) upd(setSysRules)({...DEFAULT_SYS_RULES, ...d.sysRules});
+              upd(setRotaRulesText)(d.rotaRulesText || '');
             }
           }
           setFsReady(true);
@@ -4979,11 +5088,11 @@ function App() {
   // Also mirrors to localStorage as an offline / fast-reload cache
   useEffect(() => {
     if (!fsReady) return;
-    const payload = {staff,auditLog,wteConfig,years,activeYearId,rotaByYear,leaveByYear:leaveByYear,availByYear,qStatusByYear,requestsByYear,notesByYear,corrsByYear,staffHoursByYear,swapsByYear,shiftOverridesByYear,fixedDaysOff,genRules,shiftTimes,staffShiftTimes,trainingDays,constraintRules,sysRules,demoMode};
+    const payload = {staff,auditLog,wteConfig,years,activeYearId,rotaByYear,leaveByYear:leaveByYear,availByYear,qStatusByYear,requestsByYear,notesByYear,corrsByYear,staffHoursByYear,swapsByYear,shiftOverridesByYear,fixedDaysOff,genRules,shiftTimes,staffShiftTimes,trainingDays,constraintRules,sysRules,demoMode,rotaRulesText};
     appDoc().set(payload).catch(console.error);
-    Object.entries({staff:staff,audit:auditLog,wteConfig:wteConfig,years:years,activeYearId:activeYearId,rotaByYear:rotaByYear,leaveByYear:leaveByYear,availByYear:availByYear,qstatusByYear:qStatusByYear,requestsByYear:requestsByYear,notesByYear:notesByYear,corrsByYear:corrsByYear,staffHoursByYear:staffHoursByYear,swapsByYear:swapsByYear,shiftOverridesByYear:shiftOverridesByYear,fixedDaysOff:fixedDaysOff,genRules:genRules,shiftTimes:shiftTimes,staffShiftTimes:staffShiftTimes,trainingDays:trainingDays,constraintRules:constraintRules,sysRules:sysRules,demoMode:demoMode})
+    Object.entries({staff:staff,audit:auditLog,wteConfig:wteConfig,years:years,activeYearId:activeYearId,rotaByYear:rotaByYear,leaveByYear:leaveByYear,availByYear:availByYear,qstatusByYear:qStatusByYear,requestsByYear:requestsByYear,notesByYear:notesByYear,corrsByYear:corrsByYear,staffHoursByYear:staffHoursByYear,swapsByYear:swapsByYear,shiftOverridesByYear:shiftOverridesByYear,fixedDaysOff:fixedDaysOff,genRules:genRules,shiftTimes:shiftTimes,staffShiftTimes:staffShiftTimes,trainingDays:trainingDays,constraintRules:constraintRules,sysRules:sysRules,demoMode:demoMode,rotaRulesText:rotaRulesText})
       .forEach(([k,v])=>lsSave(k,v));
-  },[fsReady,staff,auditLog,wteConfig,years,activeYearId,rotaByYear,leaveByYear,availByYear,qStatusByYear,requestsByYear,notesByYear,corrsByYear,staffHoursByYear,swapsByYear,shiftOverridesByYear,fixedDaysOff,genRules,shiftTimes,staffShiftTimes,trainingDays,constraintRules,sysRules,demoMode]);
+  },[fsReady,staff,auditLog,wteConfig,years,activeYearId,rotaByYear,leaveByYear,availByYear,qStatusByYear,requestsByYear,notesByYear,corrsByYear,staffHoursByYear,swapsByYear,shiftOverridesByYear,fixedDaysOff,genRules,shiftTimes,staffShiftTimes,trainingDays,constraintRules,sysRules,demoMode,rotaRulesText]);
 
   const addAudit=(u,action,details)=>{
     const now=new Date(), ts=`${now.toLocaleDateString("en-GB")} ${now.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}`;
@@ -5030,7 +5139,7 @@ function App() {
   const hasOpenQ=activeYearQuarters.some(q=>quarterStatus[q.id]==="open");
   const isAdmin=user?.role==="admin";
 
-  const titles={dashboard:"Dashboard",calendar:"Rota Calendar",myshifts:"My Shifts",myrecords:"My Leave Records",availability:"Availability",requests:isAdmin?"Leave Requests":"My Requests",builder:"Rota Builder",adjustments:"Hour Adjustments",staff:"Staff Management",reports:isAdmin?"Reports":"My Summary",rotaconfig:"Rota Config",audit:"Audit Log",yearsetup:"Year Setup",airota:"AI Rota Builder",fixeddays:"Fixed Days Off",conflicts:"Conflicts & Rules"};
+  const titles={dashboard:"Dashboard",calendar:"Rota Calendar",myshifts:"My Shifts",myrecords:"My Leave Records",availability:"Availability",requests:isAdmin?"Leave Requests":"My Requests",builder:"Rota Builder",adjustments:"Hour Adjustments",staff:"Staff Management",reports:isAdmin?"Reports":"My Summary",rotaconfig:"Rota Config",audit:"Audit Log",yearsetup:"Year Setup",airota:"AI Rota Builder",fixeddays:"Fixed Days Off",conflicts:"Conflicts & Rules",rotarules:"Rota Rules"};
 
   if(!fsReady) return(
     <><style>{CSS}</style>
@@ -5106,6 +5215,7 @@ function App() {
             {view==="rotaconfig" &&isAdmin&&<RotaConfig wteConfig={wteConfig} setWteConfig={setWteConfig} staffHours={staffHours} setStaffHours={setStaffHours} staff={staff} addAudit={addAudit} shiftTimes={shiftTimes} setShiftTimes={setShiftTimes} staffShiftTimes={staffShiftTimes} setStaffShiftTimes={setSST} trainingDays={trainingDays} setTrainingDays={setTrainingDays} staffShiftOverrides={staffShiftOverrides} setShiftOverrides={setShiftOverrides}/>}
 {view==="airota"     &&isAdmin&&<AIRotaView user={user} staff={staff} rota={rota} setRota={setRota} availability={availability} leaveEntries={leaveEntries} quarterStatus={quarterStatus} wteConfig={wteConfig} staffHours={staffHours} genRules={genRules} setGenRules={setGenRules} shiftTimes={shiftTimes} addAudit={addAudit} quarters={activeYearQuarters} activeYearId={activeYearId}/>}
             {view==="adjustments"&&isAdmin&&<HoursAdjustView staff={staff} hoursCorrections={hoursCorrections} setHoursCorrections={setHoursCorrections} addAudit={addAudit} currentUser={user} wteConfig={wteConfig} staffHours={staffHours} rota={rota} leaveEntries={leaveEntries}/>}
+            {view==="rotarules"  &&<RotaRulesView rotaRulesText={rotaRulesText} setRotaRulesText={setRotaRulesText} addAudit={addAudit} currentUser={user} isAdmin={isAdmin}/>}
             {view==="audit"      &&isAdmin&&<AuditLog log={auditLog}/>}
             {view==="yearsetup"  &&isAdmin&&<YearSetupView years={years} setYears={setYears} activeYearId={activeYearId} setActiveYearId={setActiveYearId} staff={staff} rotaByYear={rotaByYear} leaveByYear={leaveByYear} availByYear={availByYear} qStatusByYear={qStatusByYear} requestsByYear={requestsByYear} notesByYear={notesByYear} corrsByYear={corrsByYear} staffHoursByYear={staffHoursByYear} swapsByYear={swapsByYear} fixedDaysOff={fixedDaysOff} wteConfig={wteConfig} setQStatusByYear={setQStatusByYear} addAudit={addAudit} currentUser={user}/>}
           </div>

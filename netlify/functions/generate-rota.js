@@ -181,7 +181,7 @@ function scheduleNights(body) {
   function pickFromPool(pool, blockDates, exclude, required, blockIdx) {
     const is4 = blockDates.length >= 4;
     const is2 = blockDates.length === 2;
-    const prefScore = p => is4 ? (p==="4"?2:p==="any"?1:0) : is2 ? (p==="2+2"?2:p==="any"?1:0) : 1;
+    const prefScore = p => is4 ? (p==="4"?2:p==="any"?1:0) : is2 ? (p==="2"?2:p==="any"?1:0) : 1;
 
     // Pre-compute urgency for each eligible pool member (avoids O(n²) in sort)
     const urgency = {};
