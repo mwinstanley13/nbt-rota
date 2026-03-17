@@ -642,19 +642,35 @@ body{font-family:'Inter',sans-serif;background:#f4f6fb;font-size:13px}
 
 /* ── Responsive layout ── */
 @media(max-width:768px){
-  .sb{position:fixed;top:0;left:0;height:100%;z-index:500;transform:translateX(-100%);transition:transform .25s;width:228px;overflow-y:auto}
+  .app{flex-direction:column;height:100vh;overflow:hidden}
+  .sb{position:fixed;top:0;left:0;height:100%;z-index:500;transform:translateX(-100%);transition:transform .25s;width:260px;overflow-y:auto;flex-shrink:0}
   .sb.mob-open{transform:translateX(0);box-shadow:4px 0 24px rgba(0,0,0,.35)}
-  .mob-hbg{display:block}
-  .hdr{padding-left:52px}
-  .body{padding:14px 12px}
-  .sg{grid-template-columns:repeat(2,1fr)}
-  .dg2{grid-template-columns:1fr}
-  .mbox{max-width:calc(100vw - 16px)}
-  .stats-sb{display:none}
-  .bld-wrap{-webkit-overflow-scrolling:touch}
-  .tbl{font-size:11.5px}
-  .tbl th,.tbl td{padding:7px 8px}
+  .sb.sb-col{width:260px}
   .sb-col-btn{display:none}
+  .mob-hbg{display:block}
+  .main{width:100%;overflow:hidden;display:flex;flex-direction:column;height:100vh}
+  .hdr{padding:10px 12px 10px 50px;min-height:52px;flex-shrink:0}
+  .hdr h2{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:55vw}
+  .body{flex:1;overflow-y:auto;overflow-x:hidden;padding:12px 10px;-webkit-overflow-scrolling:touch}
+  .sg{grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px}
+  .sc{min-height:110px;padding:14px 10px}
+  .sv{font-size:42px;letter-spacing:-1px}
+  .dg2{grid-template-columns:1fr}
+  .mbox{max-width:calc(100vw - 16px);width:calc(100vw - 16px)}
+  .stats-sb{display:none}
+  .bld-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .bld-tbl{font-size:10px}
+  .bld-date-col{min-width:70px;max-width:70px}
+  .tbl{font-size:11.5px}
+  .tbl th,.tbl td{padding:6px 6px}
+  .card{border-radius:10px;margin-bottom:12px}
+  .list-wrap{border-radius:8px}
+  .list-tbl{font-size:10.5px}
+  .ai-tab{padding:7px 12px;font-size:12px}
+  .btn{font-size:12px;padding:7px 12px}
+  .bsm{font-size:11px;padding:4px 8px}
+  .fi{font-size:13px;padding:7px 9px}
+  .mtog-btn{padding:5px 10px;font-size:11.5px}
 }
 @keyframes spin{to{transform:rotate(360deg)}}
 .ai-tab-bar{display:flex;gap:0;border-bottom:2px solid #e2e8f0;margin-bottom:0}
@@ -1807,6 +1823,16 @@ function getTarget(wteConfig, grade, field, wte) {
   return Math.round((cfg[field] || 0) * wte * 10) / 10;
 }
 
+// Returns the grade key to use for hours/target config (Military flag overrides)
+const effGrade = s => (s && s.military) ? "Military" : (s?.grade || "ST4+");
+
+// Returns target for a person, respecting per-quarter shift overrides
+const getPersonTarget = (wteConfig, s, field, wte, shiftOverrides, qid) => {
+  const ov = shiftOverrides?.[s.init]?.[qid];
+  if (ov && ov[field] != null) return ov[field];
+  return getTarget(wteConfig, effGrade(s), field, wte);
+};
+
 function StatCell({done, target}) {
   const color = target === 0 ? "#94a3b8" : done > target ? "#ef4444" : done >= target - 1 ? "#f59e0b" : "#94a3b8";
   return (
@@ -1816,7 +1842,7 @@ function StatCell({done, target}) {
   );
 }
 
-function StaffStatsSidebar({staff, rota, wteConfig, staffHours, selQ, leaveEntries, hoursCorrections, setHoursCorrections, addAudit, currentUser, availability}) {
+function StaffStatsSidebar({staff, rota, wteConfig, staffHours, selQ, leaveEntries, hoursCorrections, setHoursCorrections, addAudit, currentUser, availability, staffShiftOverrides}) {
   const [mode, setMode] = useState("quarter"); // "quarter" | "year"
   const [corrModal, setCorrModal] = useState(null); // {init, name, grade}
 
@@ -1868,13 +1894,13 @@ function StaffStatsSidebar({staff, rota, wteConfig, staffHours, selQ, leaveEntri
           </thead>
           <tbody>
             {staff.map(s => {
-              const wte = getEffectiveWTE(s.init, s.grade, qid, wteConfig, staffHours);
+              const wte = getEffectiveWTE(s.init, effGrade(s), qid, wteConfig, staffHours);
               const counts = allCounts[s.init] || {nights:0,weekends:0,earlies:0,mids:0,lates:0};
-              const tN = mode==="quarter" ? getTarget(wteConfig,s.grade,"nights",  wte) : QUARTERS.reduce((a,q)=>a+getTarget(wteConfig,s.grade,"nights",  getEffectiveWTE(s.init,s.grade,q.id,wteConfig,staffHours)),0);
-              const tW = mode==="quarter" ? getTarget(wteConfig,s.grade,"weekends",wte) : QUARTERS.reduce((a,q)=>a+getTarget(wteConfig,s.grade,"weekends",getEffectiveWTE(s.init,s.grade,q.id,wteConfig,staffHours)),0);
-              const tE = mode==="quarter" ? getTarget(wteConfig,s.grade,"earlies", wte) : QUARTERS.reduce((a,q)=>a+getTarget(wteConfig,s.grade,"earlies", getEffectiveWTE(s.init,s.grade,q.id,wteConfig,staffHours)),0);
-              const tM = mode==="quarter" ? getTarget(wteConfig,s.grade,"mids",    wte) : QUARTERS.reduce((a,q)=>a+getTarget(wteConfig,s.grade,"mids",    getEffectiveWTE(s.init,s.grade,q.id,wteConfig,staffHours)),0);
-              const tL = mode==="quarter" ? getTarget(wteConfig,s.grade,"lates",   wte) : QUARTERS.reduce((a,q)=>a+getTarget(wteConfig,s.grade,"lates",   getEffectiveWTE(s.init,s.grade,q.id,wteConfig,staffHours)),0);
+              const tN = mode==="quarter" ? getPersonTarget(wteConfig,s,"nights",  wte,staffShiftOverrides,qid) : QUARTERS.reduce((a,q)=>a+getPersonTarget(wteConfig,s,"nights",  getEffectiveWTE(s.init,effGrade(s),q.id,wteConfig,staffHours),staffShiftOverrides,q.id),0);
+              const tW = mode==="quarter" ? getPersonTarget(wteConfig,s,"weekends",wte,staffShiftOverrides,qid) : QUARTERS.reduce((a,q)=>a+getPersonTarget(wteConfig,s,"weekends",getEffectiveWTE(s.init,effGrade(s),q.id,wteConfig,staffHours),staffShiftOverrides,q.id),0);
+              const tE = mode==="quarter" ? getPersonTarget(wteConfig,s,"earlies", wte,staffShiftOverrides,qid) : QUARTERS.reduce((a,q)=>a+getPersonTarget(wteConfig,s,"earlies", getEffectiveWTE(s.init,effGrade(s),q.id,wteConfig,staffHours),staffShiftOverrides,q.id),0);
+              const tM = mode==="quarter" ? getPersonTarget(wteConfig,s,"mids",    wte,staffShiftOverrides,qid) : QUARTERS.reduce((a,q)=>a+getPersonTarget(wteConfig,s,"mids",    getEffectiveWTE(s.init,effGrade(s),q.id,wteConfig,staffHours),staffShiftOverrides,q.id),0);
+              const tL = mode==="quarter" ? getPersonTarget(wteConfig,s,"lates",   wte,staffShiftOverrides,qid) : QUARTERS.reduce((a,q)=>a+getPersonTarget(wteConfig,s,"lates",   getEffectiveWTE(s.init,effGrade(s),q.id,wteConfig,staffHours),staffShiftOverrides,q.id),0);
               const hrs = mode==="quarter"
                 ? getHoursRemaining(s.init, s.grade, qid, wteConfig, staffHours, rota, leaveEntries, hoursCorrections)
                 : QUARTERS.reduce((a,q)=>a+(getHoursRemaining(s.init,s.grade,q.id,wteConfig,staffHours,rota,leaveEntries,hoursCorrections)||0),0);
@@ -1928,7 +1954,7 @@ function StaffStatsSidebar({staff, rota, wteConfig, staffHours, selQ, leaveEntri
 // ROTA BUILDER — slot-based, rows=dates
 // ═══════════════════════════════════════════════════════════════
 
-function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,setDayNotes,availability,addAudit,currentUser,wteConfig,staffHours,hoursCorrections,setHoursCorrections}) {
+function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,setDayNotes,availability,addAudit,currentUser,wteConfig,staffHours,hoursCorrections,setHoursCorrections,trainingDays,staffShiftOverrides}) {
   const [selQ,setSelQ]=useState("Q1");
   const [assignModal,setAM]=useState(null); // {date, slotKey}
   const [leaveModal,setLM]=useState(null);  // {date}
@@ -1940,6 +1966,7 @@ function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,s
   const q=QUARTERS.find(x=>x.id===selQ)||QUARTERS[0];
   const quarterDates=useMemo(()=>getDatesInRange(q.start,q.end),[q.start,q.end]);
   const activeStaff=staff.filter(s=>s.role==="staff"&&s.active);
+  const tdMap=useMemo(()=>Object.fromEntries((trainingDays||[]).map(t=>[t.date,t])),[trainingDays]);
 
   const assignSlot=(date,slotKey,init)=>{
     setRota(p=>({...p,[date]:{...(p[date]||{}),[slotKey]:init||null}}));
@@ -1978,7 +2005,7 @@ function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,s
           {QUARTERS.map(qv=>(
             <button key={qv.id} onClick={()=>setSelQ(qv.id)}
               className={`btn${selQ===qv.id?" bp":" bs"}`} style={{fontSize:12,padding:"5px 12px"}}>
-              {qv.id}: {qv.label.split(" ")[0]}–{qv.label.split(" ")[2]?.slice(0,3)}
+              {qv.label}
             </button>
           ))}
         </div>
@@ -2010,13 +2037,15 @@ function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,s
               const dayLeave=leaveEntries[date]||[];
               const note=dayNotes[date];
               const conflicts=SLOTS.map(sl=>{const init=getAssigned(date,sl.key);return init&&hasConflict(init,date)?init:null;}).filter(Boolean);
+              const td=tdMap[date];
               return (
-                <tr key={date} className={we?"we-row":""}>
+                <tr key={date} className={we?"we-row":""} style={td?{background:td.type==="SpR"?"rgba(254,240,138,.25)":"rgba(243,232,255,.25)"}:undefined}>
                   <td className={`bld-date-col${we?" we-row":""}${isBH?" bh-row":""}${isToday?" td-row":""}`}
                     style={{cursor:"pointer"}} onClick={()=>{setNM(date);setNT(dayNotes[date]||"");}}>
                     <div style={{fontSize:12,fontWeight:700,color:isToday?"#065f46":we?"#6d28d9":"#0d1b2a"}}>{getDayName(date)} {new Date(date+"T00:00:00").getDate()}</div>
                     <div style={{fontSize:9.5,color:"#94a3b8"}}>{new Date(date+"T00:00:00").toLocaleDateString("en-GB",{month:"short",year:"numeric"})}</div>
                     {isBH&&<div style={{fontSize:8,background:"#fde047",color:"#713f12",padding:"1px 4px",borderRadius:2,marginTop:2}}>{BH[date]}</div>}
+                    {td&&<div style={{fontSize:8,background:td.type==="SpR"?"#fef08a":"#e9d5ff",color:td.type==="SpR"?"#713f12":"#6b21a8",padding:"1px 4px",borderRadius:2,marginTop:2,fontWeight:700}}>{td.type} Training</div>}
                     {note&&<div style={{fontSize:8,color:"#92400e",marginTop:2}}>📌 {note.slice(0,20)}</div>}
                     {conflicts.length>0&&<div style={{fontSize:8,color:"#ef4444",fontWeight:700,marginTop:2}}>⚠️ Conflict</div>}
                   </td>
@@ -2071,6 +2100,7 @@ function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,s
         addAudit={addAudit}
         currentUser={currentUser}
         availability={availability}
+        staffShiftOverrides={staffShiftOverrides}
       />
       </div>
 
@@ -2784,7 +2814,7 @@ function StaffMgmt({staff,setStaff,addAudit,currentUser}) {
   return (
     <div>
       <div style={{display:"flex",gap:10,marginBottom:14,flexWrap:"wrap"}}>
-        <button className="btn bp" onClick={()=>{setForm({name:"",init:"",grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0,nightBlockPref:"any"});setModal("add");}}>＋ Add Staff</button>
+        <button className="btn bp" onClick={()=>{setForm({name:"",init:"",grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0,nightBlockPref:"any",military:false});setModal("add");}}>＋ Add Staff</button>
         {show.length===0&&IS_DEMO&&<button className="btn" style={{background:"#f0f9ff",color:"#0369a1",border:"1px solid #bae6fd"}} onClick={()=>{if(!confirm("Load all 32 default NBT staff? This will add them with password rota2026.")) return; const existing=staff.map(s=>s.init); const toAdd=INIT_STAFF.filter(s=>s.role==="staff"&&!existing.includes(s.init)); setStaff(p=>[...p,...toAdd]);}}>📋 Load Default Staff</button>}
       </div>
       <div className="card">
@@ -2794,7 +2824,7 @@ function StaffMgmt({staff,setStaff,addAudit,currentUser}) {
             <tr key={s.id}>
               <td style={{fontWeight:600}}>{s.name}</td>
               <td><code style={{background:"#f1f5f9",padding:"1px 5px",borderRadius:4,fontSize:11}}>{s.init}</code></td>
-              <td>{s.grade}</td><td>{s.hrs}</td>
+              <td>{s.grade}{s.military&&<span className="badge b-admin" style={{marginLeft:4,fontSize:9,padding:"1px 5px"}}>MIL</span>}</td><td>{s.hrs}</td>
               <td><span className={`badge ${s.active?"b-approved":"b-rejected"}`}>{s.active?"Active":"Inactive"}</span></td>
               <td><div style={{display:"flex",gap:5}}>
                 <button className="btn bs bsm" onClick={()=>{setForm({...s});setModal(s);}}>Edit</button>
@@ -2813,7 +2843,7 @@ function StaffMgmt({staff,setStaff,addAudit,currentUser}) {
           <div className="fg"><label className="fl">Full Name</label><input className="fi" value={form.name||""} onChange={e=>setForm(f=>({...f,name:e.target.value}))}/></div>
           <div className="fg"><label className="fl">Initials</label><input className="fi" value={form.init||""} onChange={e=>setForm(f=>({...f,init:e.target.value.toUpperCase()}))}/></div>
           <div className="fg"><label className="fl">Grade</label><select className="fi" value={form.grade||"ST4+"} onChange={e=>setForm(f=>({...f,grade:e.target.value}))}>
-            <option>ST4+</option><option>ST3</option><option>ACP</option><option>PHEM Fellow</option><option>Research Fellow</option><option>Military</option>
+            <option>ST4+</option><option>ST3</option><option>ACP</option><option>tACP</option><option>PHEM Fellow</option><option>Research Fellow</option>
           </select></div>
           <div className="fg"><label className="fl">Hours/Week</label><input type="number" className="fi" value={form.hrs||45.25} onChange={e=>setForm(f=>({...f,hrs:parseFloat(e.target.value)||0}))}/></div>
           <div className="fg"><label className="fl">SL Days Entitlement / yr</label><input type="number" className="fi" value={form.slDays??30} onChange={e=>setForm(f=>({...f,slDays:e.target.value}))}/></div>
@@ -2824,6 +2854,12 @@ function StaffMgmt({staff,setStaff,addAudit,currentUser}) {
               <option value="full">Full block (4 nights Mon–Thu)</option>
               <option value="split">Split block (2+2 nights)</option>
             </select>
+          </div>
+          <div className="fg" style={{gridColumn:"1/-1"}}>
+            <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:12.5,fontWeight:500,color:"#374151"}}>
+              <input type="checkbox" checked={!!form.military} onChange={e=>setForm(f=>({...f,military:e.target.checked}))} style={{width:16,height:16,accentColor:"#10b981"}}/>
+              Military contract — uses Military hours targets but keeps grade for shift eligibility
+            </label>
           </div>
           {modal==="add"&&<div className="fg"><label className="fl">Password</label><input className="fi" value={form.pw||"rota2026"} onChange={e=>setForm(f=>({...f,pw:e.target.value}))}/></div>}
         </div>
@@ -3047,8 +3083,9 @@ const SHIFT_FIELDS = [
   {key:"lates",    label:"Lates"},
 ];
 
-function RotaConfig({wteConfig, setWteConfig, staffHours, setStaffHours, staff, addAudit, shiftTimes, setShiftTimes, staffShiftTimes, setStaffShiftTimes, trainingDays, setTrainingDays}) {
-  const [tab, setTab] = useState("fte"); // "fte" | "hours" | "shifttimes" | "training"
+function RotaConfig({wteConfig, setWteConfig, staffHours, setStaffHours, staff, addAudit, shiftTimes, setShiftTimes, staffShiftTimes, setStaffShiftTimes, trainingDays, setTrainingDays, staffShiftOverrides, setShiftOverrides}) {
+  const [tab, setTab] = useState("fte"); // "fte" | "hours" | "targets" | "shifttimes" | "training"
+  const [targetModal, setTargetModal] = useState(null); // {init, name, grade, qid}
   const activeStaff = staff.filter(s => s.role==="staff" && s.active);
   const [tdDate,setTdDate]  = useState("");
   const [tdType,setTdType]  = useState("SpR");
@@ -3068,11 +3105,19 @@ function RotaConfig({wteConfig, setWteConfig, staffHours, setStaffHours, staff, 
     setWteConfig(prev => ({ ...prev, [grade]: { ...(prev[grade]||{}), hoursPerWeek: num } }));
   };
 
-  const setStaffHoursVal = (init, qid, val) => {
-    const num = val === "" ? null : parseFloat(val);
-    if (num !== null && (isNaN(num) || num < 0)) return;
-    setStaffHours(prev => ({ ...prev, [init]: { ...(prev[init]||{}), [qid]: num } }));
-    if (num !== null) addAudit("ADM", "Hours Override", `${init} ${qid} → ${num}h`);
+  // Store WTE (0.0–1.0) as actual hours = wte × grade full-time hours per quarter
+  const setStaffWTEVal = (init, grade, qid, wteVal) => {
+    if (wteVal === "") {
+      setStaffHours(prev => { const n={...prev,[init]:{...(prev[init]||{})}}; delete n[init][qid]; return n; });
+      return;
+    }
+    const wte = parseFloat(wteVal);
+    if (isNaN(wte) || wte < 0 || wte > 2) return;
+    const cfg = wteConfig[effGrade({grade})] || wteConfig["ST4+"] || {};
+    const full = cfg.hoursPerQuarter ?? Math.round((cfg.hoursPerWeek || 0) * 13 * 10) / 10;
+    const hours = Math.round(wte * full * 10) / 10;
+    setStaffHours(prev => ({ ...prev, [init]: { ...(prev[init]||{}), [qid]: hours } }));
+    addAudit("ADM", "WTE Override", `${init} ${qid} → ${wte} WTE (${hours}h)`);
   };
 
   const SLOT_KEYS_ALL = ["E1","E2","E3","E4","M1","M2","M3","L1","L2","L3","L4","WE1","WE2","WE3","WL1","WL2","N1","N2","SN","AN","SL","RESEARCH","FELLOW","MILITARY"];
@@ -3080,7 +3125,7 @@ function RotaConfig({wteConfig, setWteConfig, staffHours, setStaffHours, staff, 
   return (
     <div>
       <div style={{display:"flex",gap:7,marginBottom:18,flexWrap:"wrap"}}>
-        {[["fte","FTE Targets"],["hours","Staff Hours"],["shifttimes","Shift Times"],["training","Training Days"]].map(([k,lbl])=>(
+        {[["fte","FTE Targets"],["hours","Staff WTE"],["targets","Shift Targets"],["shifttimes","Shift Times"],["training","Training Days"]].map(([k,lbl])=>(
           <button key={k} className={`btn${tab===k?" bp":" bs"}`} onClick={()=>setTab(k)}>{lbl}</button>
         ))}
       </div>
@@ -3123,7 +3168,7 @@ function RotaConfig({wteConfig, setWteConfig, staffHours, setStaffHours, staff, 
       {tab==="hours"&&(
         <div>
           <div className="al al-i" style={{marginBottom:14}}>
-            Set each person's contracted hours per quarter. Leave blank to use the grade default (net hrs/qtr from FTE config).
+            Set each person's WTE (whole-time equivalent) per quarter. <strong>1.0 = full-time</strong>, 0.5 = half-time, etc. Targets are scaled proportionally from the FTE config. Leave blank to use 1.0 (full-time).
           </div>
           <div className="card">
             <div style={{overflowX:"auto"}}>
@@ -3132,36 +3177,37 @@ function RotaConfig({wteConfig, setWteConfig, staffHours, setStaffHours, staff, 
                   <tr>
                     <th>Name</th>
                     <th>Grade</th>
-                    <th style={{color:"#64748b",fontSize:11}}>Default/Qtr</th>
-                    {QUARTERS.map(q=><th key={q.id}>{q.id} (hrs)</th>)}
-                    <th style={{color:"#6366f1"}}>Annual</th>
+                    <th style={{color:"#64748b",fontSize:11}}>FT hrs/qtr</th>
+                    {QUARTERS.map(q=><th key={q.id}>{q.id} WTE</th>)}
+                    <th style={{color:"#6366f1"}}>Annual hrs</th>
                   </tr>
                 </thead>
                 <tbody>
                   {activeStaff.map(s=>{
                     const sh = staffHours[s.init] || {};
-                    const cfg = wteConfig[s.grade] || wteConfig["ST4+"] || {};
-                    const defaultQtr = cfg.hoursPerQuarter ?? Math.round((cfg.hoursPerWeek || 0) * 13 * 10) / 10;
+                    const cfg = wteConfig[effGrade(s)] || wteConfig["ST4+"] || {};
+                    const fullQtr = cfg.hoursPerQuarter ?? Math.round((cfg.hoursPerWeek || 0) * 13 * 10) / 10;
                     const annual = QUARTERS.reduce((sum,q)=>{
-                      const v = sh[q.id] != null ? sh[q.id] : defaultQtr;
-                      return sum + v;
+                      const storedHrs = sh[q.id] != null ? sh[q.id] : fullQtr;
+                      return sum + storedHrs;
                     }, 0);
                     return (
                       <tr key={s.id}>
-                        <td style={{fontWeight:600}}>{s.name}</td>
+                        <td style={{fontWeight:600}}>{s.name}{s.military&&<span className="badge b-admin" style={{marginLeft:4,fontSize:9,padding:"1px 4px"}}>MIL</span>}</td>
                         <td style={{color:"#64748b"}}>{s.grade}</td>
-                        <td style={{textAlign:"center",fontSize:11,color:"#94a3b8"}}>{defaultQtr}</td>
+                        <td style={{textAlign:"center",fontSize:11,color:"#94a3b8"}}>{fullQtr}</td>
                         {QUARTERS.map(q=>{
-                          const val = sh[q.id];
+                          const storedHrs = sh[q.id];
+                          const displayWTE = storedHrs != null && fullQtr > 0 ? Math.round(storedHrs / fullQtr * 100) / 100 : "";
                           return (
                             <td key={q.id} style={{padding:"4px 6px"}}>
                               <input type="number" className="fi"
                                 style={{width:68,padding:"4px 7px",textAlign:"center",
-                                  color: val != null ? "#1e293b" : "#94a3b8"}}
-                                value={val ?? ""}
-                                placeholder={String(defaultQtr)}
-                                step="0.5" min="0"
-                                onChange={e=>setStaffHoursVal(s.init,q.id,e.target.value)}/>
+                                  color: storedHrs != null ? "#1e293b" : "#94a3b8"}}
+                                value={displayWTE}
+                                placeholder="1.0"
+                                step="0.1" min="0" max="2"
+                                onChange={e=>setStaffWTEVal(s.init,s.grade,q.id,e.target.value)}/>
                             </td>
                           );
                         })}
@@ -3175,6 +3221,101 @@ function RotaConfig({wteConfig, setWteConfig, staffHours, setStaffHours, staff, 
               </table>
             </div>
           </div>
+        </div>
+      )}
+
+      {tab==="targets"&&staffShiftOverrides!==undefined&&(
+        <div>
+          <div className="al al-i" style={{marginBottom:14}}>
+            Override the calculated shift targets for a specific person and quarter. The calculated value is shown in brackets. Leave a reason for the override.
+          </div>
+          <div className="card">
+            <div style={{overflowX:"auto"}}>
+              <table className="tbl">
+                <thead>
+                  <tr>
+                    <th>Name</th><th>Grade</th>
+                    {QUARTERS.map(q=><th key={q.id}>{q.id}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {activeStaff.map(s=>{
+                    return (
+                      <tr key={s.id}>
+                        <td style={{fontWeight:600}}>{s.name}</td>
+                        <td style={{color:"#64748b"}}>{s.grade}{s.military&&<span className="badge b-admin" style={{marginLeft:4,fontSize:9,padding:"1px 4px"}}>MIL</span>}</td>
+                        {QUARTERS.map(q=>{
+                          const ov = staffShiftOverrides?.[s.init]?.[q.id];
+                          const hasOv = ov && SHIFT_FIELDS.some(f=>ov[f.key]!=null);
+                          return (
+                            <td key={q.id} style={{padding:"4px 8px"}}>
+                              <button className={`btn bsm ${hasOv?"bp":"bs"}`} style={{fontSize:10}}
+                                onClick={()=>setTargetModal({init:s.init,name:s.name,grade:s.grade,military:s.military,qid:q.id})}>
+                                {hasOv?"Overridden":"Set"}
+                              </button>
+                              {ov?.reason&&<div style={{fontSize:9,color:"#94a3b8",marginTop:2,maxWidth:80,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={ov.reason}>{ov.reason}</div>}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          {targetModal&&(()=>{
+            const {init,name,grade,military,qid} = targetModal;
+            const ov = staffShiftOverrides?.[init]?.[qid] || {};
+            const cfg = wteConfig[effGrade({grade,military})] || wteConfig["ST4+"] || {};
+            const sh = staffHours[init] || {};
+            const fullQtr = cfg.hoursPerQuarter ?? Math.round((cfg.hoursPerWeek||0)*13*10)/10;
+            const storedHrs = sh[qid] != null ? sh[qid] : fullQtr;
+            const wte = fullQtr > 0 ? storedHrs / fullQtr : 1.0;
+            const calcTarget = f => Math.round((cfg[f]||0)*wte*10)/10;
+            const saveOv = (field, val) => {
+              const num = val===""||val==null ? null : parseFloat(val);
+              if (num!==null && isNaN(num)) return;
+              setShiftOverrides(prev=>{
+                const next={...prev,[init]:{...(prev[init]||{}),[qid]:{...(prev[init]?.[qid]||{}),[field]:num}}};
+                return next;
+              });
+            };
+            const saveReason = reason => {
+              setShiftOverrides(prev=>({...prev,[init]:{...(prev[init]||{}),[qid]:{...(prev[init]?.[qid]||{}),reason}}}));
+            };
+            const clearAll = () => {
+              setShiftOverrides(prev=>{const n={...prev};if(n[init]){const q2={...n[init]};delete q2[qid];n[init]=q2;}return n;});
+              setTargetModal(null);
+              addAudit("ADM","Shift Override Cleared",`${name} ${qid} overrides removed`);
+            };
+            return (
+              <Modal title={`Shift Targets — ${name} ${qid}`} onClose={()=>setTargetModal(null)}
+                footer={<>
+                  <button className="btn bd bsm" onClick={clearAll}>Clear All Overrides</button>
+                  <button className="btn bs" onClick={()=>setTargetModal(null)}>Close</button>
+                  <button className="btn bp" onClick={()=>{addAudit("ADM","Shift Override",`${name} ${qid} targets updated`);setTargetModal(null);}}>Save</button>
+                </>}>
+                <div className="al al-i" style={{marginBottom:12,fontSize:12}}>
+                  Override any shift count target for <strong>{name}</strong> in <strong>{qid}</strong>. Leave blank to use the calculated value (shown in grey).
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+                  {SHIFT_FIELDS.map(f=>(
+                    <div key={f.key} className="fg">
+                      <label className="fl">{f.label} <span style={{color:"#94a3b8",fontWeight:400}}>(calc: {calcTarget(f.key)})</span></label>
+                      <input type="number" className="fi" min="0" step="1"
+                        value={ov[f.key]??""} placeholder={String(calcTarget(f.key))}
+                        onChange={e=>saveOv(f.key,e.target.value)}/>
+                    </div>
+                  ))}
+                </div>
+                <div className="fg">
+                  <label className="fl">Reason for override</label>
+                  <input className="fi" value={ov.reason||""} onChange={e=>saveReason(e.target.value)} placeholder="e.g. Reduced duties, on secondment…"/>
+                </div>
+              </Modal>
+            );
+          })()}
         </div>
       )}
 
@@ -4144,6 +4285,7 @@ function App() {
   const [corrsByYear,setCorrsByYear]       = useState(()=>lsGet('corrsByYear',{}));
   const [staffHoursByYear,setSHByYear]     = useState(()=>lsGet('staffHoursByYear',{}));
   const [swapsByYear,setSwapsByYear]       = useState(()=>lsGet('swapsByYear',{}));
+  const [shiftOverridesByYear,setSOByYear] = useState(()=>lsGet('shiftOverridesByYear',{}));
 
   // Active-year flat accessors (derived from above)
   const activeYearQuarters = useMemo(()=>(years.find(y=>y.id===activeYearId)||years[0])?.quarters||QUARTERS,[years,activeYearId]);
@@ -4155,7 +4297,8 @@ function App() {
   const dayNotes      = notesByYear[activeYearId]          || {};
   const hoursCorrections = corrsByYear[activeYearId]       || [];
   const staffHours    = staffHoursByYear[activeYearId]     || {};
-  const swaps         = swapsByYear[activeYearId]          || [];
+  const swaps              = swapsByYear[activeYearId]          || [];
+  const staffShiftOverrides = shiftOverridesByYear[activeYearId] || {};
 
   // Year-aware setters (same interface as the old flat setters)
   const yw = (setter, key) => v => setter(p=>({...p,[activeYearId]:typeof v==="function"?v(p[activeYearId]||(key==="arr"?[]:{})):v}));
@@ -4166,8 +4309,9 @@ function App() {
   const setReqs        = yw(setReqsByYear,"arr");
   const setNotes       = yw(setNotesByYear);
   const setHoursCorrections = yw(setCorrsByYear,"arr");
-  const setStaffHours  = yw(setSHByYear);
-  const setSwaps       = yw(setSwapsByYear,"arr");
+  const setStaffHours    = yw(setSHByYear);
+  const setSwaps         = yw(setSwapsByYear,"arr");
+  const setShiftOverrides = yw(setSOByYear);
 
   // ── Subscribe to Firestore on mount (gated behind Anonymous Auth) ────────────
   // onAuthStateChanged fires immediately; if no user, we sign in anonymously.
@@ -4255,6 +4399,7 @@ function App() {
               upd(setCorrsByYear)(d.corrsByYear);
               upd(setSHByYear)(d.staffHoursByYear);
               upd(setSwapsByYear)(d.swapsByYearV2 || {});
+              upd(setSOByYear)(d.shiftOverridesByYear || {});
               upd(setFixedDaysOff)(d.fixedDaysOff);
               upd(setGenRules)(d.genRules);
               upd(setShiftTimes)(d.shiftTimes);
@@ -4279,11 +4424,11 @@ function App() {
   // Also mirrors to localStorage as an offline / fast-reload cache
   useEffect(() => {
     if (!fsReady) return;
-    const payload = {staff,auditLog,wteConfig,years,activeYearId,rotaByYear,leaveByYear:leaveByYear,availByYear,qStatusByYear,requestsByYear,notesByYear,corrsByYear,staffHoursByYear,swapsByYear,fixedDaysOff,genRules,shiftTimes,staffShiftTimes,trainingDays,demoMode};
+    const payload = {staff,auditLog,wteConfig,years,activeYearId,rotaByYear,leaveByYear:leaveByYear,availByYear,qStatusByYear,requestsByYear,notesByYear,corrsByYear,staffHoursByYear,swapsByYear,shiftOverridesByYear,fixedDaysOff,genRules,shiftTimes,staffShiftTimes,trainingDays,demoMode};
     appDoc().set(payload).catch(console.error);
-    Object.entries({staff:staff,audit:auditLog,wteConfig:wteConfig,years:years,activeYearId:activeYearId,rotaByYear:rotaByYear,leaveByYear:leaveByYear,availByYear:availByYear,qstatusByYear:qStatusByYear,requestsByYear:requestsByYear,notesByYear:notesByYear,corrsByYear:corrsByYear,staffHoursByYear:staffHoursByYear,swapsByYear:swapsByYear,fixedDaysOff:fixedDaysOff,genRules:genRules,shiftTimes:shiftTimes,staffShiftTimes:staffShiftTimes,trainingDays:trainingDays,demoMode:demoMode})
+    Object.entries({staff:staff,audit:auditLog,wteConfig:wteConfig,years:years,activeYearId:activeYearId,rotaByYear:rotaByYear,leaveByYear:leaveByYear,availByYear:availByYear,qstatusByYear:qStatusByYear,requestsByYear:requestsByYear,notesByYear:notesByYear,corrsByYear:corrsByYear,staffHoursByYear:staffHoursByYear,swapsByYear:swapsByYear,shiftOverridesByYear:shiftOverridesByYear,fixedDaysOff:fixedDaysOff,genRules:genRules,shiftTimes:shiftTimes,staffShiftTimes:staffShiftTimes,trainingDays:trainingDays,demoMode:demoMode})
       .forEach(([k,v])=>lsSave(k,v));
-  },[fsReady,staff,auditLog,wteConfig,years,activeYearId,rotaByYear,leaveByYear,availByYear,qStatusByYear,requestsByYear,notesByYear,corrsByYear,staffHoursByYear,swapsByYear,fixedDaysOff,genRules,shiftTimes,staffShiftTimes,trainingDays,demoMode]);
+  },[fsReady,staff,auditLog,wteConfig,years,activeYearId,rotaByYear,leaveByYear,availByYear,qStatusByYear,requestsByYear,notesByYear,corrsByYear,staffHoursByYear,swapsByYear,shiftOverridesByYear,fixedDaysOff,genRules,shiftTimes,staffShiftTimes,trainingDays,demoMode]);
 
   const addAudit=(u,action,details)=>{
     const now=new Date(), ts=`${now.toLocaleDateString("en-GB")} ${now.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}`;
@@ -4398,15 +4543,18 @@ function App() {
                 />
               )}
             {view==="requests"   &&<RequestsView user={user} requests={requests} setRequests={setReqs} addAudit={addAudit} swaps={swaps} setSwaps={setSwaps} rota={rota} setRota={setRota} staff={staff}/>}
-            {view==="builder"    &&isAdmin&&<RotaBuilder rota={rota} setRota={setRota} leaveEntries={leaveEntries} setLeaveEntries={setLE} staff={staff} dayNotes={dayNotes} setDayNotes={setNotes} availability={availability} addAudit={addAudit} currentUser={user} wteConfig={wteConfig} staffHours={staffHours} hoursCorrections={hoursCorrections} setHoursCorrections={setHoursCorrections}/>}
+            {view==="builder"    &&isAdmin&&<RotaBuilder rota={rota} setRota={setRota} leaveEntries={leaveEntries} setLeaveEntries={setLE} staff={staff} dayNotes={dayNotes} setDayNotes={setNotes} availability={availability} addAudit={addAudit} currentUser={user} wteConfig={wteConfig} staffHours={staffHours} hoursCorrections={hoursCorrections} setHoursCorrections={setHoursCorrections} trainingDays={trainingDays} staffShiftOverrides={staffShiftOverrides}/>}
             {view==="staff"      &&isAdmin&&<StaffMgmt staff={staff} setStaff={setStaff} addAudit={addAudit} currentUser={user}/>}
             {view==="reports"    &&<Reports user={user} staff={staff} rota={rota} leaveEntries={leaveEntries} requests={requests} quarters={activeYearQuarters} availability={availability}/>}
             {view==="fixeddays"  &&isAdmin&&<FixedDaysView fixedDaysOff={fixedDaysOff} setFixedDaysOff={setFixedDaysOff} staff={staff} addAudit={addAudit} currentUser={user}/>}
-            {view==="rotaconfig" &&isAdmin&&<RotaConfig wteConfig={wteConfig} setWteConfig={setWteConfig} staffHours={staffHours} setStaffHours={setStaffHours} staff={staff} addAudit={addAudit} shiftTimes={shiftTimes} setShiftTimes={setShiftTimes} staffShiftTimes={staffShiftTimes} setStaffShiftTimes={setSST} trainingDays={trainingDays} setTrainingDays={setTrainingDays}/>}
+            {view==="rotaconfig" &&isAdmin&&<RotaConfig wteConfig={wteConfig} setWteConfig={setWteConfig} staffHours={staffHours} setStaffHours={setStaffHours} staff={staff} addAudit={addAudit} shiftTimes={shiftTimes} setShiftTimes={setShiftTimes} staffShiftTimes={staffShiftTimes} setStaffShiftTimes={setSST} trainingDays={trainingDays} setTrainingDays={setTrainingDays} staffShiftOverrides={staffShiftOverrides} setShiftOverrides={setShiftOverrides}/>}
 {view==="airota"     &&isAdmin&&<AIRotaView user={user} staff={staff} rota={rota} setRota={setRota} availability={availability} leaveEntries={leaveEntries} quarterStatus={quarterStatus} wteConfig={wteConfig} staffHours={staffHours} genRules={genRules} setGenRules={setGenRules} shiftTimes={shiftTimes} addAudit={addAudit} quarters={activeYearQuarters} activeYearId={activeYearId}/>}
             {view==="adjustments"&&isAdmin&&<HoursAdjustView staff={staff} hoursCorrections={hoursCorrections} setHoursCorrections={setHoursCorrections} addAudit={addAudit} currentUser={user} wteConfig={wteConfig} staffHours={staffHours} rota={rota} leaveEntries={leaveEntries}/>}
             {view==="audit"      &&isAdmin&&<AuditLog log={auditLog}/>}
             {view==="yearsetup"  &&isAdmin&&<YearSetupView years={years} setYears={setYears} activeYearId={activeYearId} setActiveYearId={setActiveYearId} staff={staff} rotaByYear={rotaByYear} leaveByYear={leaveByYear} availByYear={availByYear} qStatusByYear={qStatusByYear} requestsByYear={requestsByYear} notesByYear={notesByYear} corrsByYear={corrsByYear} staffHoursByYear={staffHoursByYear} swapsByYear={swapsByYear} fixedDaysOff={fixedDaysOff} wteConfig={wteConfig} setQStatusByYear={setQStatusByYear} addAudit={addAudit} currentUser={user}/>}
+          </div>
+          <div style={{flexShrink:0,padding:"8px 28px",borderTop:"1px solid #edf0f7",background:"white",fontSize:11,color:"#94a3b8",textAlign:"center",letterSpacing:".2px"}}>
+            © 2026 RotaFlow Ltd. All rights reserved.
           </div>
         </div>
       </div>
