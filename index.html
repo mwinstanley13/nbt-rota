@@ -751,6 +751,7 @@ function Sidebar({user,view,setView,onLogout,pendingCount,hasOpenQ,isOpen,onClos
       {id:"adjustments", icon:"⏱️",label:"Hour Adjustments"},
       {id:"staff",       icon:"👥",label:"Staff"},
       {id:"reports",     icon:"📈",label:"Reports"},
+      {id:"conflicts",   icon:"⚠️",label:"Conflicts & Rules"},
       {id:"fixeddays",   icon:"📆",label:"Fixed Days Off"},
       {id:"rotaconfig",  icon:"⚙️",label:"Rota Config"},
       {id:"yearsetup",   icon:"📅",label:"Year Setup"},
@@ -1953,7 +1954,7 @@ function StaffStatsSidebar({staff, rota, wteConfig, staffHours, selQ, leaveEntri
 // ROTA BUILDER — slot-based, rows=dates
 // ═══════════════════════════════════════════════════════════════
 
-function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,setDayNotes,availability,addAudit,currentUser,wteConfig,staffHours,hoursCorrections,setHoursCorrections,trainingDays,staffShiftOverrides}) {
+function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,setDayNotes,availability,addAudit,currentUser,wteConfig,staffHours,hoursCorrections,setHoursCorrections,trainingDays,staffShiftOverrides,constraintRules}) {
   const [selQ,setSelQ]=useState("Q1");
   const [assignModal,setAM]=useState(null); // {date, slotKey}
   const [leaveModal,setLM]=useState(null);  // {date}
@@ -1997,6 +1998,17 @@ function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,s
   // Warn: assigned staff is unavailable
   const hasConflict = (init, date) => getAvail(init, date)?.base === "UNAVAILABLE";
 
+  // Check if assignment violates a constraint rule
+  const hasRuleWarning = (init, date, slotKey) => {
+    if (!init || !constraintRules?.length) return false;
+    const sl = SLOTS.find(s=>s.key===slotKey);
+    const dow = new Date(date+"T00:00:00").toLocaleDateString("en-GB",{weekday:"long"});
+    return constraintRules.some(r=>r.active&&r.init===init&&(
+      (r.type==="avoid_day"&&r.dayOfWeek===dow)||
+      (r.type==="avoid_slot_group"&&sl&&r.slotGroup===sl.grp)
+    ));
+  };
+
   return (
     <div>
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16,flexWrap:"wrap"}}>
@@ -2009,7 +2021,7 @@ function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,s
           ))}
         </div>
         <div className="al al-i" style={{margin:0,padding:"6px 11px",fontSize:11.5}}>
-          💡 Click a slot cell to assign · Click a date to add a note · <strong>Red border</strong> = conflict · 🟢 = available
+          💡 Click a slot cell to assign · Click a date to add a note · <strong style={{color:"#ef4444"}}>Red</strong> = unavailable · <strong style={{color:"#f59e0b"}}>Amber</strong> = rule warning · 🟢 = preferred
         </div>
       </div>
 
@@ -2053,6 +2065,7 @@ function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,s
                     const init=getAssigned(date,sl.key);
                     const av = init ? getAvail(init, date) : null;
                     const conflict = init && (av?.base === "UNAVAILABLE" || av?.base === "SL" || av?.base === "MILITARY");
+                    const ruleWarn = !conflict && hasRuleWarning(init, date, sl.key);
                     const staffMember = init ? activeStaff.find(s=>s.init===init) : null;
                     const pref = init && av?.base && !conflict
                       ? isSlotPreferred(availability, init, date, sl.key, staffMember?.grade)
@@ -2060,12 +2073,13 @@ function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,s
                     const availCount = applicable ? activeStaff.filter(s=>isSlotPreferred(availability,s.init,date,sl.key,s.grade)).length : 0;
                     if(!applicable) return <td key={sl.key} className="slot-cell disabled"><span style={{fontSize:9,color:"#e2e8f0"}}>—</span></td>;
                     return (
-                      <td key={sl.key} className="slot-cell" style={{border:conflict?"2px solid #ef4444":"",background:init?sl.bg+"80":"white"}}
+                      <td key={sl.key} className="slot-cell" style={{border:conflict?"2px solid #ef4444":ruleWarn?"2px solid #f59e0b":"",background:init?sl.bg+"80":"white"}}
                         onClick={()=>setAM({date,slotKey:sl.key})}>
                         {init?(
-                          <span className="slot-chip" style={{background:sl.bg,color:conflict?"#ef4444":sl.fg,borderColor:conflict?"#ef4444":sl.bd,border:conflict?"2px solid #ef4444":"1px solid "+sl.bd}}>
+                          <span className="slot-chip" style={{background:sl.bg,color:conflict?"#ef4444":sl.fg,borderColor:conflict?"#ef4444":ruleWarn?"#f59e0b":sl.bd,border:conflict?"2px solid #ef4444":ruleWarn?"2px solid #f59e0b":"1px solid "+sl.bd}}>
                             {init.slice(0,4)}
-                            {pref && <span className="avail-dot" style={{ background: sl.fg || "#94a3b8" }} title="preferred" />}
+                            {ruleWarn && <span className="avail-dot" style={{background:"#f59e0b"}} title="Rule warning"/>}
+                            {pref && !ruleWarn && <span className="avail-dot" style={{ background: sl.fg || "#94a3b8" }} title="preferred" />}
                           </span>
                         ):<span className="slot-empty"/>}
                         {availCount>0&&<div style={{fontSize:8,background:"#dcfce7",color:"#14532d",borderRadius:8,padding:"0 3px",marginTop:1,lineHeight:"12px"}}>{availCount}✓</div>}
@@ -2867,6 +2881,268 @@ function StaffMgmt({staff,setStaff,addAudit,currentUser}) {
         footer={<><button className="btn bs" onClick={()=>setPwM(null)}>Cancel</button><button className="btn bp" disabled={!newPw} onClick={()=>{setStaff(p=>p.map(s=>s.id===pwModal.id?{...s,pw:newPw}:s));addAudit(currentUser.init,"Password Reset",pwModal.name);setPwM(null);}}>Reset</button></>}>
         <div className="fg" style={{marginBottom:0}}><label className="fl">New Password</label><input className="fi" value={newPw} onChange={e=>setNPw(e.target.value)} placeholder="Enter new password"/></div>
       </Modal>}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CONFLICTS & RULES
+// ═══════════════════════════════════════════════════════════════
+
+const DOW_FULL = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+const GRP_LABELS = {EARLY:"Early",MID:"Mid",LATE:"Late",WE_EARLY:"W/E Early",WE_LATE:"W/E Late",NIGHT1:"Night (N1)",NIGHT2:"Night (N2)",ST3_NIGHT:"Night (ST3)",ACP_NIGHT:"Night (ACP)"};
+
+function ConflictsView({rota, leaveEntries, availability, staff, quarters, addAudit, currentUser, constraintRules, setConstraintRules}) {
+  const [tab, setTab] = useState("conflicts");
+  const [addForm, setAddForm] = useState(null); // null | "new"
+  const [form, setForm] = useState({init:"",type:"avoid_day",dayOfWeek:"Monday",slotGroup:"EARLY",note:"",severity:"warn"});
+  const [selQ, setSelQ] = useState("Q1");
+
+  const qs = quarters || QUARTERS;
+  const activeStaff = staff.filter(s=>s.role==="staff"&&s.active);
+  const selQDef = qs.find(q=>q.id===selQ)||qs[0];
+  const rotaDates = selQDef ? getDatesInRange(selQDef.start, selQDef.end) : [];
+
+  // Detect live conflicts: assigned + unavailable/leave
+  const conflicts = useMemo(() => {
+    const out = [];
+    rotaDates.forEach(date => {
+      const dayRota = rota[date] || {};
+      Object.entries(dayRota).forEach(([slotKey, init]) => {
+        if (!init) return;
+        const avEntry = getAvailEntry(availability, init, date);
+        const base = avEntry?.base;
+        const lv = (leaveEntries[date]||[]).find(e=>e.init===init);
+        let reason = null;
+        if (base === "UNAVAILABLE") reason = "Marked unavailable";
+        else if (base === "SL" || lv?.type === "SL") reason = "Study Leave";
+        else if (base === "MILITARY" || lv?.type === "MILITARY") reason = "Military";
+        else if (lv) reason = `Leave: ${LEAVE_T[lv.type]?.label || lv.type}`;
+        if (reason) {
+          const sm = activeStaff.find(s=>s.init===init);
+          const sl = SLOTS.find(s=>s.key===slotKey);
+          out.push({date, slotKey, init, name:sm?.name||init, grade:sm?.grade||"", slotLabel:sl?.label||slotKey, bg:sl?.bg||"#f1f5f9", fg:sl?.fg||"#374151", reason});
+        }
+      });
+    });
+    out.sort((a,b)=>a.date.localeCompare(b.date));
+    return out;
+  }, [rotaDates, rota, leaveEntries, availability]);
+
+  // Rule violations: constraint rule + actual assignment
+  const ruleViolations = useMemo(() => {
+    const out = [];
+    rotaDates.forEach(date => {
+      const dayRota = rota[date] || {};
+      const dow = new Date(date+"T00:00:00").toLocaleDateString("en-GB",{weekday:"long"});
+      Object.entries(dayRota).forEach(([slotKey, init]) => {
+        if (!init) return;
+        const sl = SLOTS.find(s=>s.key===slotKey);
+        constraintRules.filter(r=>r.active&&r.init===init).forEach(r => {
+          let triggered = false;
+          if (r.type==="avoid_day" && r.dayOfWeek===dow) triggered=true;
+          if (r.type==="avoid_slot_group" && sl && r.slotGroup===sl.grp) triggered=true;
+          if (triggered) {
+            const sm = activeStaff.find(s=>s.init===init);
+            out.push({date, slotKey, init, name:sm?.name||init, rule:r, slotLabel:sl?.label||slotKey, bg:sl?.bg||"#f1f5f9", fg:sl?.fg||"#374151"});
+          }
+        });
+      });
+    });
+    out.sort((a,b)=>a.date.localeCompare(b.date));
+    return out;
+  }, [rotaDates, rota, constraintRules]);
+
+  const addRule = () => {
+    if (!form.init || !form.note.trim()) return;
+    const sm = activeStaff.find(s=>s.init===form.init);
+    const rule = {...form, id:Date.now(), name:sm?.name||form.init, active:true, createdDate:fmtISO(new Date()), createdBy:currentUser.init};
+    setConstraintRules(p=>[...p, rule]);
+    addAudit(currentUser.init,"Constraint Added",`${rule.name}: ${rule.note}`);
+    setAddForm(null);
+    setForm({init:"",type:"avoid_day",dayOfWeek:"Monday",slotGroup:"EARLY",note:"",severity:"warn"});
+  };
+
+  const toggleRule = id => setConstraintRules(p=>p.map(r=>r.id===id?{...r,active:!r.active}:r));
+  const deleteRule = id => { setConstraintRules(p=>p.filter(r=>r.id!==id)); addAudit(currentUser.init,"Constraint Removed","Rule deleted"); };
+
+  const CONF_SEVERITY = {warn:{bg:"#fef3c7",fg:"#92400e",label:"Warning"},info:{bg:"#eff6ff",fg:"#1d4ed8",label:"Info"}};
+
+  return (
+    <div>
+      <div style={{display:"flex",gap:7,marginBottom:16}}>
+        <button className={`btn${tab==="conflicts"?" bp":" bs"}`} onClick={()=>setTab("conflicts")}>⚠️ Active Conflicts</button>
+        <button className={`btn${tab==="rules"?" bp":" bs"}`} onClick={()=>setTab("rules")}>📏 Rules & Constraints</button>
+      </div>
+
+      {tab==="conflicts"&&(
+        <div>
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14,flexWrap:"wrap"}}>
+            <span style={{fontSize:12.5,color:"#64748b",fontWeight:500}}>Quarter:</span>
+            <div className="mtog">
+              {qs.map(q=><button key={q.id} className={`mtog-btn${selQ===q.id?" act":""}`} onClick={()=>setSelQ(q.id)}>{q.id}</button>)}
+            </div>
+            {conflicts.length===0&&ruleViolations.length===0
+              ?<span style={{fontSize:12,color:"#10b981",fontWeight:600,marginLeft:4}}>✓ No conflicts in {selQ}</span>
+              :<span style={{fontSize:12,color:"#ef4444",fontWeight:600,marginLeft:4}}>{conflicts.length+ruleViolations.length} issue{conflicts.length+ruleViolations.length!==1?"s":""} in {selQ}</span>}
+          </div>
+
+          {conflicts.length>0&&(
+            <div className="card" style={{marginBottom:14}}>
+              <div className="ch"><span className="ct">Availability / Leave Conflicts</span><span style={{fontSize:11.5,color:"#ef4444",fontWeight:700}}>{conflicts.length}</span></div>
+              <div style={{overflowX:"auto"}}>
+                <table className="tbl">
+                  <thead><tr><th>Date</th><th>Day</th><th>Slot</th><th>Staff</th><th>Grade</th><th>Reason</th></tr></thead>
+                  <tbody>{conflicts.map((c,i)=>(
+                    <tr key={i}>
+                      <td style={{fontWeight:600,whiteSpace:"nowrap"}}>{fmtShort(c.date)}</td>
+                      <td style={{color:"#64748b"}}>{getDayName(c.date)}</td>
+                      <td><span style={{background:c.bg,color:c.fg,padding:"2px 7px",borderRadius:4,fontSize:10.5,fontWeight:700,whiteSpace:"nowrap"}}>{c.slotLabel}</span></td>
+                      <td style={{fontWeight:600}}>{c.name}</td>
+                      <td style={{color:"#64748b",fontSize:11}}>{c.grade}</td>
+                      <td><span style={{background:"#fee2e2",color:"#7f1d1d",padding:"2px 7px",borderRadius:4,fontSize:10.5,fontWeight:600}}>{c.reason}</span></td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {ruleViolations.length>0&&(
+            <div className="card">
+              <div className="ch"><span className="ct">Rule Violations</span><span style={{fontSize:11.5,color:"#f59e0b",fontWeight:700}}>{ruleViolations.length}</span></div>
+              <div style={{overflowX:"auto"}}>
+                <table className="tbl">
+                  <thead><tr><th>Date</th><th>Day</th><th>Slot</th><th>Staff</th><th>Rule</th></tr></thead>
+                  <tbody>{ruleViolations.map((v,i)=>{
+                    const sev=CONF_SEVERITY[v.rule.severity]||CONF_SEVERITY.warn;
+                    return (
+                      <tr key={i}>
+                        <td style={{fontWeight:600,whiteSpace:"nowrap"}}>{fmtShort(v.date)}</td>
+                        <td style={{color:"#64748b"}}>{getDayName(v.date)}</td>
+                        <td><span style={{background:v.bg,color:v.fg,padding:"2px 7px",borderRadius:4,fontSize:10.5,fontWeight:700,whiteSpace:"nowrap"}}>{v.slotLabel}</span></td>
+                        <td style={{fontWeight:600}}>{v.name}</td>
+                        <td><span style={{background:sev.bg,color:sev.fg,padding:"2px 7px",borderRadius:4,fontSize:10.5,fontWeight:600}}>{v.rule.note}</span></td>
+                      </tr>
+                    );
+                  })}</tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {conflicts.length===0&&ruleViolations.length===0&&(
+            <div className="card"><div className="cb" style={{textAlign:"center",padding:40}}>
+              <div style={{fontSize:32,marginBottom:8}}>✅</div>
+              <div style={{fontSize:14,fontWeight:600,color:"#374151"}}>No conflicts found in {selQ}</div>
+              <div style={{fontSize:12,color:"#94a3b8",marginTop:4}}>All assigned staff are available on their scheduled dates.</div>
+            </div></div>
+          )}
+        </div>
+      )}
+
+      {tab==="rules"&&(
+        <div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:8}}>
+            <div className="al al-i" style={{margin:0,flex:1,minWidth:200}}>
+              Define constraints for staff — e.g. "MW should not do Monday nights". These appear as warnings in the Rota Builder when violated.
+            </div>
+            <button className="btn bp" onClick={()=>setAddForm("new")}>＋ Add Rule</button>
+          </div>
+
+          <div className="card">
+            {constraintRules.length===0&&!addForm&&(
+              <div className="cb" style={{textAlign:"center",padding:32,color:"#94a3b8"}}>
+                <div style={{fontSize:28,marginBottom:6}}>📏</div>
+                <div style={{fontSize:13,fontWeight:600,color:"#374151"}}>No rules defined yet</div>
+                <div style={{fontSize:12,marginTop:4}}>Add rules to track scheduling constraints and spot violations in the rota.</div>
+              </div>
+            )}
+            {constraintRules.length>0&&(
+              <div style={{overflowX:"auto"}}>
+                <table className="tbl">
+                  <thead><tr><th>Staff</th><th>Grade</th><th>Rule</th><th>Note</th><th>Severity</th><th>Status</th><th>Actions</th></tr></thead>
+                  <tbody>{constraintRules.map(r=>{
+                    const sm=activeStaff.find(s=>s.init===r.init);
+                    const sev=CONF_SEVERITY[r.severity]||CONF_SEVERITY.warn;
+                    const ruleDesc = r.type==="avoid_day"
+                      ? `Avoid ${r.dayOfWeek}s`
+                      : r.type==="avoid_slot_group"
+                      ? `Avoid ${GRP_LABELS[r.slotGroup]||r.slotGroup} shifts`
+                      : "Note";
+                    return (
+                      <tr key={r.id} style={{opacity:r.active?1:.5}}>
+                        <td style={{fontWeight:600}}>{r.name||r.init}</td>
+                        <td style={{color:"#64748b",fontSize:11}}>{sm?.grade||"—"}</td>
+                        <td><span style={{background:"#f1f5f9",color:"#475569",padding:"2px 7px",borderRadius:4,fontSize:10.5,fontWeight:600}}>{ruleDesc}</span></td>
+                        <td style={{color:"#374151",fontSize:12}}>{r.note}</td>
+                        <td><span style={{background:sev.bg,color:sev.fg,padding:"2px 7px",borderRadius:4,fontSize:10.5,fontWeight:600}}>{sev.label}</span></td>
+                        <td><span className={`badge ${r.active?"b-approved":"b-rejected"}`}>{r.active?"Active":"Inactive"}</span></td>
+                        <td>
+                          <div style={{display:"flex",gap:5}}>
+                            <button className="btn bs bsm" onClick={()=>toggleRule(r.id)}>{r.active?"Disable":"Enable"}</button>
+                            <button className="btn bsm" style={{color:"#ef4444",border:"1px solid #fca5a5"}} onClick={()=>deleteRule(r.id)}>Delete</button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}</tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {addForm&&(
+            <Modal title="Add Constraint Rule" onClose={()=>setAddForm(null)}
+              footer={<><button className="btn bs" onClick={()=>setAddForm(null)}>Cancel</button><button className="btn bp" disabled={!form.init||!form.note.trim()} onClick={addRule}>Add Rule</button></>}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                <div className="fg" style={{gridColumn:"1/-1"}}>
+                  <label className="fl">Staff Member</label>
+                  <select className="fi" value={form.init} onChange={e=>setForm(f=>({...f,init:e.target.value}))}>
+                    <option value="">Select staff…</option>
+                    {activeStaff.sort((a,b)=>a.name.localeCompare(b.name)).map(s=><option key={s.id} value={s.init}>{s.name} ({s.grade})</option>)}
+                  </select>
+                </div>
+                <div className="fg">
+                  <label className="fl">Rule Type</label>
+                  <select className="fi" value={form.type} onChange={e=>setForm(f=>({...f,type:e.target.value}))}>
+                    <option value="avoid_day">Avoid day of week</option>
+                    <option value="avoid_slot_group">Avoid shift type</option>
+                    <option value="note">Note only</option>
+                  </select>
+                </div>
+                <div className="fg">
+                  <label className="fl">Severity</label>
+                  <select className="fi" value={form.severity} onChange={e=>setForm(f=>({...f,severity:e.target.value}))}>
+                    <option value="warn">Warning</option>
+                    <option value="info">Info</option>
+                  </select>
+                </div>
+                {form.type==="avoid_day"&&(
+                  <div className="fg" style={{gridColumn:"1/-1"}}>
+                    <label className="fl">Day of Week</label>
+                    <select className="fi" value={form.dayOfWeek} onChange={e=>setForm(f=>({...f,dayOfWeek:e.target.value}))}>
+                      {DOW_FULL.map(d=><option key={d}>{d}</option>)}
+                    </select>
+                  </div>
+                )}
+                {form.type==="avoid_slot_group"&&(
+                  <div className="fg" style={{gridColumn:"1/-1"}}>
+                    <label className="fl">Shift Type</label>
+                    <select className="fi" value={form.slotGroup} onChange={e=>setForm(f=>({...f,slotGroup:e.target.value}))}>
+                      {Object.entries(GRP_LABELS).map(([k,v])=><option key={k} value={k}>{v}</option>)}
+                    </select>
+                  </div>
+                )}
+                <div className="fg" style={{gridColumn:"1/-1"}}>
+                  <label className="fl">Note / Reason</label>
+                  <input className="fi" value={form.note} onChange={e=>setForm(f=>({...f,note:e.target.value}))} placeholder="e.g. Childcare on Mondays, cannot do night shifts…"/>
+                </div>
+              </div>
+            </Modal>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -4269,6 +4545,7 @@ function App() {
   const [staffShiftTimes,setSST]           = useState(()=>lsGet('staffShiftTimes',{}));
   const [trainingDays,setTrainingDays]     = useState(()=>lsGet('trainingDays',[])); // [{id,date,type:"SpR"|"ACP",note}]
   const [demoMode,setDemoMode]             = useState(()=>lsGet('demoMode',false));
+  const [constraintRules,setConstraintRules] = useState(()=>lsGet('constraintRules',[])); // global, not per-year
 
   // Year management
   const [years,setYears]           = useState(()=>lsGet('years',[{id:"2026-27",label:"2026/27",quarters:QUARTERS,active:true,archived:false}]));
@@ -4404,6 +4681,7 @@ function App() {
               upd(setShiftTimes)(d.shiftTimes);
               upd(setSST)(d.staffShiftTimes);
               upd(setTrainingDays)(d.trainingDays);
+              upd(setConstraintRules)(d.constraintRules || []);
             }
           }
           setFsReady(true);
@@ -4423,11 +4701,11 @@ function App() {
   // Also mirrors to localStorage as an offline / fast-reload cache
   useEffect(() => {
     if (!fsReady) return;
-    const payload = {staff,auditLog,wteConfig,years,activeYearId,rotaByYear,leaveByYear:leaveByYear,availByYear,qStatusByYear,requestsByYear,notesByYear,corrsByYear,staffHoursByYear,swapsByYear,shiftOverridesByYear,fixedDaysOff,genRules,shiftTimes,staffShiftTimes,trainingDays,demoMode};
+    const payload = {staff,auditLog,wteConfig,years,activeYearId,rotaByYear,leaveByYear:leaveByYear,availByYear,qStatusByYear,requestsByYear,notesByYear,corrsByYear,staffHoursByYear,swapsByYear,shiftOverridesByYear,fixedDaysOff,genRules,shiftTimes,staffShiftTimes,trainingDays,constraintRules,demoMode};
     appDoc().set(payload).catch(console.error);
-    Object.entries({staff:staff,audit:auditLog,wteConfig:wteConfig,years:years,activeYearId:activeYearId,rotaByYear:rotaByYear,leaveByYear:leaveByYear,availByYear:availByYear,qstatusByYear:qStatusByYear,requestsByYear:requestsByYear,notesByYear:notesByYear,corrsByYear:corrsByYear,staffHoursByYear:staffHoursByYear,swapsByYear:swapsByYear,shiftOverridesByYear:shiftOverridesByYear,fixedDaysOff:fixedDaysOff,genRules:genRules,shiftTimes:shiftTimes,staffShiftTimes:staffShiftTimes,trainingDays:trainingDays,demoMode:demoMode})
+    Object.entries({staff:staff,audit:auditLog,wteConfig:wteConfig,years:years,activeYearId:activeYearId,rotaByYear:rotaByYear,leaveByYear:leaveByYear,availByYear:availByYear,qstatusByYear:qStatusByYear,requestsByYear:requestsByYear,notesByYear:notesByYear,corrsByYear:corrsByYear,staffHoursByYear:staffHoursByYear,swapsByYear:swapsByYear,shiftOverridesByYear:shiftOverridesByYear,fixedDaysOff:fixedDaysOff,genRules:genRules,shiftTimes:shiftTimes,staffShiftTimes:staffShiftTimes,trainingDays:trainingDays,constraintRules:constraintRules,demoMode:demoMode})
       .forEach(([k,v])=>lsSave(k,v));
-  },[fsReady,staff,auditLog,wteConfig,years,activeYearId,rotaByYear,leaveByYear,availByYear,qStatusByYear,requestsByYear,notesByYear,corrsByYear,staffHoursByYear,swapsByYear,shiftOverridesByYear,fixedDaysOff,genRules,shiftTimes,staffShiftTimes,trainingDays,demoMode]);
+  },[fsReady,staff,auditLog,wteConfig,years,activeYearId,rotaByYear,leaveByYear,availByYear,qStatusByYear,requestsByYear,notesByYear,corrsByYear,staffHoursByYear,swapsByYear,shiftOverridesByYear,fixedDaysOff,genRules,shiftTimes,staffShiftTimes,trainingDays,constraintRules,demoMode]);
 
   const addAudit=(u,action,details)=>{
     const now=new Date(), ts=`${now.toLocaleDateString("en-GB")} ${now.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}`;
@@ -4474,7 +4752,7 @@ function App() {
   const hasOpenQ=activeYearQuarters.some(q=>quarterStatus[q.id]==="open");
   const isAdmin=user?.role==="admin";
 
-  const titles={dashboard:"Dashboard",calendar:"Rota Calendar",myshifts:"My Shifts",myrecords:"My Leave Records",availability:"Availability",requests:isAdmin?"Leave Requests":"My Requests",builder:"Rota Builder",adjustments:"Hour Adjustments",staff:"Staff Management",reports:isAdmin?"Reports":"My Summary",rotaconfig:"Rota Config",audit:"Audit Log",yearsetup:"Year Setup",airota:"AI Rota Builder",fixeddays:"Fixed Days Off"};
+  const titles={dashboard:"Dashboard",calendar:"Rota Calendar",myshifts:"My Shifts",myrecords:"My Leave Records",availability:"Availability",requests:isAdmin?"Leave Requests":"My Requests",builder:"Rota Builder",adjustments:"Hour Adjustments",staff:"Staff Management",reports:isAdmin?"Reports":"My Summary",rotaconfig:"Rota Config",audit:"Audit Log",yearsetup:"Year Setup",airota:"AI Rota Builder",fixeddays:"Fixed Days Off",conflicts:"Conflicts & Rules"};
 
   if(!fsReady) return(
     <><style>{CSS}</style>
@@ -4542,9 +4820,10 @@ function App() {
                 />
               )}
             {view==="requests"   &&<RequestsView user={user} requests={requests} setRequests={setReqs} addAudit={addAudit} swaps={swaps} setSwaps={setSwaps} rota={rota} setRota={setRota} staff={staff}/>}
-            {view==="builder"    &&isAdmin&&<RotaBuilder rota={rota} setRota={setRota} leaveEntries={leaveEntries} setLeaveEntries={setLE} staff={staff} dayNotes={dayNotes} setDayNotes={setNotes} availability={availability} addAudit={addAudit} currentUser={user} wteConfig={wteConfig} staffHours={staffHours} hoursCorrections={hoursCorrections} setHoursCorrections={setHoursCorrections} trainingDays={trainingDays} staffShiftOverrides={staffShiftOverrides}/>}
+            {view==="builder"    &&isAdmin&&<RotaBuilder rota={rota} setRota={setRota} leaveEntries={leaveEntries} setLeaveEntries={setLE} staff={staff} dayNotes={dayNotes} setDayNotes={setNotes} availability={availability} addAudit={addAudit} currentUser={user} wteConfig={wteConfig} staffHours={staffHours} hoursCorrections={hoursCorrections} setHoursCorrections={setHoursCorrections} trainingDays={trainingDays} staffShiftOverrides={staffShiftOverrides} constraintRules={constraintRules}/>}
             {view==="staff"      &&isAdmin&&<StaffMgmt staff={staff} setStaff={setStaff} addAudit={addAudit} currentUser={user}/>}
             {view==="reports"    &&<Reports user={user} staff={staff} rota={rota} leaveEntries={leaveEntries} requests={requests} quarters={activeYearQuarters} availability={availability}/>}
+            {view==="conflicts"  &&isAdmin&&<ConflictsView rota={rota} leaveEntries={leaveEntries} availability={availability} staff={staff} quarters={activeYearQuarters} addAudit={addAudit} currentUser={user} constraintRules={constraintRules} setConstraintRules={setConstraintRules}/>}
             {view==="fixeddays"  &&isAdmin&&<FixedDaysView fixedDaysOff={fixedDaysOff} setFixedDaysOff={setFixedDaysOff} staff={staff} addAudit={addAudit} currentUser={user}/>}
             {view==="rotaconfig" &&isAdmin&&<RotaConfig wteConfig={wteConfig} setWteConfig={setWteConfig} staffHours={staffHours} setStaffHours={setStaffHours} staff={staff} addAudit={addAudit} shiftTimes={shiftTimes} setShiftTimes={setShiftTimes} staffShiftTimes={staffShiftTimes} setStaffShiftTimes={setSST} trainingDays={trainingDays} setTrainingDays={setTrainingDays} staffShiftOverrides={staffShiftOverrides} setShiftOverrides={setShiftOverrides}/>}
 {view==="airota"     &&isAdmin&&<AIRotaView user={user} staff={staff} rota={rota} setRota={setRota} availability={availability} leaveEntries={leaveEntries} quarterStatus={quarterStatus} wteConfig={wteConfig} staffHours={staffHours} genRules={genRules} setGenRules={setGenRules} shiftTimes={shiftTimes} addAudit={addAudit} quarters={activeYearQuarters} activeYearId={activeYearId}/>}
