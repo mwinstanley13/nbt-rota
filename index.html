@@ -966,14 +966,18 @@ const LIST_GRP_LABEL = {
   ST3_NIGHT:"Night ST3", ACP_NIGHT:"Night ACP"
 };
 
-function CalendarView({rota,leaveEntries,dayNotes,staff,viewMonth,setViewMonth,viewMode,setViewMode,trainingDays}) {
+function CalendarView({rota,leaveEntries,dayNotes,staff,viewMonth,setViewMonth,viewMode,setViewMode,trainingDays,quarters}) {
   const [fStaff,setFS]=useState(""), [dayModal,setDM]=useState(null);
   const [isList,setIsList]=useState(false);
+  const [listQ,setListQ]=useState("Q1");
   const today=fmtISO(new Date()), yr=viewMonth.getFullYear(), mo=viewMonth.getMonth();
   const tdMap=useMemo(()=>Object.fromEntries((trainingDays||[]).map(t=>[t.date,t])),[trainingDays]);
   const days=useMemo(()=>getMonthDays(yr,mo),[yr,mo]);
   const DOW=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
   const activeStaff=staff.filter(s=>s.role==="staff"&&s.active);
+  const activeQs = quarters || QUARTERS;
+  const listQDef = activeQs.find(q=>q.id===listQ)||activeQs[0];
+  const quarterDays = useMemo(()=> listQDef ? getDatesInRange(listQDef.start, listQDef.end) : [], [listQDef]);
 
   const getDateStaff=(d)=>{
     const result=[];
@@ -1003,7 +1007,12 @@ function CalendarView({rota,leaveEntries,dayNotes,staff,viewMonth,setViewMonth,v
     <div>
       {/* Top bar */}
       <div className="cal-top">
-        <div className="cal-nav"><button onClick={()=>nav(-1)}>‹</button><div className="cal-mo">{label}</div><button onClick={()=>nav(1)}>›</button></div>
+        {!isList&&<div className="cal-nav"><button onClick={()=>nav(-1)}>‹</button><div className="cal-mo">{label}</div><button onClick={()=>nav(1)}>›</button></div>}
+        {isList&&(
+          <div className="mtog">
+            {activeQs.map(q=><button key={q.id} className={`mtog-btn${listQ===q.id?" act":""}`} onClick={()=>setListQ(q.id)}>{q.id}</button>)}
+          </div>
+        )}
         <select className="fi" style={{width:160}} value={fStaff} onChange={e=>setFS(e.target.value)}>
           <option value="">All Staff</option>{activeStaff.map(s=><option key={s.id} value={s.init}>{s.name}</option>)}
         </select>
@@ -1030,7 +1039,7 @@ function CalendarView({rota,leaveEntries,dayNotes,staff,viewMonth,setViewMonth,v
               </tr>
             </thead>
             <tbody>
-              {monthDays.map(({date})=>{
+              {quarterDays.map(date=>{
                 const isWE=isWeekend(date),isBH=!!BH[date],isToday=date===today;
                 const rowBg=isToday?"#f0fdf4":isBH?"#fffbeb":isWE?"#f8f7ff":"white";
                 const stickyBg=isToday?"#e8faf3":isBH?"#fef9e7":isWE?"#f4f3ff":"white";
@@ -4275,7 +4284,7 @@ function AIRotaView({user,staff,rota,setRota,availability,leaveEntries,quarterSt
   const [tab,setTab]           = useState("rules");
   const [selQ,setSelQ]         = useState("Q1");
   const [slotFilter,setSF]     = useState("all");
-  const [overwrite,setOW]      = useState(false);
+  const [overwrite,setOW]      = useState("fill"); // "fill" | "overwrite" | "replace"
   const [generating,setGen]    = useState(false);
   const [genError,setErr]      = useState(null);
   const [rotaDraft,setDraft]   = useState(()=>lsGet('rotaDraft_'+activeYearId,null));
@@ -4353,17 +4362,21 @@ function AIRotaView({user,staff,rota,setRota,availability,leaveEntries,quarterSt
       });
 
       // build targets per person for this quarter
+      // staffHours stores contracted HOURS (e.g. 419.85), not a 0–1 WTE fraction.
+      // Convert to WTE by dividing by the grade's full-time quarterly hours.
       const targets = {};
       activeStaff.forEach(s=>{
         const cfg = wteConfig[s.grade] || wteConfig["ST4+"] || {};
-        const wte = ((staffHours||{})[s.init]||{})[selQ] ?? 1.0;
+        const fullHrs = cfg.hoursPerQuarter || Math.round((cfg.hoursPerWeek||45.25) * 13 * 10) / 10;
+        const storedHrs = ((staffHours||{})[s.init]||{})[selQ];
+        const wte = (storedHrs != null && fullHrs > 0) ? Math.min(2, Math.max(0, storedHrs / fullHrs)) : 1.0;
         targets[s.init]={
           nights:         Math.round((cfg.nights||0)*wte),
           weekends:       Math.round((cfg.weekends||0)*wte),
           earlies:        Math.round((cfg.earlies||0)*wte),
           mids:           Math.round((cfg.mids||0)*wte),
           lates:          Math.round((cfg.lates||0)*wte),
-          hoursPerQuarter:Math.round((cfg.hoursPerQuarter||0)*wte),
+          hoursPerQuarter:Math.round(fullHrs * wte),
         };
       });
 
@@ -4407,14 +4420,31 @@ function AIRotaView({user,staff,rota,setRota,availability,leaveEntries,quarterSt
     }
   };
 
+  // ── clear quarter ──
+  const clearQuarter = () => {
+    const q = (quarters||QUARTERS).find(x=>x.id===selQ);
+    if (!q) return;
+    if (!window.confirm(`Clear ALL existing rota assignments for ${selQ} (${q.label})? This cannot be undone.`)) return;
+    const dates = [];
+    let cur = new Date(q.start); const end = new Date(q.end);
+    while (cur <= end) { dates.push(cur.toISOString().slice(0,10)); cur.setDate(cur.getDate()+1); }
+    setRota(prev=>{ const next={...prev}; dates.forEach(d=>{ delete next[d]; }); return next; });
+    addAudit(user.init,"Rota Cleared",`All assignments cleared for ${selQ}`);
+  };
+
   // ── accept ──
   const acceptDraft = () => {
     if(!rotaDraft) return;
     setRota(prev=>{
       const next={...prev};
+      // "replace" mode: wipe the quarter's existing assignments first
+      if(overwrite==="replace"){
+        const q=(quarters||QUARTERS).find(x=>x.id===selQ);
+        if(q){let c=new Date(q.start);const e=new Date(q.end);while(c<=e){delete next[c.toISOString().slice(0,10)];c.setDate(c.getDate()+1);}}
+      }
       Object.entries(rotaDraft).forEach(([date,slots])=>{
-        if(overwrite) next[date]={...(prev[date]||{}),...slots};
-        else next[date]={...slots,...(prev[date]||{})};
+        if(overwrite==="overwrite") next[date]={...(prev[date]||{}),...slots};
+        else next[date]={...slots,...(prev[date]||{})};  // fill = existing takes priority
       });
       return next;
     });
@@ -4537,7 +4567,7 @@ function AIRotaView({user,staff,rota,setRota,availability,leaveEntries,quarterSt
         <div className="card">
           <div className="ch"><span className="ct">Generate Rota Draft</span></div>
           <div className="cb">
-            {accepted&&<div className="al al-ok" style={{marginBottom:14}}>✓ Draft accepted and merged into the rota for {selQ}.</div>}
+            {accepted&&<div className="al al-ok" style={{marginBottom:14}}>✓ Draft accepted and applied to the rota for {selQ}.</div>}
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:14,marginBottom:18}}>
               <div className="fg" style={{margin:0}}>
                 <label className="fl">Quarter</label>
@@ -4553,23 +4583,32 @@ function AIRotaView({user,staff,rota,setRota,availability,leaveEntries,quarterSt
                   <option value="nights">Nights only (N1, N2, SN, AN)</option>
                 </select>
               </div>
-              <div style={{display:"flex",alignItems:"center",gap:8,paddingTop:18}}>
-                <input type="checkbox" id="overwrite" checked={overwrite} onChange={e=>setOW(e.target.checked)}/>
-                <label htmlFor="overwrite" style={{fontSize:13,color:"#374151",cursor:"pointer"}}>Overwrite existing assignments</label>
+              <div className="fg" style={{margin:0}}>
+                <label className="fl">When accepting draft</label>
+                <select className="fi" style={{padding:"6px 10px"}} value={overwrite} onChange={e=>setOW(e.target.value)}>
+                  <option value="fill">Fill empty slots only (keep existing)</option>
+                  <option value="overwrite">Overwrite — draft replaces conflicts</option>
+                  <option value="replace">Replace all — clear quarter first</option>
+                </select>
               </div>
             </div>
 
-            <div style={{background:"#f8fafc",borderRadius:8,padding:14,marginBottom:18,fontSize:12.5,color:"#64748b"}}>
-              <strong>How it works:</strong> The scheduler reads all staff availability for {selQ}, assigns night blocks first (hard-capped to individual targets, N1 always filled), then fills day shifts to balance hours within ±8h of each person's quarterly target. Review on the Draft tab — conflicts highlighted — then Accept to merge. The existing rota is untouched until you accept.
-              {!overwrite&&" Existing slot assignments will be preserved (AI only fills empty slots)."}
-              {overwrite&&<span style={{color:"#d97706"}}> ⚠ Overwrite mode: existing assignments will be replaced.</span>}
+            <div style={{background:"#f8fafc",borderRadius:8,padding:14,marginBottom:14,fontSize:12.5,color:"#64748b"}}>
+              <strong>How it works:</strong> The scheduler reads all staff availability for {selQ}, assigns night blocks first (hard-capped to individual WTE targets), then fills day shifts to balance hours. Review the Draft tab — conflicts are highlighted — then Accept to apply.
+              {overwrite==="fill"&&<span> Existing slot assignments are preserved; AI only fills empty slots.</span>}
+              {overwrite==="overwrite"&&<span style={{color:"#d97706"}}> ⚠ Draft takes priority over any existing assignments on the same slot.</span>}
+              {overwrite==="replace"&&<span style={{color:"#dc2626"}}> ⛔ Replace mode: ALL existing {selQ} assignments are wiped before applying the draft.</span>}
             </div>
 
-            {genError&&<div className="al al-w" style={{marginBottom:14}}>⚠️ {genError}</div>}
-
-            <button className="btn bp" style={{padding:"10px 24px",fontSize:14,gap:8}} onClick={generate} disabled={generating}>
-              {generating?<><span style={{display:"inline-block",animation:"spin 1s linear infinite"}}>⟳</span> Generating…</>:"⚙️ Generate Draft"}
-            </button>
+            <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginBottom:8}}>
+              <button className="btn bp" style={{padding:"10px 24px",fontSize:14}} onClick={generate} disabled={generating}>
+                {generating?<><span style={{display:"inline-block",animation:"spin 1s linear infinite"}}>⟳</span> Generating…</>:"⚙️ Generate Draft"}
+              </button>
+              <button className="btn bs" style={{padding:"10px 16px",color:"#ef4444",borderColor:"#fca5a5"}} onClick={clearQuarter}
+                title={`Clear all existing ${selQ} rota assignments`}>
+                🗑 Clear {selQ} rota
+              </button>
+            </div>
             {generating&&<p style={{marginTop:10,fontSize:12,color:"#64748b"}}>Running deterministic scheduler — this usually takes a few seconds.</p>}
           </div>
         </div>
@@ -4637,7 +4676,7 @@ function AIRotaView({user,staff,rota,setRota,availability,leaveEntries,quarterSt
                       <td style={{padding:"4px 8px",border:"1px solid #f1f5f9",fontWeight:600,fontSize:11,whiteSpace:"nowrap",color:"#374151"}}>{fmtDate(date)}</td>
                       {ALL_SLOTS.map(sk=>{
                         const init=daySlots[sk];
-                        const wasExisting=existSlots[sk]&&!overwrite;
+                        const wasExisting=existSlots[sk]&&overwrite==="fill";
                         const isCfl=conflictSlots.has(sk);
                         return (
                           <td key={sk} style={{padding:"3px 4px",border:"1px solid #f1f5f9",textAlign:"center"}}>
@@ -4945,7 +4984,7 @@ function App() {
           )}
           <div className="body">
             {view==="dashboard"  &&<Dashboard user={user} staff={staff} rota={rota} requests={requests} dayNotes={dayNotes} availability={availability} quarterStatus={quarterStatus} quarters={activeYearQuarters} demoMode={demoMode} loadDemoData={loadDemoData} resetToFresh={resetToFresh} isAdmin={isAdmin} swaps={swaps} setView={setView}/>}
-            {view==="calendar"   &&<CalendarView rota={rota} leaveEntries={leaveEntries} dayNotes={dayNotes} staff={staff} viewMonth={viewMonth} setViewMonth={setVM} viewMode="month" setViewMode={()=>{}} trainingDays={trainingDays}/>}
+            {view==="calendar"   &&<CalendarView rota={rota} leaveEntries={leaveEntries} dayNotes={dayNotes} staff={staff} viewMonth={viewMonth} setViewMonth={setVM} viewMode="month" setViewMode={()=>{}} trainingDays={trainingDays} quarters={activeYearQuarters}/>}
             {view==="myshifts"   &&!isAdmin&&<MyShifts user={user} rota={rota} leaveEntries={leaveEntries} dayNotes={dayNotes}/>}
             {view==="myrecords"  &&!isAdmin&&<MyLeaveRecords user={user} leaveEntries={leaveEntries} requests={requests} availability={availability}/>}
             {view==="availability"&&(<AvailabilityView

@@ -65,10 +65,22 @@ function scheduleNights(body) {
   const postRestHrs = contractRules?.postNightRestHours || 46;
   const avMap = availability;
 
+  // Build night pools from slotGrades config if set, else fall back to grade defaults.
+  // This ensures grade changes in the app are respected immediately.
+  const slotsConfig = body.slots || {};
+  const gradeInSlot = (slotKey, defaultGrades) => {
+    const cfg = slotsConfig[slotKey];
+    return (cfg && cfg.length > 0) ? cfg : defaultGrades;
+  };
+  const n1Grades = gradeInSlot("N1", ["ST4+", "Military"]);
+  const n2Grades = gradeInSlot("N2", ["ST4+", "Military"]);
+  const snGrades = gradeInSlot("SN", ["ST3"]);
+  const anGrades = gradeInSlot("AN", ["ACP", "tACP"]);
+
   const pools = {
-    n1n2: staff.filter(s => s.grade === "ST4+"),
-    sn:   staff.filter(s => s.grade === "ST3"),
-    an:   staff.filter(s => ["ACP","tACP"].includes(s.grade)),
+    n1n2: staff.filter(s => n1Grades.includes(s.grade) || n2Grades.includes(s.grade)),
+    sn:   staff.filter(s => snGrades.includes(s.grade)),
+    an:   staff.filter(s => anGrades.includes(s.grade)),
   };
 
   const state = {};
@@ -206,29 +218,22 @@ function scheduleNights(body) {
       return exactFit[0];
     }
 
-    // For required slots (N1 / SDM):
-    // Second pass — under target but block would overshoot (still better than anyone over target)
+    // Second pass (required slots only): someone under target but block would slightly overshoot.
+    // Hard cap: never assign more than target+1 nights to anyone.
     if (required) {
       const underTarget = pool.filter(s =>
         !exclude.has(s.init) &&
         canDoBlock(s.init, blockDates) &&
-        state[s.init].nightCount < state[s.init].target
+        state[s.init].nightCount < state[s.init].target &&
+        state[s.init].nightCount + blockDates.length <= state[s.init].target + 1
       );
       if (underTarget.length) {
         underTarget.sort((a, b) => state[a.init].nightCount - state[b.init].nightCount);
         return underTarget[0];
       }
-      // Last resort — anyone physically eligible (already at/over target)
-      const fallback = pool.filter(s =>
-        !exclude.has(s.init) && canDoBlock(s.init, blockDates)
-      );
-      if (fallback.length) {
-        fallback.sort((a, b) => state[a.init].nightCount - state[b.init].nightCount);
-        return fallback[0];
-      }
     }
 
-    return null; // slot stays empty (OK for N2 / SN / AN)
+    return null; // slot stays empty — conflict will be flagged in validation
   }
 
   function record(person, blockDates, slot, nightRota) {
