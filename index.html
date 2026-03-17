@@ -9,7 +9,12 @@
   <meta name="apple-mobile-web-app-title" content="RotaFlow" />
   <title>RotaFlow</title>
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/rotaflow_icon_180.png" />
+  <link rel="apple-touch-icon" sizes="152x152" href="icons/rotaflow_icon_152.png" />
+  <link rel="apple-touch-icon" sizes="167x167" href="icons/rotaflow_icon_167.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/rotaflow_icon_180.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/rotaflow_icon_32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="icons/rotaflow_icon_16.png" />
   <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -161,6 +166,15 @@ const INIT_GEN_RULES = {
   maxConsecWorkingDays: 7, postNightRestHours: 46, restEvery14Days: 48,
   maxWeekendFreq: "1in2", targetWeekendFreq: "1in3", maxConsecWeekends: 4,
   balanceNights: true, balanceWeekends: true, matchWteTargets: true,
+};
+
+// Built-in system rule definitions (toggleable in Conflicts & Rules view)
+const DEFAULT_SYS_RULES = {
+  unavailConflict: {label:"Availability conflict",  desc:"Staff assigned when marked Unavailable, SL, or Military",    enabled:true,  severity:"error"},
+  leaveEntryClash: {label:"Leave entry clash",       desc:"Staff assigned when a leave entry exists on that date",       enabled:true,  severity:"error"},
+  gradeMismatch:   {label:"Grade mismatch",          desc:"Staff assigned to a slot their grade is not permitted for",   enabled:true,  severity:"warn"},
+  doubleBook:      {label:"Double booking",          desc:"Staff appearing in more than one slot on the same day",       enabled:true,  severity:"error"},
+  postNightRest:   {label:"Post-night rest (46 h)",  desc:"Staff assigned within 46 hours of completing a night shift", enabled:false, severity:"warn"},
 };
 
 // localStorage helpers — safe read/write with JSON (de)serialisation
@@ -582,7 +596,7 @@ body{font-family:'Inter',sans-serif;background:#f4f6fb;font-size:13px}
 .list-tbl thead tr{background:#f8fafc;border-bottom:2px solid #e2e8f0}
 .list-th-date{position:sticky;left:0;z-index:3;background:#f8fafc;padding:9px 12px;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#64748b;white-space:nowrap;border-right:2px solid #e2e8f0;min-width:90px}
 .list-th-day{position:sticky;left:90px;z-index:3;background:#f8fafc;padding:9px 10px;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#64748b;white-space:nowrap;border-right:1px solid #e2e8f0;min-width:46px}
-.list-th-staff{padding:6px 8px;font-size:10.5px;text-align:center;border-right:1px solid #f0f4f8;min-width:80px;max-width:100px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.list-th-staff{padding:6px 8px;font-size:10.5px;text-align:center;border-right:1px solid #f0f4f8;min-width:80px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .list-td-date{position:sticky;left:0;z-index:2;padding:7px 12px;white-space:nowrap;border-right:2px solid #e2e8f0;border-bottom:1px solid #f1f5f9;font-size:11.5px;font-weight:500}
 .list-td-day{position:sticky;left:90px;z-index:2;padding:7px 10px;font-size:11px;font-weight:600;border-right:1px solid #e2e8f0;border-bottom:1px solid #f1f5f9;min-width:46px}
 .list-td-cell{padding:4px 5px;text-align:center;border-right:1px solid #f0f4f8;border-bottom:1px solid #f1f5f9;vertical-align:middle}
@@ -983,6 +997,7 @@ function CalendarView({rota,leaveEntries,dayNotes,staff,viewMonth,setViewMonth,v
   const label=viewMonth.toLocaleDateString("en-GB",{month:"long",year:"numeric"});
   const visStaff=fStaff?activeStaff.filter(s=>s.init===fStaff):activeStaff;
   const monthDays=days.filter(d=>d.inMonth);
+  const staffColStyle = visStaff.length <= 6 ? {minWidth:Math.max(100, Math.floor(600/visStaff.length))+"px", width:"auto"} : undefined;
 
   return (
     <div>
@@ -1007,8 +1022,8 @@ function CalendarView({rota,leaveEntries,dayNotes,staff,viewMonth,setViewMonth,v
                 <th className="list-th-date">Date</th>
                 <th className="list-th-day">Day</th>
                 {visStaff.map(s=>(
-                  <th key={s.init} className="list-th-staff">
-                    <div style={{fontSize:9.5,fontWeight:600,color:"#374151",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:90}}>{s.name.split(" ").slice(-1)[0]}</div>
+                  <th key={s.init} className="list-th-staff" style={staffColStyle}>
+                    <div style={{fontSize:9.5,fontWeight:600,color:"#374151",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.name.split(" ").slice(-1)[0]}</div>
                     <div style={{color:"#6366f1",fontWeight:800,fontSize:11.5}}>{s.init}</div>
                   </th>
                 ))}
@@ -1034,7 +1049,7 @@ function CalendarView({rota,leaveEntries,dayNotes,staff,viewMonth,setViewMonth,v
                     {visStaff.map(s=>{
                       const cell=getCell(s.init,date);
                       return (
-                        <td key={s.init} className="list-td-cell" style={{background:rowBg}}>
+                        <td key={s.init} className="list-td-cell" style={{background:rowBg,...staffColStyle}}>
                           {cell&&<span className="list-chip" style={{background:cell.bg,color:cell.fg,borderColor:cell.bd}}>{cell.text}</span>}
                         </td>
                       );
@@ -1659,25 +1674,59 @@ function AvailabilityView({
     {/* ── Fixed Days Off ── */}
     {!isAdmin && fixedDaysOff && setFixedDaysOff && (() => {
       const DAY_NAMES = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
-      const REASONS   = ["Research","Fellow Day"];
+      const REASONS   = ["Research","Fellow Day","PHEM"];
+      const FIXED_LEAVE_TYPE = {"Research":"RESEARCH","Fellow Day":"FELLOW","PHEM":"PHEM"};
       const myFixed   = fixedDaysOff.filter(f=>f.init===user.init);
       const [fdDay, setFdDay] = React.useState("Monday");
       const [fdReason, setFdReason] = React.useState("Research");
       const addFixed = () => {
         if (myFixed.some(f=>f.dayOfWeek===fdDay&&f.reason===fdReason)) return;
         setFixedDaysOff(prev=>[...prev,{id:Date.now(),init:user.init,name:user.name,dayOfWeek:fdDay,reason:fdReason,addedDate:fmtISO(new Date())}]);
-        addAudit(user.init,"Fixed Day Off",`${user.init} added fixed ${fdReason} day: ${fdDay}`);
+        // Auto-add leave entries for all matching dates across the year
+        const leaveType = FIXED_LEAVE_TYPE[fdReason];
+        if (leaveType) {
+          const allDates = [];
+          (quarters||QUARTERS).forEach(q => getDatesInRange(q.start,q.end).forEach(d=>{
+            if (new Date(d+"T00:00:00").toLocaleDateString("en-GB",{weekday:"long"})===fdDay) allDates.push(d);
+          }));
+          setLeaveEntries(prev=>{
+            const next={...prev};
+            allDates.forEach(d=>{
+              const day=next[d]||[];
+              if (!day.some(e=>e.init===user.init&&e.type===leaveType&&e.autoFromFixed)) {
+                next[d]=[...day,{id:Date.now()+Math.random(),init:user.init,type:leaveType,note:"Auto-added from fixed day off",autoFromFixed:true}];
+              }
+            });
+            return next;
+          });
+        }
+        addAudit(user.init,"Fixed Day Off",`${user.init} added fixed ${fdReason} day: ${fdDay} (leave entries auto-populated)`);
+      };
+      const removeFixed = (f) => {
+        setFixedDaysOff(prev=>prev.filter(x=>x.id!==f.id));
+        const leaveType = FIXED_LEAVE_TYPE[f.reason];
+        if (leaveType) {
+          setLeaveEntries(prev=>{
+            const next={};
+            Object.entries(prev).forEach(([d,entries])=>{
+              const filtered=entries.filter(e=>!(e.init===f.init&&e.type===leaveType&&e.autoFromFixed));
+              if (filtered.length>0) next[d]=filtered;
+            });
+            return next;
+          });
+        }
+        addAudit(user.init,"Fixed Day Off",`${user.init} removed fixed ${f.reason}: ${f.dayOfWeek}`);
       };
       return (
         <div className="card" style={{marginTop:18}}>
-          <div className="ch"><span className="ct">Fixed Days Off</span><span style={{fontSize:11,color:"#94a3b8",marginLeft:8}}>Regular non-working days (Research / Fellow Day)</span></div>
+          <div className="ch"><span className="ct">Fixed Days Off</span><span style={{fontSize:11,color:"#94a3b8",marginLeft:8}}>Regular non-working days — leave entries auto-populated for the year</span></div>
           <div className="cb">
             {myFixed.length===0&&<p style={{fontSize:12.5,color:"#94a3b8",margin:"8px 0"}}>No fixed days off set.</p>}
             {myFixed.map(f=>(
               <div key={f.id} style={{display:"flex",alignItems:"center",gap:10,padding:"6px 0",borderBottom:"1px solid #f1f5f9"}}>
                 <span style={{flex:1,fontSize:13,fontWeight:600}}>{f.dayOfWeek}</span>
                 <span style={{padding:"2px 8px",borderRadius:4,background:"#eff6ff",color:"#1d4ed8",fontSize:11,fontWeight:600}}>{f.reason}</span>
-                <button className="btn bs bsm" style={{color:"#ef4444",borderColor:"#ef4444"}} onClick={()=>{setFixedDaysOff(prev=>prev.filter(x=>x.id!==f.id));addAudit(user.init,"Fixed Day Off",`${user.init} removed fixed ${f.reason}: ${f.dayOfWeek}`);}}>Remove</button>
+                <button className="btn bs bsm" style={{color:"#ef4444",borderColor:"#ef4444"}} onClick={()=>removeFixed(f)}>Remove</button>
               </div>
             ))}
             <div style={{display:"flex",gap:8,marginTop:12,flexWrap:"wrap",alignItems:"flex-end"}}>
@@ -1954,7 +2003,7 @@ function StaffStatsSidebar({staff, rota, wteConfig, staffHours, selQ, leaveEntri
 // ROTA BUILDER — slot-based, rows=dates
 // ═══════════════════════════════════════════════════════════════
 
-function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,setDayNotes,availability,addAudit,currentUser,wteConfig,staffHours,hoursCorrections,setHoursCorrections,trainingDays,staffShiftOverrides,constraintRules}) {
+function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,setDayNotes,availability,addAudit,currentUser,wteConfig,staffHours,hoursCorrections,setHoursCorrections,trainingDays,staffShiftOverrides,constraintRules,sysRules,genRules}) {
   const [selQ,setSelQ]=useState("Q1");
   const [assignModal,setAM]=useState(null); // {date, slotKey}
   const [leaveModal,setLM]=useState(null);  // {date}
@@ -1995,8 +2044,28 @@ function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,s
   // Get availability status of a staff member on a date
   const getAvail = (init, date) => getAvailEntry(availability, init, date);
 
-  // Warn: assigned staff is unavailable
-  const hasConflict = (init, date) => getAvail(init, date)?.base === "UNAVAILABLE";
+  // Precompute double-booked inits per date (staff in >1 slot same day)
+  const doubleBooks = useMemo(() => {
+    const out = {};
+    quarterDates.forEach(date => {
+      const vals = Object.values(rota[date]||{}).filter(Boolean);
+      const seen = {};
+      vals.forEach(init => { seen[init] = (seen[init]||0) + 1; });
+      const dupes = new Set(Object.entries(seen).filter(([,c])=>c>1).map(([init])=>init));
+      if (dupes.size) out[date] = dupes;
+    });
+    return out;
+  }, [quarterDates, rota]);
+
+  // Warn: assigned staff has any system-rule conflict on a given date
+  const hasConflict = (init, date) => {
+    if (!init) return false;
+    const av = getAvail(init, date);
+    if (sysRules?.unavailConflict?.enabled !== false && (av?.base==="UNAVAILABLE"||av?.base==="SL"||av?.base==="MILITARY")) return true;
+    if (sysRules?.leaveEntryClash?.enabled !== false && (leaveEntries[date]||[]).some(e=>e.init===init)) return true;
+    if (sysRules?.doubleBook?.enabled !== false && doubleBooks[date]?.has(init)) return true;
+    return false;
+  };
 
   // Check if assignment violates a constraint rule
   const hasRuleWarning = (init, date, slotKey) => {
@@ -2021,7 +2090,7 @@ function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,s
           ))}
         </div>
         <div className="al al-i" style={{margin:0,padding:"6px 11px",fontSize:11.5}}>
-          💡 Click a slot cell to assign · Click a date to add a note · <strong style={{color:"#ef4444"}}>Red</strong> = unavailable · <strong style={{color:"#f59e0b"}}>Amber</strong> = rule warning · 🟢 = preferred
+          💡 Click a slot cell to assign · Click a date to add a note · <strong style={{color:"#ef4444"}}>Red</strong> = conflict · <strong style={{color:"#f97316"}}>Orange</strong> = grade mismatch · <strong style={{color:"#f59e0b"}}>Amber</strong> = rule warning · 🟢 = preferred
         </div>
       </div>
 
@@ -2064,22 +2133,24 @@ function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,s
                     const applicable=dateSlots.some(s=>s.key===sl.key);
                     const init=getAssigned(date,sl.key);
                     const av = init ? getAvail(init, date) : null;
-                    const conflict = init && (av?.base === "UNAVAILABLE" || av?.base === "SL" || av?.base === "MILITARY");
-                    const ruleWarn = !conflict && hasRuleWarning(init, date, sl.key);
                     const staffMember = init ? activeStaff.find(s=>s.init===init) : null;
+                    const conflict = init && hasConflict(init, date);
+                    const gradeWarn = !conflict && init && sysRules?.gradeMismatch?.enabled !== false && staffMember && genRules?.slotGrades?.[sl.key] && !genRules.slotGrades[sl.key].includes(staffMember.grade);
+                    const ruleWarn = !conflict && !gradeWarn && hasRuleWarning(init, date, sl.key);
                     const pref = init && av?.base && !conflict
                       ? isSlotPreferred(availability, init, date, sl.key, staffMember?.grade)
                       : false;
                     const availCount = applicable ? activeStaff.filter(s=>isSlotPreferred(availability,s.init,date,sl.key,s.grade)).length : 0;
                     if(!applicable) return <td key={sl.key} className="slot-cell disabled"><span style={{fontSize:9,color:"#e2e8f0"}}>—</span></td>;
                     return (
-                      <td key={sl.key} className="slot-cell" style={{border:conflict?"2px solid #ef4444":ruleWarn?"2px solid #f59e0b":"",background:init?sl.bg+"80":"white"}}
+                      <td key={sl.key} className="slot-cell" style={{border:conflict?"2px solid #ef4444":gradeWarn?"2px solid #f97316":ruleWarn?"2px solid #f59e0b":"",background:init?sl.bg+"80":"white"}}
                         onClick={()=>setAM({date,slotKey:sl.key})}>
                         {init?(
-                          <span className="slot-chip" style={{background:sl.bg,color:conflict?"#ef4444":sl.fg,borderColor:conflict?"#ef4444":ruleWarn?"#f59e0b":sl.bd,border:conflict?"2px solid #ef4444":ruleWarn?"2px solid #f59e0b":"1px solid "+sl.bd}}>
+                          <span className="slot-chip" style={{background:sl.bg,color:conflict?"#ef4444":sl.fg,borderColor:conflict?"#ef4444":gradeWarn?"#f97316":ruleWarn?"#f59e0b":sl.bd,border:conflict?"2px solid #ef4444":gradeWarn?"2px solid #f97316":ruleWarn?"2px solid #f59e0b":"1px solid "+sl.bd}}>
                             {init.slice(0,4)}
-                            {ruleWarn && <span className="avail-dot" style={{background:"#f59e0b"}} title="Rule warning"/>}
-                            {pref && !ruleWarn && <span className="avail-dot" style={{ background: sl.fg || "#94a3b8" }} title="preferred" />}
+                            {gradeWarn && <span className="avail-dot" style={{background:"#f97316"}} title="Grade mismatch"/>}
+                            {ruleWarn && !gradeWarn && <span className="avail-dot" style={{background:"#f59e0b"}} title="Rule warning"/>}
+                            {pref && !ruleWarn && !gradeWarn && <span className="avail-dot" style={{ background: sl.fg || "#94a3b8" }} title="preferred" />}
                           </span>
                         ):<span className="slot-empty"/>}
                         {availCount>0&&<div style={{fontSize:8,background:"#dcfce7",color:"#14532d",borderRadius:8,padding:"0 3px",marginTop:1,lineHeight:"12px"}}>{availCount}✓</div>}
@@ -2892,7 +2963,7 @@ function StaffMgmt({staff,setStaff,addAudit,currentUser}) {
 const DOW_FULL = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
 const GRP_LABELS = {EARLY:"Early",MID:"Mid",LATE:"Late",WE_EARLY:"W/E Early",WE_LATE:"W/E Late",NIGHT1:"Night (N1)",NIGHT2:"Night (N2)",ST3_NIGHT:"Night (ST3)",ACP_NIGHT:"Night (ACP)"};
 
-function ConflictsView({rota, leaveEntries, availability, staff, quarters, addAudit, currentUser, constraintRules, setConstraintRules}) {
+function ConflictsView({rota, leaveEntries, availability, staff, quarters, addAudit, currentUser, constraintRules, setConstraintRules, sysRules, setSysRules, genRules}) {
   const [tab, setTab] = useState("conflicts");
   const [addForm, setAddForm] = useState(null); // null | "new"
   const [form, setForm] = useState({init:"",type:"avoid_day",dayOfWeek:"Monday",slotGroup:"EARLY",note:"",severity:"warn"});
@@ -2903,9 +2974,19 @@ function ConflictsView({rota, leaveEntries, availability, staff, quarters, addAu
   const selQDef = qs.find(q=>q.id===selQ)||qs[0];
   const rotaDates = selQDef ? getDatesInRange(selQDef.start, selQDef.end) : [];
 
-  // Detect live conflicts: assigned + unavailable/leave
+  // Detect live conflicts across all enabled system rules
   const conflicts = useMemo(() => {
     const out = [];
+    // Precompute double books per date
+    const doubleBookMap = {};
+    rotaDates.forEach(date => {
+      const vals = Object.values(rota[date]||{}).filter(Boolean);
+      const seen = {};
+      vals.forEach(init => { seen[init] = (seen[init]||0) + 1; });
+      const dupes = new Set(Object.entries(seen).filter(([,c])=>c>1).map(([i])=>i));
+      if (dupes.size) doubleBookMap[date] = dupes;
+    });
+
     rotaDates.forEach(date => {
       const dayRota = rota[date] || {};
       Object.entries(dayRota).forEach(([slotKey, init]) => {
@@ -2913,21 +2994,32 @@ function ConflictsView({rota, leaveEntries, availability, staff, quarters, addAu
         const avEntry = getAvailEntry(availability, init, date);
         const base = avEntry?.base;
         const lv = (leaveEntries[date]||[]).find(e=>e.init===init);
-        let reason = null;
-        if (base === "UNAVAILABLE") reason = "Marked unavailable";
-        else if (base === "SL" || lv?.type === "SL") reason = "Study Leave";
-        else if (base === "MILITARY" || lv?.type === "MILITARY") reason = "Military";
-        else if (lv) reason = `Leave: ${LEAVE_T[lv.type]?.label || lv.type}`;
-        if (reason) {
-          const sm = activeStaff.find(s=>s.init===init);
-          const sl = SLOTS.find(s=>s.key===slotKey);
-          out.push({date, slotKey, init, name:sm?.name||init, grade:sm?.grade||"", slotLabel:sl?.label||slotKey, bg:sl?.bg||"#f1f5f9", fg:sl?.fg||"#374151", reason});
+        const sm = activeStaff.find(s=>s.init===init);
+        const sl = SLOTS.find(s=>s.key===slotKey);
+
+        const addConflict = (reason, severity) => {
+          out.push({date, slotKey, init, name:sm?.name||init, grade:sm?.grade||"", slotLabel:sl?.label||slotKey, bg:sl?.bg||"#f1f5f9", fg:sl?.fg||"#374151", reason, severity:severity||"error"});
+        };
+
+        if (sysRules?.unavailConflict?.enabled !== false) {
+          if (base === "UNAVAILABLE") addConflict("Marked unavailable");
+          else if (base === "SL") addConflict("Availability: Study Leave");
+          else if (base === "MILITARY") addConflict("Availability: Military");
+        }
+        if (sysRules?.leaveEntryClash?.enabled !== false && lv && base !== "SL" && base !== "MILITARY" && base !== "UNAVAILABLE") {
+          addConflict(`Leave entry: ${LEAVE_T[lv.type]?.label || lv.type}`);
+        }
+        if (sysRules?.gradeMismatch?.enabled !== false && sm && genRules?.slotGrades?.[slotKey] && !genRules.slotGrades[slotKey].includes(sm.grade)) {
+          addConflict(`Grade mismatch: ${sm.grade} in ${sl?.label||slotKey}`, "warn");
+        }
+        if (sysRules?.doubleBook?.enabled !== false && doubleBookMap[date]?.has(init)) {
+          addConflict("Double booked (multiple slots same day)");
         }
       });
     });
-    out.sort((a,b)=>a.date.localeCompare(b.date));
+    out.sort((a,b)=>a.date.localeCompare(b.date)||a.slotKey.localeCompare(b.slotKey));
     return out;
-  }, [rotaDates, rota, leaveEntries, availability]);
+  }, [rotaDates, rota, leaveEntries, availability, sysRules, genRules]);
 
   // Rule violations: constraint rule + actual assignment
   const ruleViolations = useMemo(() => {
@@ -3000,7 +3092,7 @@ function ConflictsView({rota, leaveEntries, availability, staff, quarters, addAu
                       <td><span style={{background:c.bg,color:c.fg,padding:"2px 7px",borderRadius:4,fontSize:10.5,fontWeight:700,whiteSpace:"nowrap"}}>{c.slotLabel}</span></td>
                       <td style={{fontWeight:600}}>{c.name}</td>
                       <td style={{color:"#64748b",fontSize:11}}>{c.grade}</td>
-                      <td><span style={{background:"#fee2e2",color:"#7f1d1d",padding:"2px 7px",borderRadius:4,fontSize:10.5,fontWeight:600}}>{c.reason}</span></td>
+                      <td><span style={{background:c.severity==="warn"?"#fff7ed":"#fee2e2",color:c.severity==="warn"?"#92400e":"#7f1d1d",padding:"2px 7px",borderRadius:4,fontSize:10.5,fontWeight:600}}>{c.reason}</span></td>
                     </tr>
                   ))}</tbody>
                 </table>
@@ -3043,10 +3135,35 @@ function ConflictsView({rota, leaveEntries, availability, staff, quarters, addAu
 
       {tab==="rules"&&(
         <div>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:8}}>
-            <div className="al al-i" style={{margin:0,flex:1,minWidth:200}}>
-              Define constraints for staff — e.g. "MW should not do Monday nights". These appear as warnings in the Rota Builder when violated.
+          {/* ── System Rules ── */}
+          <div className="card" style={{marginBottom:16}}>
+            <div className="ch">
+              <span className="ct">System Rules</span>
+              <span style={{fontSize:11.5,color:"#64748b"}}>Built-in checks — disable to suppress a category</span>
             </div>
+            <div style={{overflowX:"auto"}}>
+              <table className="tbl">
+                <thead><tr><th>Check</th><th>Description</th><th>Severity</th><th>Status</th><th>Action</th></tr></thead>
+                <tbody>{Object.entries(sysRules||DEFAULT_SYS_RULES).map(([key,rule])=>{
+                  const sevBg = rule.severity==="error"?"#fee2e2":rule.severity==="warn"?"#fff7ed":"#eff6ff";
+                  const sevFg = rule.severity==="error"?"#7f1d1d":rule.severity==="warn"?"#92400e":"#1d4ed8";
+                  return (
+                    <tr key={key} style={{opacity:rule.enabled?1:.45}}>
+                      <td style={{fontWeight:600,whiteSpace:"nowrap"}}>{rule.label}</td>
+                      <td style={{fontSize:12,color:"#64748b"}}>{rule.desc}</td>
+                      <td><span style={{background:sevBg,color:sevFg,padding:"2px 7px",borderRadius:4,fontSize:10.5,fontWeight:600,textTransform:"capitalize"}}>{rule.severity}</span></td>
+                      <td><span className={`badge ${rule.enabled?"b-approved":"b-rejected"}`}>{rule.enabled?"Active":"Disabled"}</span></td>
+                      <td><button className="btn bs bsm" onClick={()=>setSysRules(p=>({...p,[key]:{...p[key],enabled:!p[key].enabled}}))}>{rule.enabled?"Disable":"Enable"}</button></td>
+                    </tr>
+                  );
+                })}</tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* ── Custom Rules ── */}
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:8}}>
+            <div style={{fontSize:13,fontWeight:700,color:"#374151"}}>Custom per-staff rules</div>
             <button className="btn bp" onClick={()=>setAddForm("new")}>＋ Add Rule</button>
           </div>
 
@@ -3054,8 +3171,8 @@ function ConflictsView({rota, leaveEntries, availability, staff, quarters, addAu
             {constraintRules.length===0&&!addForm&&(
               <div className="cb" style={{textAlign:"center",padding:32,color:"#94a3b8"}}>
                 <div style={{fontSize:28,marginBottom:6}}>📏</div>
-                <div style={{fontSize:13,fontWeight:600,color:"#374151"}}>No rules defined yet</div>
-                <div style={{fontSize:12,marginTop:4}}>Add rules to track scheduling constraints and spot violations in the rota.</div>
+                <div style={{fontSize:13,fontWeight:600,color:"#374151"}}>No custom rules yet</div>
+                <div style={{fontSize:12,marginTop:4}}>Add per-staff rules such as "MW should not do Monday nights". Violations show as amber warnings in the Rota Builder.</div>
               </div>
             )}
             {constraintRules.length>0&&(
@@ -4546,6 +4663,7 @@ function App() {
   const [trainingDays,setTrainingDays]     = useState(()=>lsGet('trainingDays',[])); // [{id,date,type:"SpR"|"ACP",note}]
   const [demoMode,setDemoMode]             = useState(()=>lsGet('demoMode',false));
   const [constraintRules,setConstraintRules] = useState(()=>lsGet('constraintRules',[])); // global, not per-year
+  const [sysRules,setSysRules]               = useState(()=>lsGet('sysRules',DEFAULT_SYS_RULES)); // global toggleable system rules
 
   // Year management
   const [years,setYears]           = useState(()=>lsGet('years',[{id:"2026-27",label:"2026/27",quarters:QUARTERS,active:true,archived:false}]));
@@ -4682,6 +4800,7 @@ function App() {
               upd(setSST)(d.staffShiftTimes);
               upd(setTrainingDays)(d.trainingDays);
               upd(setConstraintRules)(d.constraintRules || []);
+              if (d.sysRules) upd(setSysRules)({...DEFAULT_SYS_RULES, ...d.sysRules});
             }
           }
           setFsReady(true);
@@ -4701,11 +4820,11 @@ function App() {
   // Also mirrors to localStorage as an offline / fast-reload cache
   useEffect(() => {
     if (!fsReady) return;
-    const payload = {staff,auditLog,wteConfig,years,activeYearId,rotaByYear,leaveByYear:leaveByYear,availByYear,qStatusByYear,requestsByYear,notesByYear,corrsByYear,staffHoursByYear,swapsByYear,shiftOverridesByYear,fixedDaysOff,genRules,shiftTimes,staffShiftTimes,trainingDays,constraintRules,demoMode};
+    const payload = {staff,auditLog,wteConfig,years,activeYearId,rotaByYear,leaveByYear:leaveByYear,availByYear,qStatusByYear,requestsByYear,notesByYear,corrsByYear,staffHoursByYear,swapsByYear,shiftOverridesByYear,fixedDaysOff,genRules,shiftTimes,staffShiftTimes,trainingDays,constraintRules,sysRules,demoMode};
     appDoc().set(payload).catch(console.error);
-    Object.entries({staff:staff,audit:auditLog,wteConfig:wteConfig,years:years,activeYearId:activeYearId,rotaByYear:rotaByYear,leaveByYear:leaveByYear,availByYear:availByYear,qstatusByYear:qStatusByYear,requestsByYear:requestsByYear,notesByYear:notesByYear,corrsByYear:corrsByYear,staffHoursByYear:staffHoursByYear,swapsByYear:swapsByYear,shiftOverridesByYear:shiftOverridesByYear,fixedDaysOff:fixedDaysOff,genRules:genRules,shiftTimes:shiftTimes,staffShiftTimes:staffShiftTimes,trainingDays:trainingDays,constraintRules:constraintRules,demoMode:demoMode})
+    Object.entries({staff:staff,audit:auditLog,wteConfig:wteConfig,years:years,activeYearId:activeYearId,rotaByYear:rotaByYear,leaveByYear:leaveByYear,availByYear:availByYear,qstatusByYear:qStatusByYear,requestsByYear:requestsByYear,notesByYear:notesByYear,corrsByYear:corrsByYear,staffHoursByYear:staffHoursByYear,swapsByYear:swapsByYear,shiftOverridesByYear:shiftOverridesByYear,fixedDaysOff:fixedDaysOff,genRules:genRules,shiftTimes:shiftTimes,staffShiftTimes:staffShiftTimes,trainingDays:trainingDays,constraintRules:constraintRules,sysRules:sysRules,demoMode:demoMode})
       .forEach(([k,v])=>lsSave(k,v));
-  },[fsReady,staff,auditLog,wteConfig,years,activeYearId,rotaByYear,leaveByYear,availByYear,qStatusByYear,requestsByYear,notesByYear,corrsByYear,staffHoursByYear,swapsByYear,shiftOverridesByYear,fixedDaysOff,genRules,shiftTimes,staffShiftTimes,trainingDays,constraintRules,demoMode]);
+  },[fsReady,staff,auditLog,wteConfig,years,activeYearId,rotaByYear,leaveByYear,availByYear,qStatusByYear,requestsByYear,notesByYear,corrsByYear,staffHoursByYear,swapsByYear,shiftOverridesByYear,fixedDaysOff,genRules,shiftTimes,staffShiftTimes,trainingDays,constraintRules,sysRules,demoMode]);
 
   const addAudit=(u,action,details)=>{
     const now=new Date(), ts=`${now.toLocaleDateString("en-GB")} ${now.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}`;
@@ -4820,10 +4939,10 @@ function App() {
                 />
               )}
             {view==="requests"   &&<RequestsView user={user} requests={requests} setRequests={setReqs} addAudit={addAudit} swaps={swaps} setSwaps={setSwaps} rota={rota} setRota={setRota} staff={staff}/>}
-            {view==="builder"    &&isAdmin&&<RotaBuilder rota={rota} setRota={setRota} leaveEntries={leaveEntries} setLeaveEntries={setLE} staff={staff} dayNotes={dayNotes} setDayNotes={setNotes} availability={availability} addAudit={addAudit} currentUser={user} wteConfig={wteConfig} staffHours={staffHours} hoursCorrections={hoursCorrections} setHoursCorrections={setHoursCorrections} trainingDays={trainingDays} staffShiftOverrides={staffShiftOverrides} constraintRules={constraintRules}/>}
+            {view==="builder"    &&isAdmin&&<RotaBuilder rota={rota} setRota={setRota} leaveEntries={leaveEntries} setLeaveEntries={setLE} staff={staff} dayNotes={dayNotes} setDayNotes={setNotes} availability={availability} addAudit={addAudit} currentUser={user} wteConfig={wteConfig} staffHours={staffHours} hoursCorrections={hoursCorrections} setHoursCorrections={setHoursCorrections} trainingDays={trainingDays} staffShiftOverrides={staffShiftOverrides} constraintRules={constraintRules} sysRules={sysRules} genRules={genRules}/>}
             {view==="staff"      &&isAdmin&&<StaffMgmt staff={staff} setStaff={setStaff} addAudit={addAudit} currentUser={user}/>}
             {view==="reports"    &&<Reports user={user} staff={staff} rota={rota} leaveEntries={leaveEntries} requests={requests} quarters={activeYearQuarters} availability={availability}/>}
-            {view==="conflicts"  &&isAdmin&&<ConflictsView rota={rota} leaveEntries={leaveEntries} availability={availability} staff={staff} quarters={activeYearQuarters} addAudit={addAudit} currentUser={user} constraintRules={constraintRules} setConstraintRules={setConstraintRules}/>}
+            {view==="conflicts"  &&isAdmin&&<ConflictsView rota={rota} leaveEntries={leaveEntries} availability={availability} staff={staff} quarters={activeYearQuarters} addAudit={addAudit} currentUser={user} constraintRules={constraintRules} setConstraintRules={setConstraintRules} sysRules={sysRules} setSysRules={setSysRules} genRules={genRules}/>}
             {view==="fixeddays"  &&isAdmin&&<FixedDaysView fixedDaysOff={fixedDaysOff} setFixedDaysOff={setFixedDaysOff} staff={staff} addAudit={addAudit} currentUser={user}/>}
             {view==="rotaconfig" &&isAdmin&&<RotaConfig wteConfig={wteConfig} setWteConfig={setWteConfig} staffHours={staffHours} setStaffHours={setStaffHours} staff={staff} addAudit={addAudit} shiftTimes={shiftTimes} setShiftTimes={setShiftTimes} staffShiftTimes={staffShiftTimes} setStaffShiftTimes={setSST} trainingDays={trainingDays} setTrainingDays={setTrainingDays} staffShiftOverrides={staffShiftOverrides} setShiftOverrides={setShiftOverrides}/>}
 {view==="airota"     &&isAdmin&&<AIRotaView user={user} staff={staff} rota={rota} setRota={setRota} availability={availability} leaveEntries={leaveEntries} quarterStatus={quarterStatus} wteConfig={wteConfig} staffHours={staffHours} genRules={genRules} setGenRules={setGenRules} shiftTimes={shiftTimes} addAudit={addAudit} quarters={activeYearQuarters} activeYearId={activeYearId}/>}
