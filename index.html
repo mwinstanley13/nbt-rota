@@ -987,9 +987,9 @@ function CalendarView({rota,leaveEntries,dayNotes,staff,viewMonth,setViewMonth,v
   const getCell=(init,date)=>{
     const rotaDay=rota[date]||{};
     const sk=Object.entries(rotaDay).find(([,v])=>v===init)?.[0];
-    if(sk){const sl=SLOTS.find(s=>s.key===sk);if(sl)return{text:LIST_GRP_LABEL[sl.grp]||sl.label,bg:sl.bg,fg:sl.fg,bd:sl.bd};}
+    if(sk){const sl=SLOTS.find(s=>s.key===sk);if(sl)return{text:fStaff?sl.label:LIST_GRP_LABEL[sl.grp]||sl.label,bg:sl.bg,fg:sl.fg,bd:sl.bd};}
     const lv=(leaveEntries[date]||[]).find(e=>e.init===init);
-    if(lv){const lt=LEAVE_T[lv.type];if(lt)return{text:lt.abbr||lv.type,bg:lt.bg,fg:lt.fg,bd:lt.bd};}
+    if(lv){const lt=LEAVE_T[lv.type];if(lt)return{text:fStaff?lt.label:lt.abbr||lv.type,bg:lt.bg,fg:lt.fg,bd:lt.bd};}
     return null;
   };
 
