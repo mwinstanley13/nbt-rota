@@ -2366,10 +2366,10 @@ function MyShifts({user,rota,leaveEntries,dayNotes}) {
 
   return (
     <div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:13,marginBottom:18}}>
-        <div className="sc" style={{"--ac":"#10b981"}}><div className="sv">{mySlots.length}</div><div className="sl">Total Shifts</div></div>
-        <div className="sc" style={{"--ac":"#6366f1"}}><div className="sv">{upcoming.length}</div><div className="sl">Upcoming</div></div>
-        <div className="sc" style={{"--ac":"#f59e0b"}}><div className="sv">{past.length}</div><div className="sl">Completed</div></div>
+      <div className="sg" style={{gridTemplateColumns:"repeat(3,1fr)",marginBottom:18}}>
+        <div className="sc" style={{"--sc-bg":"linear-gradient(135deg,#10b981,#059669)"}}><span className="sc-icon">📅</span><div className="sv">{mySlots.length}</div><div className="sl">Total Shifts</div></div>
+        <div className="sc" style={{"--sc-bg":"linear-gradient(135deg,#6366f1,#4f46e5)"}}><span className="sc-icon">⏩</span><div className="sv">{upcoming.length}</div><div className="sl">Upcoming</div></div>
+        <div className="sc" style={{"--sc-bg":"linear-gradient(135deg,#f59e0b,#d97706)"}}><span className="sc-icon">✅</span><div className="sv">{past.length}</div><div className="sl">Completed</div></div>
       </div>
       <div className="dg2">
         <div className="card">
