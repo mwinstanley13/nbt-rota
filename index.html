@@ -4349,7 +4349,8 @@ function AIRotaView({user,staff,rota,setRota,availability,leaveEntries,quarterSt
       activeStaff.forEach(s=>{
         const blocked=[],earlyOnly=[],midOnly=[],lateOnly=[],nightOnly=[];
         filteredDates.forEach(d=>{
-          const e = (availability[s.init]||{})[d];
+          const raw = (availability[s.init]||{})[d];
+          const e = normaliseAvailEntry(raw);
           const base = e?.base;
           if(!base||base==="ANY") return;
           if(["UNAVAILABLE","SL","MILITARY","PHEM"].includes(base)) blocked.push(d);
@@ -4443,8 +4444,30 @@ function AIRotaView({user,staff,rota,setRota,availability,leaveEntries,quarterSt
         if(q){let c=new Date(q.start);const e=new Date(q.end);while(c<=e){delete next[c.toISOString().slice(0,10)];c.setDate(c.getDate()+1);}}
       }
       Object.entries(rotaDraft).forEach(([date,slots])=>{
-        if(overwrite==="overwrite") next[date]={...(prev[date]||{}),...slots};
-        else next[date]={...slots,...(prev[date]||{})};  // fill = existing takes priority
+        const existing = overwrite==="replace" ? {} : (prev[date]||{});
+        if(overwrite==="overwrite"){
+          // Generator wins per slot, but remove any OTHER existing slot for the same person
+          // to prevent a double-booking when they already hold a different slot in the existing rota
+          const merged={...existing};
+          Object.entries(slots).forEach(([sk,init])=>{
+            if(!init) return;
+            Object.keys(merged).forEach(other=>{ if(merged[other]===init) delete merged[other]; });
+            merged[sk]=init;
+          });
+          next[date]=merged;
+        } else {
+          // fill: existing takes priority; only add a generator slot if:
+          // 1. that slot is empty in existing, AND
+          // 2. the person isn't already assigned to any other slot that day
+          const existingInits=new Set(Object.values(existing).filter(Boolean));
+          const merged={...existing};
+          Object.entries(slots).forEach(([sk,init])=>{
+            if(!init||merged[sk]||existingInits.has(init)) return;
+            merged[sk]=init;
+            existingInits.add(init);
+          });
+          next[date]=merged;
+        }
       });
       return next;
     });
