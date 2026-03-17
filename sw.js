@@ -1,4 +1,4 @@
-const CACHE = 'rotaflow-v14';
+const CACHE = 'rotaflow-v15';
 const ASSETS = ['./','./index.html','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));

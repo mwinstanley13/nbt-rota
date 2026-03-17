@@ -20,8 +20,8 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <style>
-    html,body,#root{height:100%;margin:0}
-    body{background:#f0f4f8}
+    html{height:100%;height:-webkit-fill-available}
+    body,#root{height:100%;margin:0;background:#f0f4f8}
     @keyframes spin{to{transform:rotate(360deg)}}
     .fs-spinner{width:36px;height:36px;border:4px solid #e2e8f0;border-top-color:#3b82f6;border-radius:50%;animation:spin .8s linear infinite}
   </style>
@@ -468,7 +468,7 @@ const CSS = `
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Inter',sans-serif;background:#f4f6fb;font-size:13px}
 ::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:4px}
-.app{display:flex;height:100vh;overflow:hidden}
+.app{display:flex;height:100vh;height:-webkit-fill-available;overflow:hidden}
 .sb{width:228px;flex-shrink:0;background:linear-gradient(170deg,#0d1b2a,#1a2e45);display:flex;flex-direction:column;overflow-y:auto}
 .sb-logo{padding:20px 18px 16px;border-bottom:1px solid rgba(255,255,255,.07)}
 .sb-logo h1{font-family:'Plus Jakarta Sans',sans-serif;font-size:16px;font-weight:800;color:#e8f4f0;display:flex;align-items:center;gap:7px}
@@ -642,16 +642,15 @@ body{font-family:'Inter',sans-serif;background:#f4f6fb;font-size:13px}
 
 /* ── Responsive layout ── */
 @media(max-width:768px){
-  .app{flex-direction:column;height:100vh;overflow:hidden}
   .sb{position:fixed;top:0;left:0;height:100%;z-index:500;transform:translateX(-100%);transition:transform .25s;width:260px;overflow-y:auto;flex-shrink:0}
   .sb.mob-open{transform:translateX(0);box-shadow:4px 0 24px rgba(0,0,0,.35)}
   .sb.sb-col{width:260px}
   .sb-col-btn{display:none}
   .mob-hbg{display:block}
-  .main{width:100%;overflow:hidden;display:flex;flex-direction:column;height:100vh}
+  .main{flex:1;min-height:0;width:100%;overflow:hidden;display:flex;flex-direction:column}
   .hdr{padding:10px 12px 10px 50px;min-height:52px;flex-shrink:0}
   .hdr h2{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:55vw}
-  .body{flex:1;overflow-y:auto;overflow-x:hidden;padding:12px 10px;-webkit-overflow-scrolling:touch}
+  .body{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:12px 10px;-webkit-overflow-scrolling:touch}
   .sg{grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px}
   .sc{min-height:110px;padding:14px 10px}
   .sv{font-size:42px;letter-spacing:-1px}
