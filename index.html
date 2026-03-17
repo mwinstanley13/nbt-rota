@@ -171,7 +171,7 @@ const INIT_GEN_RULES = {
 // Built-in system rule definitions (toggleable in Conflicts & Rules view)
 const DEFAULT_SYS_RULES = {
   unavailConflict: {label:"Availability conflict",  desc:"Staff assigned when marked Unavailable, SL, or Military",    enabled:true,  severity:"error"},
-  leaveEntryClash: {label:"Leave entry clash",       desc:"Staff assigned when a leave entry exists on that date",       enabled:true,  severity:"error"},
+  leaveEntryClash: {label:"Leave entry clash",       desc:"Staff assigned when a leave entry exists (not already blocked by availability)",  enabled:false, severity:"warn"},
   gradeMismatch:   {label:"Grade mismatch",          desc:"Staff assigned to a slot their grade is not permitted for",   enabled:true,  severity:"warn"},
   doubleBook:      {label:"Double booking",          desc:"Staff appearing in more than one slot on the same day",       enabled:true,  severity:"error"},
   postNightRest:   {label:"Post-night rest (46 h)",  desc:"Staff assigned within 46 hours of completing a night shift", enabled:false, severity:"warn"},
@@ -1682,13 +1682,26 @@ function AvailabilityView({
       const addFixed = () => {
         if (myFixed.some(f=>f.dayOfWeek===fdDay&&f.reason===fdReason)) return;
         setFixedDaysOff(prev=>[...prev,{id:Date.now(),init:user.init,name:user.name,dayOfWeek:fdDay,reason:fdReason,addedDate:fmtISO(new Date())}]);
-        // Auto-add leave entries for all matching dates across the year
+        // Collect all matching dates across the year
+        const allDates = [];
+        (quarters||QUARTERS).forEach(q => getDatesInRange(q.start,q.end).forEach(d=>{
+          if (new Date(d+"T00:00:00").toLocaleDateString("en-GB",{weekday:"long"})===fdDay) allDates.push(d);
+        }));
+        // Auto-set availability to UNAVAILABLE for those dates (so AI generator respects them)
+        setAvailability(prev=>{
+          const next={...prev, [user.init]:{...(prev[user.init]||{})}};
+          allDates.forEach(d=>{
+            const existing = next[user.init][d];
+            // Only overwrite if not already manually set to something specific
+            if (!existing || !existing.base || existing.base==="ANY" || existing.autoFromFixed) {
+              next[user.init][d]={base:"UNAVAILABLE",slots:[],autoFromFixed:true};
+            }
+          });
+          return next;
+        });
+        // Auto-add leave entries so the reason shows on the rota/calendar
         const leaveType = FIXED_LEAVE_TYPE[fdReason];
         if (leaveType) {
-          const allDates = [];
-          (quarters||QUARTERS).forEach(q => getDatesInRange(q.start,q.end).forEach(d=>{
-            if (new Date(d+"T00:00:00").toLocaleDateString("en-GB",{weekday:"long"})===fdDay) allDates.push(d);
-          }));
           setLeaveEntries(prev=>{
             const next={...prev};
             allDates.forEach(d=>{
@@ -1700,10 +1713,19 @@ function AvailabilityView({
             return next;
           });
         }
-        addAudit(user.init,"Fixed Day Off",`${user.init} added fixed ${fdReason} day: ${fdDay} (leave entries auto-populated)`);
+        addAudit(user.init,"Fixed Day Off",`${user.init} added fixed ${fdReason} day: ${fdDay} (availability + leave auto-populated)`);
       };
       const removeFixed = (f) => {
         setFixedDaysOff(prev=>prev.filter(x=>x.id!==f.id));
+        // Clear auto-set availability entries
+        setAvailability(prev=>{
+          const next={...prev, [f.init]:{...(prev[f.init]||{})}};
+          Object.keys(next[f.init]).forEach(d=>{
+            if (next[f.init][d]?.autoFromFixed) delete next[f.init][d];
+          });
+          return next;
+        });
+        // Remove auto-added leave entries
         const leaveType = FIXED_LEAVE_TYPE[f.reason];
         if (leaveType) {
           setLeaveEntries(prev=>{
@@ -2061,8 +2083,14 @@ function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,s
   const hasConflict = (init, date) => {
     if (!init) return false;
     const av = getAvail(init, date);
-    if (sysRules?.unavailConflict?.enabled !== false && (av?.base==="UNAVAILABLE"||av?.base==="SL"||av?.base==="MILITARY")) return true;
-    if (sysRules?.leaveEntryClash?.enabled !== false && (leaveEntries[date]||[]).some(e=>e.init===init)) return true;
+    if (sysRules?.unavailConflict?.enabled !== false && (av?.base==="UNAVAILABLE"||av?.base==="SL"||av?.base==="MILITARY"||av?.base==="PHEM")) return true;
+    if (sysRules?.leaveEntryClash?.enabled !== false) {
+      const avBase = av?.base;
+      // Only flag if availability isn't already blocking (avoids double-counting)
+      if (avBase !== "UNAVAILABLE" && avBase !== "SL" && avBase !== "MILITARY" && avBase !== "PHEM") {
+        if ((leaveEntries[date]||[]).some(e=>e.init===init)) return true;
+      }
+    }
     if (sysRules?.doubleBook?.enabled !== false && doubleBooks[date]?.has(init)) return true;
     return false;
   };
@@ -3005,9 +3033,11 @@ function ConflictsView({rota, leaveEntries, availability, staff, quarters, addAu
           if (base === "UNAVAILABLE") addConflict("Marked unavailable");
           else if (base === "SL") addConflict("Availability: Study Leave");
           else if (base === "MILITARY") addConflict("Availability: Military");
+          else if (base === "PHEM") addConflict("Availability: PHEM");
         }
-        if (sysRules?.leaveEntryClash?.enabled !== false && lv && base !== "SL" && base !== "MILITARY" && base !== "UNAVAILABLE") {
-          addConflict(`Leave entry: ${LEAVE_T[lv.type]?.label || lv.type}`);
+        const availBlocked = base==="UNAVAILABLE"||base==="SL"||base==="MILITARY"||base==="PHEM";
+        if (sysRules?.leaveEntryClash?.enabled !== false && lv && !availBlocked) {
+          addConflict(`Leave entry: ${LEAVE_T[lv.type]?.label || lv.type}`, "warn");
         }
         if (sysRules?.gradeMismatch?.enabled !== false && sm && genRules?.slotGrades?.[slotKey] && !genRules.slotGrades[slotKey].includes(sm.grade)) {
           addConflict(`Grade mismatch: ${sm.grade} in ${sl?.label||slotKey}`, "warn");
