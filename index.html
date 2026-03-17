@@ -2987,7 +2987,7 @@ function RotaRulesView({rotaRulesText,setRotaRulesText,addAudit,currentUser,isAd
 function StaffMgmt({staff,setStaff,addAudit,currentUser}) {
   const [modal,setModal]=useState(null); const [form,setForm]=useState({});
   const [pwModal,setPwM]=useState(null); const [newPw,setNPw]=useState("");
-  const isOwner=!!currentUser.isOwner;
+  const isOwner=!!(currentUser.isOwner||INIT_STAFF.find(s=>s.init===currentUser.init)?.isOwner);
 
   const save=()=>{
     const rec={...form,slDays:parseInt(form.slDays)||0,militaryDays:parseInt(form.militaryDays)||0};
