@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
 import firebase from './firebase'
 import { db } from './firebase'
 import { IS_DEMO, LS_PFX, lsGet, lsSave } from './utils/storage'
@@ -9,6 +9,7 @@ import { INIT_GEN_RULES, DEFAULT_SYS_RULES, DEFAULT_SHIFT_TIMES } from './consta
 import { fmtISO } from './utils/dates'
 import { getHoursRemaining } from './utils/rota'
 import { generateDemoAvailability } from './utils/availability'
+import { showNotification } from './utils/notifications'
 
 import Modal from './components/Modal'
 import Login from './components/Login'
@@ -231,6 +232,24 @@ function App() {
     const now=new Date(), ts=`${now.toLocaleDateString("en-GB")} ${now.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}`;
     setAudit(p=>[...p,{id:Date.now(),ts,user:u,action,details}]);
   };
+
+  // ── Push notification: fire when a quarter is newly published ─────────────
+  const prevPublishedRef = useRef({});
+  useEffect(() => {
+    if (!user || user.role === 'admin' || !fsReady) return;
+    const prev = prevPublishedRef.current;
+    const cur  = rotaPublished;
+    Object.entries(cur).forEach(([qid, pub]) => {
+      if (pub && !prev[qid]) {
+        const q = activeYearQuarters.find(x => x.id === qid);
+        showNotification(
+          `${qid} Rota Published ✅`,
+          `The ${q?.label || qid} rota has been finalised — tap to check your shifts.`
+        );
+      }
+    });
+    prevPublishedRef.current = { ...cur };
+  }, [rotaPublished]);
 
   const loadDemoData = () => {
     if (!confirm("Load demo data? This loads all default staff and realistic Q1 availability so you can test the AI rota builder. Any existing staff or Q1 availability will be overwritten.")) return;

@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { QUARTERS } from '../constants/quarters'
 import { fmtISO } from '../utils/dates'
 import { getDatesInRange } from '../utils/dates'
+import { notifSupported, notifPermission, notifEnabled, setNotifEnabled, requestNotifPermission } from '../utils/notifications'
 
 function MyPreferences({ currentUser, staff, setStaff, fixedDaysOff, setFixedDaysOff, addAudit }) {
   const [fdDay, setFdDay] = useState("Monday");
@@ -45,6 +46,23 @@ function MyPreferences({ currentUser, staff, setStaff, fixedDaysOff, setFixedDay
   };
 
   const showNightPref = me && ["ST4+", "ST3", "ACP", "tACP"].includes(me.grade);
+
+  // Notifications state
+  const [notifState, setNotifState] = useState({
+    perm: notifPermission(),
+    enabled: notifEnabled(),
+  });
+  const handleEnableNotifs = async () => {
+    const result = await requestNotifPermission();
+    const granted = result === 'granted';
+    setNotifEnabled(granted);
+    setNotifState({ perm: notifPermission(), enabled: granted });
+  };
+  const handleToggleNotifs = () => {
+    const next = !notifState.enabled;
+    setNotifEnabled(next);
+    setNotifState(s => ({ ...s, enabled: next }));
+  };
 
   return (
     <div>
@@ -113,6 +131,51 @@ function MyPreferences({ currentUser, staff, setStaff, fixedDaysOff, setFixedDay
             </div>
             <button className="btn bp" style={{ height: 34, alignSelf: "flex-end" }} onClick={addFixed}>+ Add</button>
           </div>
+        </div>
+      </div>
+
+      {/* Notifications */}
+      <div className="card">
+        <div className="ch"><span className="ct">🔔 Notifications</span></div>
+        <div className="cb">
+          {!notifSupported() ? (
+            <p style={{fontSize:12.5,color:"#94a3b8"}}>Browser notifications are not supported on this device.</p>
+          ) : notifState.perm === 'denied' ? (
+            <div className="al al-w" style={{fontSize:12.5}}>
+              Notifications have been blocked by your browser. To enable them, go to your browser's site settings and allow notifications for this site, then reload.
+            </div>
+          ) : notifState.perm !== 'granted' ? (
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              <p style={{fontSize:12.5,color:"#64748b",margin:0}}>
+                Get a browser notification when your rota is published or a request is approved. You can turn this off at any time.
+              </p>
+              <button className="btn bp" style={{alignSelf:"flex-start"}} onClick={handleEnableNotifs}>
+                🔔 Enable notifications
+              </button>
+            </div>
+          ) : (
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+              <div>
+                <div style={{fontSize:13,fontWeight:600,color:"#0d1b2a"}}>Notifications {notifState.enabled ? "enabled" : "paused"}</div>
+                <div style={{fontSize:11.5,color:"#64748b",marginTop:2}}>
+                  {notifState.enabled
+                    ? "You'll be notified when your rota is published or requests are updated."
+                    : "Notifications are paused — you won't receive any alerts."}
+                </div>
+              </div>
+              <button
+                onClick={handleToggleNotifs}
+                style={{
+                  flexShrink:0, padding:"7px 16px", borderRadius:8, fontWeight:700, fontSize:12.5,
+                  border:"none", cursor:"pointer",
+                  background: notifState.enabled ? "#fee2e2" : "#ecfdf5",
+                  color: notifState.enabled ? "#ef4444" : "#10b981",
+                }}
+              >
+                {notifState.enabled ? "Pause" : "Resume"}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
