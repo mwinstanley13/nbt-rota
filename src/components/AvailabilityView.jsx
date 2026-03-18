@@ -1,5 +1,8 @@
 import React, { useState, useMemo } from 'react'
 import { BH, QUARTERS } from '../constants/quarters'
+
+// Christmas period: 21 Dec – 3 Jan
+const isXmasPeriod = d => { const mm=parseInt(d.slice(5,7)),dd=parseInt(d.slice(8,10)); return (mm===12&&dd>=21)||(mm===1&&dd<=3); };
 import { AVAIL } from '../constants/avail'
 import { fmtISO, fmtDisp, getDayName, isWeekend, getMonthDays, getDatesInRange } from '../utils/dates'
 import { normaliseAvailEntry, isMarkedAvailEntry, getAvailEntry } from '../utils/availability'
@@ -490,12 +493,14 @@ function AvailabilityView({
 
                 const entryBases = entry?.base ? entry.base.split(",") : [];
                 const bg = entryBases.length === 1 ? (AVAIL[entryBases[0]]?.bg || "#f1f5f9") : entryBases.length > 1 ? "#e0e7ff" : "";
+                const xmas = inMonth && isXmasPeriod(date);
+                const cellBg = bg || (xmas ? "#fff1f2" : "");
 
                 return (
                   <div
                     key={date}
                     className={`av-cell${!inMonth ? " om" : ""}${!inQ && inMonth ? " out-range" : ""}${isBH ? " bh" : ""}`}
-                    style={{ background: bg, cursor: clickable ? "pointer" : "default" }}
+                    style={{ background: cellBg, cursor: clickable ? "pointer" : "default", ...(xmas ? {borderTop:"2px solid #fca5a5"} : {}) }}
                     onClick={() => clickable && openDateModal(date)}
                   >
                     <div className={`av-date${!inMonth ? " om" : ""}`}>
@@ -503,6 +508,7 @@ function AvailabilityView({
                         {new Date(date + "T00:00:00").getDate()}
                       </span>
                       {isBH && <span style={{ fontSize: 7.5, background: "#fde047", color: "#713f12", padding: "0 2px", borderRadius: 2, marginLeft: 2 }}>BH</span>}
+                      {xmas && <span style={{ fontSize: 8, marginLeft: 2 }}>🎄</span>}
                     </div>
 
                     {clickable && (
