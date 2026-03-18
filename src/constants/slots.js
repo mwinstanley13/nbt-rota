@@ -38,3 +38,34 @@ export const WE_SLOTS     = new Set(["WE1","WE2","WE3","WL1","WL2"]);
 export const EARLY_SLOTS  = new Set(["E1","E2","E3","E4"]);
 export const MID_SLOTS    = new Set(["M1","M2","M3"]);
 export const LATE_SLOTS   = new Set(["L1","L2","L3","L4"]);
+
+// Slot → shift group mapping
+export const SLOT_GROUP_MAP = {
+  E1:'early',E2:'early',E3:'early',E4:'early',
+  M1:'mid',M2:'mid',M3:'mid',
+  L1:'late',L2:'late',L3:'late',L4:'late',
+  WE1:'we_early',WE2:'we_early',WE3:'we_early',
+  WL1:'we_late',WL2:'we_late',
+  N1:'night',N2:'night',SN:'night',AN:'night',
+};
+
+export const SHIFT_GROUPS = [
+  {key:'early',   label:'Early',     slots:['E1','E2','E3','E4']},
+  {key:'mid',     label:'Mid',       slots:['M1','M2','M3']},
+  {key:'late',    label:'Late',      slots:['L1','L2','L3','L4']},
+  {key:'we_early',label:'W/E Early', slots:['WE1','WE2','WE3']},
+  {key:'we_late', label:'W/E Late',  slots:['WL1','WL2']},
+  {key:'night',   label:'Night',     slots:['N1','N2','SN','AN']},
+];
+
+// Default credited hours per shift group per grade category
+export const DEFAULT_GRADE_SLOT_HOURS = {
+  doc:  {early:8.5, mid:9.0, late:8.0, we_early:10.0, we_late:10.5, night:10.5},
+  acp:  {early:10.0,mid:10.0,late:10.0,we_early:10.0, we_late:10.5, night:10.5},
+  tacp: {early:10.0,mid:10.0,late:10.0,we_early:10.0, we_late:10.5, night:10.5},
+};
+
+// Default PA values per shift group (1 PA ≈ 4 hours NHS standard)
+export const DEFAULT_PA_VALUES = {
+  early:1.0, mid:1.0, late:1.0, we_early:1.25, we_late:1.25, night:1.5
+};

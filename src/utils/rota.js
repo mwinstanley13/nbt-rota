@@ -1,9 +1,42 @@
 import { QUARTERS } from '../constants/quarters.js';
-import { SLOT_HOURS, NIGHT_SLOTS, WE_SLOTS, EARLY_SLOTS, MID_SLOTS, LATE_SLOTS } from '../constants/slots.js';
+import { SLOT_HOURS, SLOT_GROUP_MAP, DEFAULT_GRADE_SLOT_HOURS, DEFAULT_PA_VALUES, NIGHT_SLOTS, WE_SLOTS, EARLY_SLOTS, MID_SLOTS, LATE_SLOTS } from '../constants/slots.js';
 import { getDatesInRange } from './dates.js';
 
 export const isACPGrade = grade => grade==="ACP"||grade==="tACP";
 export const getSlotHours = (slotKey, grade) => { const h=SLOT_HOURS[slotKey]||{doc:0,acp:0}; return isACPGrade(grade)?h.acp:h.doc; };
+
+// Get credited hours using configurable grade slot hours (falls back to SLOT_HOURS constant)
+export const getSlotHoursConfigured = (slotKey, grade, gradeSlotHours) => {
+  const grp = SLOT_GROUP_MAP[slotKey];
+  if (grp && gradeSlotHours) {
+    const gk = (grade==='ACP'||grade==='tACP') ? (grade==='tACP'?'tacp':'acp') : 'doc';
+    const val = gradeSlotHours[gk]?.[grp];
+    if (val != null) return val;
+  }
+  return getSlotHours(slotKey, grade);
+};
+
+// Get PA value for a slot
+export const getSlotPAs = (slotKey, paSlotValues) => {
+  const grp = SLOT_GROUP_MAP[slotKey];
+  if (grp) return (paSlotValues || {})[grp] ?? DEFAULT_PA_VALUES[grp] ?? 1.0;
+  return 1.0;
+};
+
+// Sum shift PAs for a PA-contract staff member
+export const getShiftPAsUsed = (init, dates, rota, paSlotValues) => {
+  let total = 0;
+  dates.forEach(d => {
+    const day = rota[d] || {};
+    Object.entries(day).forEach(([sk, v]) => {
+      if (v === init) total += getSlotPAs(sk, paSlotValues);
+    });
+  });
+  return Math.round(total * 100) / 100;
+};
+
+// Is this staff member on a PA contract?
+export const isPAStaff = s => !!(s?.pa);
 
 // Budget for one person in one quarter — uses staffHours override, then hoursPerQuarter, then hoursPerWeek × 13
 export const getStaffQuarterBudget = (init, grade, qid, wteConfig, staffHours) => {
@@ -14,12 +47,12 @@ export const getStaffQuarterBudget = (init, grade, qid, wteConfig, staffHours) =
 };
 
 // Sum shift hours for a person across given dates
-export const getShiftHoursUsed = (init, grade, dates, rota) => {
+export const getShiftHoursUsed = (init, grade, dates, rota, gradeSlotHours) => {
   let total = 0;
   dates.forEach(d => {
     const day = rota[d] || {};
     Object.entries(day).forEach(([sk, v]) => {
-      if (v === init) total += getSlotHours(sk, grade);
+      if (v === init) total += getSlotHoursConfigured(sk, grade, gradeSlotHours);
     });
   });
   return Math.round(total * 10) / 10;
@@ -47,12 +80,12 @@ export const getCarryForwardTotal = (init, qid, hoursCorrections) =>
   (hoursCorrections||[]).filter(c=>c.init===init&&c.qid===qid&&c.carryForward).reduce((s,c)=>s+c.amount,0);
 
 // Hours remaining for a person in a quarter
-export const getHoursRemaining = (init, grade, qid, wteConfig, staffHours, rota, leaveEntries, hoursCorrections) => {
+export const getHoursRemaining = (init, grade, qid, wteConfig, staffHours, rota, leaveEntries, hoursCorrections, gradeSlotHours) => {
   const q = QUARTERS.find(x => x.id === qid);
   if (!q) return null;
   const dates = getDatesInRange(q.start, q.end);
   const budget = getStaffQuarterBudget(init, grade, qid, wteConfig, staffHours);
-  const used = getShiftHoursUsed(init, grade, dates, rota);
+  const used = getShiftHoursUsed(init, grade, dates, rota, gradeSlotHours);
   const slDeduct = getLeaveHoursDeducted(init, leaveEntries, dates);
   const corrections = getCorrectionsTotal(init, qid, hoursCorrections);
   return Math.round((budget - used - slDeduct + corrections) * 10) / 10;

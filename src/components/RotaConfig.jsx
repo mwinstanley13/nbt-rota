@@ -1,11 +1,12 @@
 import React, { useState } from 'react'
 import { QUARTERS } from '../constants/quarters.js'
 import { DEFAULT_SHIFT_TIMES, getShiftDuration, GRADE_KEYS, SHIFT_FIELDS } from '../constants/rules.js'
+import { SHIFT_GROUPS, DEFAULT_GRADE_SLOT_HOURS, DEFAULT_PA_VALUES } from '../constants/slots.js'
 import { effGrade } from '../utils/rota.js'
 import Modal from './Modal.jsx'
 
-function RotaConfig({wteConfig, setWteConfig, staffHours, setStaffHours, staff, addAudit, shiftTimes, setShiftTimes, staffShiftTimes, setStaffShiftTimes, trainingDays, setTrainingDays, staffShiftOverrides, setShiftOverrides}) {
-  const [tab, setTab] = useState("fte"); // "fte" | "hours" | "targets" | "shifttimes" | "training"
+function RotaConfig({wteConfig, setWteConfig, staffHours, setStaffHours, staff, addAudit, shiftTimes, setShiftTimes, staffShiftTimes, setStaffShiftTimes, trainingDays, setTrainingDays, staffShiftOverrides, setShiftOverrides, gradeSlotHours, setGradeSlotHours, paSlotValues, setPaSlotValues}) {
+  const [tab, setTab] = useState("fte"); // "fte" | "hours" | "targets" | "shifttimes" | "training" | "gradehours"
   const [targetModal, setTargetModal] = useState(null); // {init, name, grade, qid}
   const activeStaff = staff.filter(s => s.role==="staff" && s.active);
   const [tdDate,setTdDate]  = useState("");
@@ -45,7 +46,7 @@ function RotaConfig({wteConfig, setWteConfig, staffHours, setStaffHours, staff, 
   return (
     <div>
       <div style={{display:"flex",gap:7,marginBottom:18,flexWrap:"wrap"}}>
-        {[["fte","FTE Targets"],["hours","Staff WTE"],["targets","Shift Targets"],["shifttimes","Shift Times"],["training","Training Days"]].map(([k,lbl])=>(
+        {[["fte","FTE Targets"],["hours","Staff WTE"],["targets","Shift Targets"],["shifttimes","Shift Times"],["training","Training Days"],["gradehours","Grade Hours & PAs"]].map(([k,lbl])=>(
           <button key={k} className={`btn${tab===k?" bp":" bs"}`} onClick={()=>setTab(k)}>{lbl}</button>
         ))}
       </div>
@@ -351,6 +352,81 @@ function RotaConfig({wteConfig, setWteConfig, staffHours, setStaffHours, staff, 
                   </tr>
                 ))}</tbody>
               </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {tab==="gradehours"&&(
+        <div>
+          <div className="al al-i" style={{marginBottom:14}}>
+            Set how many hours each shift group credits for each grade. This is separate from the actual shift start/end times — it affects the hours tracker only. For example, an Early shift may be 08:00–16:30 but credit 10 hours for ACP staff.
+          </div>
+
+          {/* Grade credited hours table */}
+          <div className="card" style={{marginBottom:16}}>
+            <div className="ch"><span className="ct">Credited Hours per Shift Group</span></div>
+            <div className="cb" style={{overflowX:"auto"}}>
+              <table className="tbl">
+                <thead>
+                  <tr>
+                    <th>Shift Group</th>
+                    <th>ST4+ / ST3 (hrs)</th>
+                    <th>ACP (hrs)</th>
+                    <th>tACP (hrs)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {SHIFT_GROUPS.map(grp=>{
+                    const docVal = (gradeSlotHours?.doc?.[grp.key] ?? DEFAULT_GRADE_SLOT_HOURS.doc[grp.key]);
+                    const acpVal = (gradeSlotHours?.acp?.[grp.key] ?? DEFAULT_GRADE_SLOT_HOURS.acp[grp.key]);
+                    const tacpVal= (gradeSlotHours?.tacp?.[grp.key]?? DEFAULT_GRADE_SLOT_HOURS.tacp[grp.key]);
+                    const setGH = (gk, val) => {
+                      const num = parseFloat(val);
+                      if (isNaN(num)||num<=0) return;
+                      setGradeSlotHours(prev=>({...prev,[gk]:{...(prev[gk]||{}),[grp.key]:num}}));
+                    };
+                    return (
+                      <tr key={grp.key}>
+                        <td style={{fontWeight:600}}>{grp.label}</td>
+                        <td><input type="number" className="fi" style={{width:70}} value={docVal} step="0.5" onChange={e=>setGH('doc',e.target.value)}/></td>
+                        <td><input type="number" className="fi" style={{width:70}} value={acpVal} step="0.5" onChange={e=>setGH('acp',e.target.value)}/></td>
+                        <td><input type="number" className="fi" style={{width:70}} value={tacpVal} step="0.5" onChange={e=>setGH('tacp',e.target.value)}/></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* PA values */}
+          <div className="card">
+            <div className="ch"><span className="ct">PA Values per Shift Group</span></div>
+            <div className="cb">
+              <div style={{fontSize:12,color:"#64748b",marginBottom:12}}>
+                For staff on PA contracts, set how many Programmed Activities each shift group is worth. 1 PA ≈ 4 hours (NHS standard). Nights and long weekend shifts typically count as more PAs.
+              </div>
+              <div style={{overflowX:"auto"}}>
+                <table className="tbl">
+                  <thead>
+                    <tr><th>Shift Group</th><th>PA Value</th><th>Description</th></tr>
+                  </thead>
+                  <tbody>
+                    {SHIFT_GROUPS.map(grp=>{
+                      const val = (paSlotValues?.[grp.key] ?? DEFAULT_PA_VALUES[grp.key] ?? 1.0);
+                      return (
+                        <tr key={grp.key}>
+                          <td style={{fontWeight:600}}>{grp.label}</td>
+                          <td><input type="number" className="fi" style={{width:70}} value={val} step="0.25" min="0.25" max="3"
+                            onChange={e=>{const n=parseFloat(e.target.value);if(!isNaN(n)&&n>0)setPaSlotValues(prev=>({...prev,[grp.key]:n}));}}/></td>
+                          <td style={{fontSize:11,color:"#64748b"}}>{val} PA{val!==1?"s":""} per {grp.label.toLowerCase()} shift</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>

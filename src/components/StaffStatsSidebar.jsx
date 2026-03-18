@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react'
 import { QUARTERS } from '../constants/quarters'
 import { getDatesInRange } from '../utils/dates'
-import { countShifts, getHoursRemaining, getEffectiveWTE, getTarget, effGrade, getPersonTarget } from '../utils/rota'
+import { countShifts, getHoursRemaining, getEffectiveWTE, getTarget, effGrade, getPersonTarget, isPAStaff, getShiftPAsUsed } from '../utils/rota'
 import HoursCorrectModal from './HoursCorrectModal'
 
 function StatCell({done, target}) {
@@ -13,7 +13,7 @@ function StatCell({done, target}) {
   );
 }
 
-function StaffStatsSidebar({staff, rota, wteConfig, staffHours, selQ, leaveEntries, hoursCorrections, setHoursCorrections, addAudit, currentUser, availability, staffShiftOverrides}) {
+function StaffStatsSidebar({staff, rota, wteConfig, staffHours, selQ, leaveEntries, hoursCorrections, setHoursCorrections, addAudit, currentUser, availability, staffShiftOverrides, gradeSlotHours, paSlotValues}) {
   const [mode, setMode] = useState("quarter"); // "quarter" | "year"
   const [corrModal, setCorrModal] = useState(null); // {init, name, grade}
 
@@ -72,10 +72,15 @@ function StaffStatsSidebar({staff, rota, wteConfig, staffHours, selQ, leaveEntri
               const tE = mode==="quarter" ? getPersonTarget(wteConfig,s,"earlies", wte,staffShiftOverrides,qid) : QUARTERS.reduce((a,q)=>a+getPersonTarget(wteConfig,s,"earlies", getEffectiveWTE(s.init,effGrade(s),q.id,wteConfig,staffHours),staffShiftOverrides,q.id),0);
               const tM = mode==="quarter" ? getPersonTarget(wteConfig,s,"mids",    wte,staffShiftOverrides,qid) : QUARTERS.reduce((a,q)=>a+getPersonTarget(wteConfig,s,"mids",    getEffectiveWTE(s.init,effGrade(s),q.id,wteConfig,staffHours),staffShiftOverrides,q.id),0);
               const tL = mode==="quarter" ? getPersonTarget(wteConfig,s,"lates",   wte,staffShiftOverrides,qid) : QUARTERS.reduce((a,q)=>a+getPersonTarget(wteConfig,s,"lates",   getEffectiveWTE(s.init,effGrade(s),q.id,wteConfig,staffHours),staffShiftOverrides,q.id),0);
-              const hrs = mode==="quarter"
-                ? getHoursRemaining(s.init, s.grade, qid, wteConfig, staffHours, rota, leaveEntries, hoursCorrections)
-                : QUARTERS.reduce((a,q)=>a+(getHoursRemaining(s.init,s.grade,q.id,wteConfig,staffHours,rota,leaveEntries,hoursCorrections)||0),0);
-              const hrsCol = hrs==null?"#94a3b8":hrs>8?"#d97706":hrs>=-8?"#16a34a":"#ef4444";
+              const isPa = isPAStaff(s);
+              const hrs = isPa ? null : (mode==="quarter"
+                ? getHoursRemaining(s.init, s.grade, qid, wteConfig, staffHours, rota, leaveEntries, hoursCorrections, gradeSlotHours)
+                : QUARTERS.reduce((a,q)=>a+(getHoursRemaining(s.init,s.grade,q.id,wteConfig,staffHours,rota,leaveEntries,hoursCorrections,gradeSlotHours)||0),0));
+              const pasDone = isPa ? getShiftPAsUsed(s.init, dates, rota, paSlotValues) : null;
+              const paTarget = isPa ? (s.paTarget || 40) : null;
+              const hrsCol = isPa
+                ? (pasDone >= paTarget ? "#ef4444" : pasDone >= paTarget - 5 ? "#d97706" : "#16a34a")
+                : (hrs==null?"#94a3b8":hrs>8?"#d97706":hrs>=-8?"#16a34a":"#ef4444");
               return (
                 <tr key={s.id} style={{borderBottom:"1px solid #f8fafc"}}>
                   <td style={{padding:"4px 8px",fontSize:10,fontWeight:600,color:"#374151",maxWidth:80,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}
@@ -92,7 +97,7 @@ function StaffStatsSidebar({staff, rota, wteConfig, staffHours, selQ, leaveEntri
                   <StatCell done={counts.mids}      target={tM}/>
                   <StatCell done={counts.lates}     target={tL}/>
                   <td style={{padding:"3px 5px",textAlign:"center",fontSize:10,fontWeight:700,color:hrsCol,whiteSpace:"nowrap"}}>
-                    {hrs!=null?hrs:"—"}
+                    {isPa ? `${pasDone}/${paTarget}PA` : (hrs!=null?hrs:"—")}
                   </td>
                 </tr>
               );

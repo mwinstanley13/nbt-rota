@@ -7,7 +7,7 @@ import { getAvailEntry, isSlotPreferred } from '../utils/availability'
 import Modal from './Modal'
 import StaffStatsSidebar from './StaffStatsSidebar'
 
-function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,setDayNotes,availability,addAudit,currentUser,wteConfig,staffHours,hoursCorrections,setHoursCorrections,trainingDays,staffShiftOverrides,constraintRules,sysRules,genRules,rotaPublished,setRotaPublished,quarters,specialPeriods}) {
+function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,setDayNotes,availability,addAudit,currentUser,wteConfig,staffHours,hoursCorrections,setHoursCorrections,trainingDays,staffShiftOverrides,constraintRules,sysRules,genRules,rotaPublished,setRotaPublished,quarters,specialPeriods,gradeSlotHours,paSlotValues}) {
   const [selQ,setSelQ]=useState("Q1");
   const [assignModal,setAM]=useState(null); // {date, slotKey}
   const [leaveModal,setLM]=useState(null);  // {date}
@@ -230,6 +230,8 @@ function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,s
         currentUser={currentUser}
         availability={availability}
         staffShiftOverrides={staffShiftOverrides}
+        gradeSlotHours={gradeSlotHours}
+        paSlotValues={paSlotValues}
       />
       </div>
 

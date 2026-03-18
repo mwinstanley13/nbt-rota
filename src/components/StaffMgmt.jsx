@@ -54,7 +54,7 @@ function StaffMgmt({staff,setStaff,addAudit,currentUser}) {
   return (
     <div>
       <div style={{display:"flex",gap:10,marginBottom:14,flexWrap:"wrap"}}>
-        <button className="btn bp" onClick={()=>{setForm({name:"",init:"",grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0,nightBlockPref:"any",military:false});setModal("add");}}>＋ Add Staff</button>
+        <button className="btn bp" onClick={()=>{setForm({name:"",init:"",grade:"ST4+",hrs:45.25,pw:"rota2026",role:"staff",active:true,slDays:30,militaryDays:0,nightBlockPref:"any",military:false,pa:false,paTarget:40});setModal("add");}}>＋ Add Staff</button>
         {isOwner&&<button className="btn" style={{background:"#ede9fe",color:"#5b21b6",border:"1px solid #c4b5fd"}} onClick={()=>{setForm({name:"",init:"",grade:"Admin",hrs:0,pw:"admin2026",role:"admin",active:true,slDays:0,militaryDays:0,nightBlockPref:"any",military:false});setModal("add");}}>＋ Add Admin</button>}
         {demoLoadable&&<button className="btn" style={{background:"#f0f9ff",color:"#0369a1",border:"1px solid #bae6fd"}} onClick={()=>{if(!confirm("Load all 32 default NBT staff? This will add them with password rota2026.")) return; const existing=staff.map(s=>s.init); const toAdd=INIT_STAFF.filter(s=>s.role==="staff"&&!existing.includes(s.init)); setStaff(p=>[...p,...toAdd]);}}>📋 Load Default Staff</button>}
       </div>
@@ -132,6 +132,16 @@ function StaffMgmt({staff,setStaff,addAudit,currentUser}) {
               Military contract — uses Military hours targets but keeps grade for shift eligibility
             </label>
           </div>
+          <div className="fg" style={{gridColumn:"1/-1"}}>
+            <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:12.5,fontWeight:500,color:"#374151"}}>
+              <input type="checkbox" checked={!!form.pa} onChange={e=>setForm(f=>({...f,pa:e.target.checked}))} style={{width:16,height:16,accentColor:"#6366f1"}}/>
+              PA contract — hours tracked in Programmed Activities (PAs) not clock hours
+            </label>
+          </div>
+          {form.pa&&<div className="fg">
+            <label className="fl">PA Budget (per quarter)</label>
+            <input type="number" className="fi" value={form.paTarget??40} step="0.5" onChange={e=>setForm(f=>({...f,paTarget:parseFloat(e.target.value)||0}))}/>
+          </div>}
           <div className="fg" style={{gridColumn:"1/-1"}}>
             <div style={{fontSize:12,fontWeight:600,color:"#374151",marginBottom:6}}>Christmas/NY History (Previous Rota Year)</div>
             <div style={{display:"flex",gap:16,flexWrap:"wrap"}}>
