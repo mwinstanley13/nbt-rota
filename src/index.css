@@ -26,8 +26,8 @@ body{font-family:'Inter',sans-serif;background:#f4f6fb;font-size:13px}
 .u-out:hover{color:#ef4444}
 .u-logout{width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:15px;transition:all .15s;border:1px solid rgba(239,68,68,.35);background:rgba(239,68,68,.1);color:#fca5a5;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .u-logout:hover{background:rgba(239,68,68,.25);color:white}
-.sb-collapse-btn{width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:11px;transition:all .15s;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);color:#4a7a96;display:flex;align-items:center;justify-content:center;margin:4px auto 6px}
-.sb-collapse-btn:hover{background:rgba(255,255,255,.14);color:#b8d4e0}
+.sb-collapse-btn{position:absolute;top:50%;right:-13px;transform:translateY(-50%);width:26px;height:42px;border-radius:0 8px 8px 0;cursor:pointer;font-size:16px;font-weight:700;transition:all .15s;border:1px solid #d1dde8;border-left:none;background:white;color:#64748b;display:flex;align-items:center;justify-content:center;box-shadow:2px 0 6px rgba(0,0,0,.10);z-index:20;line-height:1}
+.sb-collapse-btn:hover{background:#f0f6ff;color:#0284c7}
 .main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 .hdr{background:white;padding:14px 26px;border-bottom:1px solid #edf0f7;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:0 1px 4px rgba(0,0,0,.06)}
 .hdr h2{font-family:'Plus Jakarta Sans',sans-serif;font-size:19px;font-weight:700;color:#0d1b2a}
