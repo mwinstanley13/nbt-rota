@@ -3,7 +3,7 @@ import { QUARTERS } from '../constants/quarters'
 import { fmtISO, getDatesInRange } from '../utils/dates'
 import { normaliseAvailEntry } from '../utils/availability'
 
-function Reports({user,staff,rota,leaveEntries,requests,quarters,availability}) {
+function Reports({user,staff,rota,leaveEntries,requests,quarters,availability,specialPeriods}) {
   const isAdmin=user.role==="admin";
   const qs=quarters||QUARTERS;
   const target=isAdmin?staff.filter(s=>s.role==="staff"&&s.active):staff.filter(s=>s.init===user.init);
@@ -12,6 +12,7 @@ function Reports({user,staff,rota,leaveEntries,requests,quarters,availability}) 
   const todayStr=fmtISO(new Date());
   const defaultQ=(qs.find(q=>todayStr>=q.start&&todayStr<=q.end)||qs.find(q=>todayStr<q.start)||qs[qs.length-1])?.id||"Q1";
   const [selQ,setSelQ]=useState(defaultQ);
+  const [tab,setTab]=useState("summary");
   const selQDef=qs.find(q=>q.id===selQ)||qs[0];
 
   const earlySlots=["E1","E2","E3","E4","WE1","WE2","WE3"];
@@ -96,7 +97,13 @@ function Reports({user,staff,rota,leaveEntries,requests,quarters,availability}) 
 
   return (
     <div>
-      <div className="card">
+      {isAdmin&&(
+        <div style={{display:"flex",gap:6,marginBottom:16}}>
+          <button className={`btn${tab==="summary"?" bp":" bs"}`} onClick={()=>setTab("summary")}>📊 Summary</button>
+          <button className={`btn${tab==="christmas"?" bp":" bs"}`} onClick={()=>setTab("christmas")}>🎄 Christmas</button>
+        </div>
+      )}
+      {tab==="summary"&&(<div className="card">
         <div className="ch">
           <span className="ct">Shift &amp; Leave Summary</span>
           {qSel}
@@ -201,7 +208,116 @@ function Reports({user,staff,rota,leaveEntries,requests,quarters,availability}) 
             Shifts show <strong style={{color:"#374151"}}>{selQ} count</strong> / <strong style={{color:"#374151"}}>Year total</strong> · SL &amp; Military show year totals only · includes leave entries, availability entries &amp; approved requests
           </div>
         </div>
-      </div>
+      </div>)}
+      {tab==="christmas"&&isAdmin&&(()=>{
+        const allStaff = staff.filter(s=>s.role==="staff"&&s.active);
+        const xmasPeriods = (specialPeriods||[]);
+
+        if (xmasPeriods.length===0) return (
+          <div className="card">
+            <div className="ch"><span className="ct">🎄 Christmas Summary</span></div>
+            <div className="cb"><div className="al al-i">No special periods defined yet. Go to <strong>Year Setup → Special Periods</strong> to add a Christmas period.</div></div>
+          </div>
+        );
+
+        return xmasPeriods.map(sp=>{
+          const dates = getDatesInRange(sp.start, sp.end);
+          const keyDates = dates.filter(d=>{
+            const mmdd = d.slice(5);
+            return ['12-24','12-25','12-26','12-31'].includes(mmdd) || d.slice(5)==='01-01' || d.slice(5)==='01-02';
+          });
+          const displayDates = keyDates.length ? keyDates : dates.slice(0,10);
+
+          const dayLabel = d=>{
+            const mmdd=d.slice(5);
+            if(mmdd==='12-24') return 'Christmas Eve';
+            if(mmdd==='12-25') return 'Christmas Day';
+            if(mmdd==='12-26') return 'Boxing Day';
+            if(mmdd==='12-31') return "New Year's Eve";
+            if(mmdd==='01-01') return "New Year's Day";
+            if(mmdd==='01-02') return '2nd Jan';
+            return new Date(d+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
+          };
+
+          return (
+            <div key={sp.id} className="card" style={{marginBottom:16}}>
+              <div className="ch"><span className="ct">{sp.emoji} {sp.name} <span style={{fontWeight:400,fontSize:12,color:"#64748b"}}>{sp.start} – {sp.end}</span></span></div>
+              <div className="cb">
+
+                {/* Preference summary */}
+                <div style={{marginBottom:16}}>
+                  <div style={{fontSize:12,fontWeight:700,color:"#475569",marginBottom:8,textTransform:"uppercase",letterSpacing:".5px"}}>Staff Preferences</div>
+                  <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                    {allStaff.map(s=>{
+                      const pref = s.xmasPref||"any";
+                      const prefLabel = pref==="christmas"?"🎄 Xmas":(pref==="newyear"?"🥂 NY":(pref==="both_ok"?"✅ Either":"—"));
+                      const prevXmas = s.workedXmas2025;
+                      const prevNY = s.workedNY2025;
+                      return (
+                        <div key={s.init} style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:7,padding:"6px 10px",fontSize:11.5,minWidth:120}}>
+                          <div style={{fontWeight:700,color:"#0d1b2a"}}>{s.name}</div>
+                          <div style={{color:"#64748b",marginTop:1}}>Pref: <strong>{prefLabel}</strong></div>
+                          {(prevXmas||prevNY)&&<div style={{fontSize:10,color:"#94a3b8",marginTop:1}}>
+                            Last yr: {prevXmas?"🎄":""}  {prevNY?"🥂":""}
+                          </div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Key date assignments */}
+                <div style={{fontSize:12,fontWeight:700,color:"#475569",marginBottom:8,textTransform:"uppercase",letterSpacing:".5px"}}>Key Date Assignments</div>
+                {displayDates.map(d=>{
+                  const slots = rota[d]||{};
+                  const assigned = Object.entries(slots).filter(([,v])=>v).map(([sk,init])=>({sk,init,staff:allStaff.find(s=>s.init===init)}));
+                  const empty = assigned.length===0;
+                  return (
+                    <div key={d} style={{marginBottom:10,padding:"10px 12px",background:empty?"#fff7ed":"#f8fafc",border:`1px solid ${empty?"#fed7aa":"#e2e8f0"}`,borderRadius:8}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                        <span style={{fontWeight:800,fontSize:13,color:"#0d1b2a"}}>{dayLabel(d)}</span>
+                        <span style={{fontSize:11,color:"#64748b"}}>{new Date(d+'T00:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})}</span>
+                        {empty&&<span style={{background:"#fed7aa",color:"#92400e",borderRadius:4,padding:"1px 6px",fontSize:10,fontWeight:700}}>NOT YET ASSIGNED</span>}
+                      </div>
+                      {!empty&&(
+                        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                          {assigned.map(({sk,init,staff:s})=>{
+                            const workedXmasLast = d.slice(5)==='12-25'&&s?.workedXmas2025;
+                            const workedNYLast = d.slice(5)==='01-01'&&s?.workedNY2025;
+                            const flagRepeat = workedXmasLast||workedNYLast;
+                            return (
+                              <span key={sk} style={{display:"inline-flex",alignItems:"center",gap:4,background:"white",border:`1px solid ${flagRepeat?"#fca5a5":"#e2e8f0"}`,borderRadius:6,padding:"3px 8px",fontSize:11.5}}>
+                                <code style={{fontSize:10,background:"#f1f5f9",padding:"1px 4px",borderRadius:3}}>{sk}</code>
+                                <span style={{fontWeight:600}}>{s?.name||init}</span>
+                                {flagRepeat&&<span title="Also worked this day last year" style={{fontSize:10,color:"#ef4444"}}>⚠️ repeat</span>}
+                                {s?.xmasPref==="christmas"&&d.slice(5)==='12-25'&&<span title="Requested Christmas" style={{fontSize:10}}>🎄✓</span>}
+                                {s?.xmasPref==="newyear"&&d.slice(5)==='01-01'&&<span title="Requested New Year" style={{fontSize:10}}>🥂✓</span>}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {/* Fairness summary */}
+                <div style={{marginTop:16,fontSize:12,fontWeight:700,color:"#475569",marginBottom:8,textTransform:"uppercase",letterSpacing:".5px"}}>Fairness — Who Hasn't Worked Christmas/NY Yet</div>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                  {allStaff.filter(s=>!s.workedXmas2025&&!s.workedNY2025).map(s=>(
+                    <span key={s.init} style={{background:"#ecfdf5",border:"1px solid #6ee7b7",borderRadius:6,padding:"3px 8px",fontSize:11.5,color:"#065f46"}}>✓ {s.name}</span>
+                  ))}
+                  {allStaff.filter(s=>s.workedXmas2025||s.workedNY2025).map(s=>(
+                    <span key={s.init} style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:6,padding:"3px 8px",fontSize:11.5,color:"#64748b"}}>
+                      {s.name} {s.workedXmas2025&&s.workedNY2025?"(did both)":s.workedXmas2025?"(did Xmas)":"(did NY)"}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          );
+        });
+      })()}
     </div>
   );
 }

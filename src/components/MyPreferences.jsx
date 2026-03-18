@@ -134,6 +134,33 @@ function MyPreferences({ currentUser, staff, setStaff, fixedDaysOff, setFixedDay
         </div>
       </div>
 
+      {/* Christmas Preference */}
+      <div className="card" style={{marginBottom:16}}>
+        <div className="ch"><span className="ct">🎄 Christmas & New Year Preference</span></div>
+        <div className="cb">
+          <div style={{fontSize:12,color:"#64748b",marginBottom:12}}>
+            Let the rota admin know your preference for the Christmas/New Year period. This helps ensure fair allocation and is visible in the Christmas Summary report.
+          </div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            {[
+              {val:"any",     label:"No preference",       desc:"I'm happy with whatever is needed"},
+              {val:"christmas",label:"Prefer Christmas",   desc:"I'd rather work Christmas week"},
+              {val:"newyear", label:"Prefer New Year",     desc:"I'd rather work New Year week"},
+              {val:"both_ok", label:"Happy with either",   desc:"I can do Christmas or New Year"},
+            ].map(o=>{
+              const cur = me?.xmasPref||"any";
+              return (
+                <button key={o.val} onClick={()=>{setStaff(prev=>prev.map(s=>s.init===currentUser.init?{...s,xmasPref:o.val}:s));addAudit(currentUser.init,"Xmas Pref",`Set Christmas preference: ${o.val}`);}}
+                  style={{padding:"8px 14px",borderRadius:8,border:`2px solid ${cur===o.val?"#6366f1":"#e2e8f0"}`,background:cur===o.val?"#eff6ff":"#f8fafc",color:cur===o.val?"#3730a3":"#374151",cursor:"pointer",textAlign:"left",minWidth:160}}>
+                  <div style={{fontWeight:cur===o.val?700:500,fontSize:13}}>{cur===o.val?"✓ ":""}{o.label}</div>
+                  <div style={{fontSize:11,color:"#64748b",marginTop:2}}>{o.desc}</div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
       {/* Notifications */}
       <div className="card">
         <div className="ch"><span className="ct">🔔 Notifications</span></div>

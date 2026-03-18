@@ -107,6 +107,15 @@ function App() {
   const rotaPublished = rotaPublishedByYear[activeYearId] || {};
   const setRotaPublished = yw(setRPByYear);
 
+  // Special periods (e.g. Christmas) — admin-defined date ranges
+  const [specialPeriodsByYear, setSPByYear] = useState(()=>lsGet('specialPeriodsByYear',{}));
+  const specialPeriods = specialPeriodsByYear[activeYearId] || [];
+  const setSpecialPeriods = (updater) => setSPByYear(prev => {
+    const cur = prev[activeYearId] || [];
+    const next = typeof updater === 'function' ? updater(cur) : updater;
+    return {...prev, [activeYearId]: next};
+  });
+
   // ── Subscribe to Firestore on mount (gated behind Anonymous Auth) ────────────
   // onAuthStateChanged fires immediately; if no user, we sign in anonymously.
   // Once authenticated, the Firestore onSnapshot listener is set up.
@@ -124,7 +133,7 @@ function App() {
         const pendingReset = localStorage.getItem(RESET_KEY) === 'true';
         if (pendingReset) {
           localStorage.removeItem(RESET_KEY);
-          const freshPayload = {staff:INIT_STAFF.filter(s=>s.role==="admin"),auditLog:[],wteConfig:INIT_WTE_CONFIG,years:[{id:"2026-27",label:"2026/27",quarters:QUARTERS,active:true,archived:false}],activeYearId:"2026-27",rotaByYear:{},leaveByYear:{},availByYear:{},qStatusByYear:{},requestsByYear:{},notesByYear:{},corrsByYear:{},staffHoursByYear:{},swapsByYear:{},fixedDaysOff:[],genRules:INIT_GEN_RULES,shiftTimes:DEFAULT_SHIFT_TIMES,staffShiftTimes:{},trainingDays:[],demoMode:false};
+          const freshPayload = {staff:INIT_STAFF.filter(s=>s.role==="admin"),auditLog:[],wteConfig:INIT_WTE_CONFIG,years:[{id:"2026-27",label:"2026/27",quarters:QUARTERS,active:true,archived:false}],activeYearId:"2026-27",rotaByYear:{},leaveByYear:{},availByYear:{},qStatusByYear:{},requestsByYear:{},notesByYear:{},corrsByYear:{},staffHoursByYear:{},swapsByYear:{},fixedDaysOff:[],genRules:INIT_GEN_RULES,shiftTimes:DEFAULT_SHIFT_TIMES,staffShiftTimes:{},trainingDays:[],demoMode:false,specialPeriodsByYear:{}};
           appDoc().set(freshPayload).catch(console.error);
         }
         // Authenticated — connect to Firestore
@@ -195,6 +204,7 @@ function App() {
               upd(setSwapsByYear)(d.swapsByYearV2 || {});
               upd(setSOByYear)(d.shiftOverridesByYear || {});
               upd(setRPByYear)(d.rotaPublishedByYear || {});
+              upd(setSPByYear)(d.specialPeriodsByYear || {});
               upd(setFixedDaysOff)(d.fixedDaysOff);
               upd(setGenRules)(d.genRules);
               upd(setShiftTimes)(d.shiftTimes);
@@ -222,11 +232,11 @@ function App() {
   // Also mirrors to localStorage as an offline / fast-reload cache
   useEffect(() => {
     if (!fsReady) return;
-    const payload = {staff,auditLog,wteConfig,years,activeYearId,rotaByYear,leaveByYear:leaveByYear,availByYear,qStatusByYear,requestsByYear,notesByYear,corrsByYear,staffHoursByYear,swapsByYear,shiftOverridesByYear,rotaPublishedByYear,fixedDaysOff,genRules,shiftTimes,staffShiftTimes,trainingDays,constraintRules,sysRules,demoMode,rotaRulesText};
+    const payload = {staff,auditLog,wteConfig,years,activeYearId,rotaByYear,leaveByYear:leaveByYear,availByYear,qStatusByYear,requestsByYear,notesByYear,corrsByYear,staffHoursByYear,swapsByYear,shiftOverridesByYear,rotaPublishedByYear,specialPeriodsByYear,fixedDaysOff,genRules,shiftTimes,staffShiftTimes,trainingDays,constraintRules,sysRules,demoMode,rotaRulesText};
     appDoc().set(payload).catch(console.error);
-    Object.entries({staff:staff,audit:auditLog,wteConfig:wteConfig,years:years,activeYearId:activeYearId,rotaByYear:rotaByYear,leaveByYear:leaveByYear,availByYear:availByYear,qstatusByYear:qStatusByYear,requestsByYear:requestsByYear,notesByYear:notesByYear,corrsByYear:corrsByYear,staffHoursByYear:staffHoursByYear,swapsByYear:swapsByYear,shiftOverridesByYear:shiftOverridesByYear,rotaPublishedByYear:rotaPublishedByYear,fixedDaysOff:fixedDaysOff,genRules:genRules,shiftTimes:shiftTimes,staffShiftTimes:staffShiftTimes,trainingDays:trainingDays,constraintRules:constraintRules,sysRules:sysRules,demoMode:demoMode,rotaRulesText:rotaRulesText})
+    Object.entries({staff:staff,audit:auditLog,wteConfig:wteConfig,years:years,activeYearId:activeYearId,rotaByYear:rotaByYear,leaveByYear:leaveByYear,availByYear:availByYear,qstatusByYear:qStatusByYear,requestsByYear:requestsByYear,notesByYear:notesByYear,corrsByYear:corrsByYear,staffHoursByYear:staffHoursByYear,swapsByYear:swapsByYear,shiftOverridesByYear:shiftOverridesByYear,rotaPublishedByYear:rotaPublishedByYear,specialPeriodsByYear:specialPeriodsByYear,fixedDaysOff:fixedDaysOff,genRules:genRules,shiftTimes:shiftTimes,staffShiftTimes:staffShiftTimes,trainingDays:trainingDays,constraintRules:constraintRules,sysRules:sysRules,demoMode:demoMode,rotaRulesText:rotaRulesText})
       .forEach(([k,v])=>lsSave(k,v));
-  },[fsReady,staff,auditLog,wteConfig,years,activeYearId,rotaByYear,leaveByYear,availByYear,qStatusByYear,requestsByYear,notesByYear,corrsByYear,staffHoursByYear,swapsByYear,shiftOverridesByYear,rotaPublishedByYear,fixedDaysOff,genRules,shiftTimes,staffShiftTimes,trainingDays,constraintRules,sysRules,demoMode,rotaRulesText]);
+  },[fsReady,staff,auditLog,wteConfig,years,activeYearId,rotaByYear,leaveByYear,availByYear,qStatusByYear,requestsByYear,notesByYear,corrsByYear,staffHoursByYear,swapsByYear,shiftOverridesByYear,rotaPublishedByYear,specialPeriodsByYear,fixedDaysOff,genRules,shiftTimes,staffShiftTimes,trainingDays,constraintRules,sysRules,demoMode,rotaRulesText]);
 
   const addAudit=(u,action,details)=>{
     const now=new Date(), ts=`${now.toLocaleDateString("en-GB")} ${now.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}`;
@@ -356,9 +366,9 @@ function App() {
               />
             )}
           {view==="requests"   &&<RequestsView user={user} requests={requests} setRequests={setReqs} addAudit={addAudit} swaps={swaps} setSwaps={setSwaps} rota={rota} setRota={setRota} staff={staff}/>}
-          {view==="builder"    &&isAdmin&&<RotaBuilder rota={rota} setRota={setRota} leaveEntries={leaveEntries} setLeaveEntries={setLE} staff={staff} dayNotes={dayNotes} setDayNotes={setNotes} availability={availability} addAudit={addAudit} currentUser={user} wteConfig={wteConfig} staffHours={staffHours} hoursCorrections={hoursCorrections} setHoursCorrections={setHoursCorrections} trainingDays={trainingDays} staffShiftOverrides={staffShiftOverrides} constraintRules={constraintRules} sysRules={sysRules} genRules={genRules} rotaPublished={rotaPublished} setRotaPublished={setRotaPublished} quarters={activeYearQuarters}/>}
+          {view==="builder"    &&isAdmin&&<RotaBuilder rota={rota} setRota={setRota} leaveEntries={leaveEntries} setLeaveEntries={setLE} staff={staff} dayNotes={dayNotes} setDayNotes={setNotes} availability={availability} addAudit={addAudit} currentUser={user} wteConfig={wteConfig} staffHours={staffHours} hoursCorrections={hoursCorrections} setHoursCorrections={setHoursCorrections} trainingDays={trainingDays} staffShiftOverrides={staffShiftOverrides} constraintRules={constraintRules} sysRules={sysRules} genRules={genRules} rotaPublished={rotaPublished} setRotaPublished={setRotaPublished} quarters={activeYearQuarters} specialPeriods={specialPeriods} setSpecialPeriods={setSpecialPeriods}/>}
           {view==="staff"      &&isAdmin&&<StaffMgmt staff={staff} setStaff={setStaff} addAudit={addAudit} currentUser={user}/>}
-          {view==="reports"    &&<Reports user={user} staff={staff} rota={rota} leaveEntries={leaveEntries} requests={requests} quarters={activeYearQuarters} availability={availability}/>}
+          {view==="reports"    &&<Reports user={user} staff={staff} rota={rota} leaveEntries={leaveEntries} requests={requests} quarters={activeYearQuarters} availability={availability} specialPeriods={specialPeriods}/>}
           {view==="conflicts"  &&isAdmin&&<ConflictsView rota={rota} leaveEntries={leaveEntries} availability={availability} staff={staff} quarters={activeYearQuarters} addAudit={addAudit} currentUser={user} constraintRules={constraintRules} setConstraintRules={setConstraintRules} sysRules={sysRules} setSysRules={setSysRules} genRules={genRules}/>}
           {view==="fixeddays"  &&isAdmin&&<FixedDaysView fixedDaysOff={fixedDaysOff} setFixedDaysOff={setFixedDaysOff} staff={staff} addAudit={addAudit} currentUser={user}/>}
           {view==="rotaconfig" &&isAdmin&&<RotaConfig wteConfig={wteConfig} setWteConfig={setWteConfig} staffHours={staffHours} setStaffHours={setStaffHours} staff={staff} addAudit={addAudit} shiftTimes={shiftTimes} setShiftTimes={setShiftTimes} staffShiftTimes={staffShiftTimes} setStaffShiftTimes={setSST} trainingDays={trainingDays} setTrainingDays={setTrainingDays} staffShiftOverrides={staffShiftOverrides} setShiftOverrides={setShiftOverrides}/>}
@@ -366,7 +376,7 @@ function App() {
           {view==="adjustments"&&isAdmin&&<HoursAdjustView staff={staff} hoursCorrections={hoursCorrections} setHoursCorrections={setHoursCorrections} addAudit={addAudit} currentUser={user} wteConfig={wteConfig} staffHours={staffHours} rota={rota} leaveEntries={leaveEntries}/>}
           {view==="rotarules"  &&<RotaRulesView rotaRulesText={rotaRulesText} setRotaRulesText={setRotaRulesText} addAudit={addAudit} currentUser={user} isAdmin={isAdmin}/>}
           {view==="audit"      &&isAdmin&&<AuditLog log={auditLog}/>}
-          {view==="yearsetup"  &&isAdmin&&<YearSetupView years={years} setYears={setYears} activeYearId={activeYearId} setActiveYearId={setActiveYearId} staff={staff} rotaByYear={rotaByYear} leaveByYear={leaveByYear} availByYear={availByYear} qStatusByYear={qStatusByYear} requestsByYear={requestsByYear} notesByYear={notesByYear} corrsByYear={corrsByYear} staffHoursByYear={staffHoursByYear} swapsByYear={swapsByYear} fixedDaysOff={fixedDaysOff} wteConfig={wteConfig} setQStatusByYear={setQStatusByYear} addAudit={addAudit} currentUser={user}/>}
+          {view==="yearsetup"  &&isAdmin&&<YearSetupView years={years} setYears={setYears} activeYearId={activeYearId} setActiveYearId={setActiveYearId} staff={staff} rotaByYear={rotaByYear} leaveByYear={leaveByYear} availByYear={availByYear} qStatusByYear={qStatusByYear} requestsByYear={requestsByYear} notesByYear={notesByYear} corrsByYear={corrsByYear} staffHoursByYear={staffHoursByYear} swapsByYear={swapsByYear} fixedDaysOff={fixedDaysOff} wteConfig={wteConfig} setQStatusByYear={setQStatusByYear} addAudit={addAudit} currentUser={user} specialPeriods={specialPeriods} setSpecialPeriods={setSpecialPeriods}/>}
         </div>
         <div style={{flexShrink:0,padding:"8px 28px",borderTop:"1px solid #edf0f7",background:"white",fontSize:11,color:"#94a3b8",textAlign:"center",letterSpacing:".2px"}}>
           © 2026 RotaFlow Ltd. All rights reserved.

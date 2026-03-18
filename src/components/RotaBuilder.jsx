@@ -7,7 +7,7 @@ import { getAvailEntry, isSlotPreferred } from '../utils/availability'
 import Modal from './Modal'
 import StaffStatsSidebar from './StaffStatsSidebar'
 
-function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,setDayNotes,availability,addAudit,currentUser,wteConfig,staffHours,hoursCorrections,setHoursCorrections,trainingDays,staffShiftOverrides,constraintRules,sysRules,genRules,rotaPublished,setRotaPublished,quarters}) {
+function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,setDayNotes,availability,addAudit,currentUser,wteConfig,staffHours,hoursCorrections,setHoursCorrections,trainingDays,staffShiftOverrides,constraintRules,sysRules,genRules,rotaPublished,setRotaPublished,quarters,specialPeriods}) {
   const [selQ,setSelQ]=useState("Q1");
   const [assignModal,setAM]=useState(null); // {date, slotKey}
   const [leaveModal,setLM]=useState(null);  // {date}
@@ -87,6 +87,9 @@ function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,s
     if (sysRules?.doubleBook?.enabled !== false && doubleBooks[date]?.has(init)) return true;
     return false;
   };
+
+  // Check if a date falls in any special period
+  const getSpecialPeriod = (date) => (specialPeriods||[]).find(sp=>date>=sp.start&&date<=sp.end);
 
   // Check if assignment violates a constraint rule
   const hasRuleWarning = (init, date, slotKey) => {
@@ -169,6 +172,7 @@ function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,s
                     {td&&<div style={{fontSize:8,background:td.type==="SpR"?"#fef08a":"#e9d5ff",color:td.type==="SpR"?"#713f12":"#6b21a8",padding:"1px 4px",borderRadius:2,marginTop:2,fontWeight:700}}>{td.type} Training</div>}
                     {note&&<div style={{fontSize:8,color:"#92400e",marginTop:2}}>📌 {note.slice(0,20)}</div>}
                     {conflicts.length>0&&<div style={{fontSize:8,color:"#ef4444",fontWeight:700,marginTop:2}}>⚠️ Conflict</div>}
+                    {getSpecialPeriod(date)&&<span title={getSpecialPeriod(date).name} style={{fontSize:10,marginLeft:2}}>{getSpecialPeriod(date).emoji||"⭐"}</span>}
                   </td>
                   {SLOTS.map(sl=>{
                     const applicable=dateSlots.some(s=>s.key===sl.key);

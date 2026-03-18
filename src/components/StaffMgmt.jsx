@@ -118,11 +118,32 @@ function StaffMgmt({staff,setStaff,addAudit,currentUser}) {
               <option value="2">2 nights</option>
             </select>
           </div>
+          <div className="fg"><label className="fl">Christmas Preference</label>
+            <select className="fi" value={form.xmasPref||"any"} onChange={e=>setForm(f=>({...f,xmasPref:e.target.value}))}>
+              <option value="any">No preference</option>
+              <option value="christmas">Prefer Christmas week</option>
+              <option value="newyear">Prefer New Year week</option>
+              <option value="both_ok">Happy with either</option>
+            </select>
+          </div>
           <div className="fg" style={{gridColumn:"1/-1"}}>
             <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:12.5,fontWeight:500,color:"#374151"}}>
               <input type="checkbox" checked={!!form.military} onChange={e=>setForm(f=>({...f,military:e.target.checked}))} style={{width:16,height:16,accentColor:"#10b981"}}/>
               Military contract — uses Military hours targets but keeps grade for shift eligibility
             </label>
+          </div>
+          <div className="fg" style={{gridColumn:"1/-1"}}>
+            <div style={{fontSize:12,fontWeight:600,color:"#374151",marginBottom:6}}>Christmas/NY History (Previous Rota Year)</div>
+            <div style={{display:"flex",gap:16,flexWrap:"wrap"}}>
+              <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:12.5,fontWeight:500,color:"#374151"}}>
+                <input type="checkbox" checked={!!form.workedXmas2025} onChange={e=>setForm(f=>({...f,workedXmas2025:e.target.checked}))} style={{width:16,height:16,accentColor:"#10b981"}}/>
+                🎄 Worked Christmas Day (25 Dec) last rota year
+              </label>
+              <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:12.5,fontWeight:500,color:"#374151"}}>
+                <input type="checkbox" checked={!!form.workedNY2025} onChange={e=>setForm(f=>({...f,workedNY2025:e.target.checked}))} style={{width:16,height:16,accentColor:"#6366f1"}}/>
+                🥂 Worked New Year's Day (1 Jan) last rota year
+              </label>
+            </div>
           </div></>}
           {modal==="add"&&<div className="fg"><label className="fl">Password</label><input className="fi" value={form.pw||(form.role==="admin"?"admin2026":"rota2026")} onChange={e=>setForm(f=>({...f,pw:e.target.value}))}/></div>}
         </div>

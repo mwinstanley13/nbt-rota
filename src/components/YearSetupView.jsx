@@ -7,10 +7,40 @@ import { fmtISO, getDatesInRange } from '../utils/dates.js'
 import { normaliseAvailEntry } from '../utils/availability.js'
 import { INIT_WTE_CONFIG } from '../constants/staff.js'
 
+function SpAddForm({onAdd}) {
+  const [name,setName]=React.useState("Christmas Period");
+  const [emoji,setEmoji]=React.useState("🎄");
+  const [start,setStart]=React.useState("");
+  const [end,setEnd]=React.useState("");
+  return (
+    <div style={{display:"flex",gap:8,marginTop:12,flexWrap:"wrap",alignItems:"flex-end",background:"#f8fafc",padding:"10px 12px",borderRadius:8,border:"1px solid #e2e8f0"}}>
+      <div className="fg" style={{margin:0}}>
+        <label className="fl">Emoji</label>
+        <input className="fi" value={emoji} onChange={e=>setEmoji(e.target.value)} style={{width:56}} maxLength={2}/>
+      </div>
+      <div className="fg" style={{margin:0,flex:1,minWidth:140}}>
+        <label className="fl">Name</label>
+        <input className="fi" value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Christmas Period"/>
+      </div>
+      <div className="fg" style={{margin:0}}>
+        <label className="fl">Start</label>
+        <input type="date" className="fi" value={start} onChange={e=>setStart(e.target.value)}/>
+      </div>
+      <div className="fg" style={{margin:0}}>
+        <label className="fl">End</label>
+        <input type="date" className="fi" value={end} onChange={e=>setEnd(e.target.value)}/>
+      </div>
+      <button className="btn bp" style={{alignSelf:"flex-end",height:34}} disabled={!name||!start||!end} onClick={()=>{if(end<start){alert("End must be after start");return;}onAdd({name:name.trim(),emoji,start,end});setStart("");setEnd("");}}>
+        + Add Period
+      </button>
+    </div>
+  );
+}
+
 function YearSetupView({years,setYears,activeYearId,setActiveYearId,staff,
   rotaByYear,leaveByYear,availByYear,qStatusByYear,requestsByYear,notesByYear,corrsByYear,staffHoursByYear,
   swapsByYear,fixedDaysOff,wteConfig,
-  setQStatusByYear,addAudit,currentUser}) {
+  setQStatusByYear,addAudit,currentUser,specialPeriods,setSpecialPeriods}) {
 
   const addWeeks = (dateStr, weeks) => {
     const d = new Date(dateStr); d.setDate(d.getDate()+weeks*7); return fmtISO(d);
@@ -260,6 +290,26 @@ function YearSetupView({years,setYears,activeYearId,setActiveYearId,staff,
             </div>
           </div>
           <button className="btn bp" onClick={createYear} disabled={!newLabel.trim()}>Create Year</button>
+        </div>
+      </div>
+
+      {/* Special Periods (e.g. Christmas) */}
+      <div className="card" style={{marginTop:16}}>
+        <div className="ch"><span className="ct">🎄 Special Periods</span></div>
+        <div className="cb">
+          <div style={{fontSize:12,color:"#64748b",marginBottom:12}}>
+            Define named date ranges that need separate rostering attention (e.g. Christmas, Easter). These are highlighted in the Rota Builder and included in the Christmas Summary report.
+          </div>
+          {(specialPeriods||[]).length===0&&<p style={{fontSize:12,color:"#94a3b8"}}>No special periods defined yet.</p>}
+          {(specialPeriods||[]).map(sp=>(
+            <div key={sp.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:"1px solid #f1f5f9",flexWrap:"wrap"}}>
+              <span style={{fontSize:18}}>{sp.emoji||"⭐"}</span>
+              <span style={{fontWeight:700,fontSize:13,color:"#0d1b2a",flex:1}}>{sp.name}</span>
+              <span style={{fontSize:11.5,color:"#475569"}}>{sp.start} → {sp.end}</span>
+              <button className="btn bs bsm" style={{color:"#ef4444",borderColor:"#fca5a5"}} onClick={()=>{setSpecialPeriods(p=>p.filter(x=>x.id!==sp.id));addAudit(currentUser.init,"Special Period Removed",sp.name);}}>Remove</button>
+            </div>
+          ))}
+          <SpAddForm onAdd={sp=>{setSpecialPeriods(p=>[...(p||[]),{...sp,id:Date.now()}]);addAudit(currentUser.init,"Special Period Added",sp.name);}}/>
         </div>
       </div>
     </div>
