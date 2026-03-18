@@ -24,9 +24,6 @@ function Sidebar({user,view,setView,onLogout,pendingCount,hasOpenQ,isOpen,onClos
   ];
   return (
     <div className={`sb${isOpen?" mob-open":""}${collapsed?" sb-col":""}`} style={{transition:"width .2s"}}>
-      <button className="sb-col-btn" onClick={onToggleCollapse} title={collapsed?"Expand menu":"Collapse menu"}>
-        {collapsed?"▶":"◀"}
-      </button>
       <div className="sb-logo"><h1><span style={{width:30,height:30,borderRadius:8,overflow:"hidden",display:"inline-flex",flexShrink:0}}><img src="icons/rotaflow_icon_32.png?v=2" alt="RF" style={{width:30,height:30,display:"block"}} /></span>{!collapsed&&<span style={{marginLeft:8}}>RotaFlow</span>}</h1>{!collapsed&&<p>Rota Year 2026 / 2027</p>}</div>
       <div className="sb-sec">
         {!collapsed&&<div className="sb-lbl">Menu</div>}
@@ -36,11 +33,18 @@ function Sidebar({user,view,setView,onLogout,pendingCount,hasOpenQ,isOpen,onClos
             {!collapsed&&n.badge&&<span className="nb">{n.badge}</span>}
           </button>
         ))}
+        {/* Collapse toggle — desktop only */}
+        <button className="sb-collapse-btn" onClick={onToggleCollapse} title={collapsed?"Expand sidebar":"Collapse sidebar"}>
+          <span className="ni">{collapsed?"▶":"◀"}</span>
+          {!collapsed&&<span>Collapse sidebar</span>}
+        </button>
       </div>
       <div className="sb-user">
         <div className="u-av">{user.init.slice(0,2)}</div>
         {!collapsed&&<div className="u-info"><div className="u-name">{user.name}</div><div className="u-role">{isAdmin?"Administrator":user.grade}</div></div>}
-        <button className="u-out" onClick={onLogout} title="Sign out">⏻</button>
+        <button className="u-logout" onClick={onLogout} title="Sign out">
+          <span>⏻</span>{!collapsed&&<span>Sign out</span>}
+        </button>
       </div>
     </div>
   );

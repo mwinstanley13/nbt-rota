@@ -7,7 +7,7 @@ import { getAvailEntry, isSlotPreferred } from '../utils/availability'
 import Modal from './Modal'
 import StaffStatsSidebar from './StaffStatsSidebar'
 
-function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,setDayNotes,availability,addAudit,currentUser,wteConfig,staffHours,hoursCorrections,setHoursCorrections,trainingDays,staffShiftOverrides,constraintRules,sysRules,genRules}) {
+function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,setDayNotes,availability,addAudit,currentUser,wteConfig,staffHours,hoursCorrections,setHoursCorrections,trainingDays,staffShiftOverrides,constraintRules,sysRules,genRules,rotaPublished,setRotaPublished,quarters}) {
   const [selQ,setSelQ]=useState("Q1");
   const [assignModal,setAM]=useState(null); // {date, slotKey}
   const [leaveModal,setLM]=useState(null);  // {date}
@@ -16,7 +16,18 @@ function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,s
   const [leaveForm,setLF]=useState({init:"",type:"SL",note:""});
   const today=fmtISO(new Date());
 
-  const q=QUARTERS.find(x=>x.id===selQ)||QUARTERS[0];
+  const activeQs = quarters || QUARTERS;
+  const q=activeQs.find(x=>x.id===selQ)||activeQs[0];
+
+  const publishQuarter = (qid) => {
+    const ts = new Date().toISOString();
+    setRotaPublished(p=>({...p,[qid]:{ts,by:currentUser.init,byName:currentUser.name}}));
+    addAudit(currentUser.init,"Rota Published",`${qid} rota published by ${currentUser.name}`);
+  };
+  const unpublishQuarter = (qid) => {
+    setRotaPublished(p=>({...p,[qid]:null}));
+    addAudit(currentUser.init,"Rota Unpublished",`${qid} rota unpublished by ${currentUser.name}`);
+  };
   const quarterDates=useMemo(()=>getDatesInRange(q.start,q.end),[q.start,q.end]);
   const activeStaff=staff.filter(s=>s.role==="staff"&&s.active);
   const tdMap=useMemo(()=>Object.fromEntries((trainingDays||[]).map(t=>[t.date,t])),[trainingDays]);
@@ -90,9 +101,29 @@ function RotaBuilder({rota,setRota,leaveEntries,setLeaveEntries,staff,dayNotes,s
 
   return (
     <div>
+
+      {/* Publication status bar */}
+      {setRotaPublished&&<div style={{background:"white",border:"1px solid #e2e8f0",borderRadius:10,padding:"12px 16px",marginBottom:14,display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
+        <span style={{fontSize:12,fontWeight:700,color:"#475569",marginRight:4}}>📢 Rota Publication:</span>
+        {activeQs.map(qv=>{
+          const pub=rotaPublished?.[qv.id];
+          return (
+            <div key={qv.id} style={{display:"flex",alignItems:"center",gap:6,background:pub?"#f0fdf4":"#f8fafc",border:`1px solid ${pub?"#86efac":"#e2e8f0"}`,borderRadius:7,padding:"5px 10px"}}>
+              <span style={{fontSize:11,fontWeight:700,color:pub?"#166534":"#64748b"}}>{qv.id}</span>
+              {pub
+                ? <><span style={{fontSize:10,color:"#166534"}}>✅ Published {new Date(pub.ts).toLocaleDateString("en-GB",{day:"numeric",month:"short"})}</span>
+                    <button onClick={()=>unpublishQuarter(qv.id)} style={{fontSize:10,background:"none",border:"1px solid #fca5a5",borderRadius:5,padding:"1px 7px",color:"#ef4444",cursor:"pointer",fontWeight:600}}>Unpublish</button></>
+                : <><span style={{fontSize:10,color:"#94a3b8"}}>Draft</span>
+                    <button onClick={()=>publishQuarter(qv.id)} style={{fontSize:10,background:"#10b981",border:"none",borderRadius:5,padding:"2px 9px",color:"white",cursor:"pointer",fontWeight:700}}>Publish</button></>
+              }
+            </div>
+          );
+        })}
+      </div>}
+
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16,flexWrap:"wrap"}}>
         <div style={{display:"flex",gap:6}}>
-          {QUARTERS.map(qv=>(
+          {activeQs.map(qv=>(
             <button key={qv.id} onClick={()=>setSelQ(qv.id)}
               className={`btn${selQ===qv.id?" bp":" bs"}`} style={{fontSize:12,padding:"5px 12px"}}>
               {qv.label}

@@ -5,7 +5,7 @@ import { QUARTERS } from '../constants/quarters'
 import { LEAVE_T } from '../constants/leaveTypes'
 import { fmtISO, fmtDisp } from '../utils/dates'
 
-function Dashboard({user,staff,rota,requests,dayNotes,availability,quarterStatus,quarters,demoMode,loadDemoData,resetToFresh,isAdmin:isAdminProp,swaps,setView}) {
+function Dashboard({user,staff,rota,requests,dayNotes,availability,quarterStatus,quarters,demoMode,loadDemoData,resetToFresh,isAdmin:isAdminProp,swaps,setView,rotaPublished}) {
   const qs = quarters || QUARTERS;
   const today=fmtISO(new Date()), isAdmin=isAdminProp||(user.role==="admin");
   const myPendingSwaps = (swaps||[]).filter(s=>s.toInit===user.init&&s.status==="pending_b");
@@ -41,6 +41,13 @@ function Dashboard({user,staff,rota,requests,dayNotes,availability,quarterStatus
 
       {/* Alerts */}
       {(dayNotes[today])&&<div className="al al-w" style={{marginBottom:14}}>📌 <strong>Today:</strong> {dayNotes[today]}</div>}
+      {/* Published rota notifications for staff */}
+      {!isAdmin&&rotaPublished&&qs.filter(q=>rotaPublished[q.id]).map(q=>(
+        <div key={q.id} className="al" style={{marginBottom:10,background:"#f0fdf4",border:"1px solid #86efac",color:"#166534",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <span>✅ <strong>{q.label} rota has been published</strong> — published {new Date(rotaPublished[q.id].ts).toLocaleDateString("en-GB",{day:"numeric",month:"long"})}</span>
+          <button className="btn bsm" style={{marginLeft:12,flexShrink:0,background:"#16a34a",color:"white",border:"none"}} onClick={()=>setView&&setView("myshifts")}>View my shifts →</button>
+        </div>
+      ))}
       {!isAdmin&&openQs.length>0&&<div className="al al-i" style={{marginBottom:14}}>📋 Availability open for <strong>{openQs.map(q=>q.id).join(", ")}</strong> — please submit yours.</div>}
       {!isAdmin&&myPendingSwaps.length>0&&<div className="al al-w" style={{marginBottom:14,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <span>🔄 You have <strong>{myPendingSwaps.length}</strong> shift swap request{myPendingSwaps.length>1?"s":""} awaiting your response.</span>

@@ -101,6 +101,11 @@ function App() {
   const setSwaps         = yw(setSwapsByYear,"arr");
   const setShiftOverrides = yw(setSOByYear);
 
+  // Rota publication — per quarter flag: {Q1: {ts, by} | null, ...}
+  const [rotaPublishedByYear, setRPByYear] = useState(()=>lsGet('rotaPublishedByYear',{}));
+  const rotaPublished = rotaPublishedByYear[activeYearId] || {};
+  const setRotaPublished = yw(setRPByYear);
+
   // ── Subscribe to Firestore on mount (gated behind Anonymous Auth) ────────────
   // onAuthStateChanged fires immediately; if no user, we sign in anonymously.
   // Once authenticated, the Firestore onSnapshot listener is set up.
@@ -188,6 +193,7 @@ function App() {
               upd(setSHByYear)(d.staffHoursByYear);
               upd(setSwapsByYear)(d.swapsByYearV2 || {});
               upd(setSOByYear)(d.shiftOverridesByYear || {});
+              upd(setRPByYear)(d.rotaPublishedByYear || {});
               upd(setFixedDaysOff)(d.fixedDaysOff);
               upd(setGenRules)(d.genRules);
               upd(setShiftTimes)(d.shiftTimes);
@@ -215,11 +221,11 @@ function App() {
   // Also mirrors to localStorage as an offline / fast-reload cache
   useEffect(() => {
     if (!fsReady) return;
-    const payload = {staff,auditLog,wteConfig,years,activeYearId,rotaByYear,leaveByYear:leaveByYear,availByYear,qStatusByYear,requestsByYear,notesByYear,corrsByYear,staffHoursByYear,swapsByYear,shiftOverridesByYear,fixedDaysOff,genRules,shiftTimes,staffShiftTimes,trainingDays,constraintRules,sysRules,demoMode,rotaRulesText};
+    const payload = {staff,auditLog,wteConfig,years,activeYearId,rotaByYear,leaveByYear:leaveByYear,availByYear,qStatusByYear,requestsByYear,notesByYear,corrsByYear,staffHoursByYear,swapsByYear,shiftOverridesByYear,rotaPublishedByYear,fixedDaysOff,genRules,shiftTimes,staffShiftTimes,trainingDays,constraintRules,sysRules,demoMode,rotaRulesText};
     appDoc().set(payload).catch(console.error);
-    Object.entries({staff:staff,audit:auditLog,wteConfig:wteConfig,years:years,activeYearId:activeYearId,rotaByYear:rotaByYear,leaveByYear:leaveByYear,availByYear:availByYear,qstatusByYear:qStatusByYear,requestsByYear:requestsByYear,notesByYear:notesByYear,corrsByYear:corrsByYear,staffHoursByYear:staffHoursByYear,swapsByYear:swapsByYear,shiftOverridesByYear:shiftOverridesByYear,fixedDaysOff:fixedDaysOff,genRules:genRules,shiftTimes:shiftTimes,staffShiftTimes:staffShiftTimes,trainingDays:trainingDays,constraintRules:constraintRules,sysRules:sysRules,demoMode:demoMode,rotaRulesText:rotaRulesText})
+    Object.entries({staff:staff,audit:auditLog,wteConfig:wteConfig,years:years,activeYearId:activeYearId,rotaByYear:rotaByYear,leaveByYear:leaveByYear,availByYear:availByYear,qstatusByYear:qStatusByYear,requestsByYear:requestsByYear,notesByYear:notesByYear,corrsByYear:corrsByYear,staffHoursByYear:staffHoursByYear,swapsByYear:swapsByYear,shiftOverridesByYear:shiftOverridesByYear,rotaPublishedByYear:rotaPublishedByYear,fixedDaysOff:fixedDaysOff,genRules:genRules,shiftTimes:shiftTimes,staffShiftTimes:staffShiftTimes,trainingDays:trainingDays,constraintRules:constraintRules,sysRules:sysRules,demoMode:demoMode,rotaRulesText:rotaRulesText})
       .forEach(([k,v])=>lsSave(k,v));
-  },[fsReady,staff,auditLog,wteConfig,years,activeYearId,rotaByYear,leaveByYear,availByYear,qStatusByYear,requestsByYear,notesByYear,corrsByYear,staffHoursByYear,swapsByYear,shiftOverridesByYear,fixedDaysOff,genRules,shiftTimes,staffShiftTimes,trainingDays,constraintRules,sysRules,demoMode,rotaRulesText]);
+  },[fsReady,staff,auditLog,wteConfig,years,activeYearId,rotaByYear,leaveByYear,availByYear,qStatusByYear,requestsByYear,notesByYear,corrsByYear,staffHoursByYear,swapsByYear,shiftOverridesByYear,rotaPublishedByYear,fixedDaysOff,genRules,shiftTimes,staffShiftTimes,trainingDays,constraintRules,sysRules,demoMode,rotaRulesText]);
 
   const addAudit=(u,action,details)=>{
     const now=new Date(), ts=`${now.toLocaleDateString("en-GB")} ${now.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}`;
@@ -305,7 +311,7 @@ function App() {
           </div>
         )}
         <div className="body">
-          {view==="dashboard"  &&<Dashboard user={user} staff={staff} rota={rota} requests={requests} dayNotes={dayNotes} availability={availability} quarterStatus={quarterStatus} quarters={activeYearQuarters} demoMode={demoMode} loadDemoData={loadDemoData} resetToFresh={resetToFresh} isAdmin={isAdmin} swaps={swaps} setView={setView}/>}
+          {view==="dashboard"  &&<Dashboard user={user} staff={staff} rota={rota} requests={requests} dayNotes={dayNotes} availability={availability} quarterStatus={quarterStatus} quarters={activeYearQuarters} demoMode={demoMode} loadDemoData={loadDemoData} resetToFresh={resetToFresh} isAdmin={isAdmin} swaps={swaps} setView={setView} rotaPublished={rotaPublished}/>}
           {view==="calendar"   &&<CalendarView rota={rota} leaveEntries={leaveEntries} dayNotes={dayNotes} staff={staff} viewMonth={viewMonth} setViewMonth={setVM} viewMode="month" setViewMode={()=>{}} trainingDays={trainingDays} quarters={activeYearQuarters}/>}
           {view==="myshifts"   &&!isAdmin&&<MyShifts user={user} rota={rota} leaveEntries={leaveEntries} dayNotes={dayNotes} shiftTimes={shiftTimes} staffShiftTimes={staffShiftTimes} staff={staff}/>}
           {view==="myrecords"  &&!isAdmin&&<MyLeaveRecords user={user} leaveEntries={leaveEntries} requests={requests} availability={availability}/>}
@@ -331,7 +337,7 @@ function App() {
               />
             )}
           {view==="requests"   &&<RequestsView user={user} requests={requests} setRequests={setReqs} addAudit={addAudit} swaps={swaps} setSwaps={setSwaps} rota={rota} setRota={setRota} staff={staff}/>}
-          {view==="builder"    &&isAdmin&&<RotaBuilder rota={rota} setRota={setRota} leaveEntries={leaveEntries} setLeaveEntries={setLE} staff={staff} dayNotes={dayNotes} setDayNotes={setNotes} availability={availability} addAudit={addAudit} currentUser={user} wteConfig={wteConfig} staffHours={staffHours} hoursCorrections={hoursCorrections} setHoursCorrections={setHoursCorrections} trainingDays={trainingDays} staffShiftOverrides={staffShiftOverrides} constraintRules={constraintRules} sysRules={sysRules} genRules={genRules}/>}
+          {view==="builder"    &&isAdmin&&<RotaBuilder rota={rota} setRota={setRota} leaveEntries={leaveEntries} setLeaveEntries={setLE} staff={staff} dayNotes={dayNotes} setDayNotes={setNotes} availability={availability} addAudit={addAudit} currentUser={user} wteConfig={wteConfig} staffHours={staffHours} hoursCorrections={hoursCorrections} setHoursCorrections={setHoursCorrections} trainingDays={trainingDays} staffShiftOverrides={staffShiftOverrides} constraintRules={constraintRules} sysRules={sysRules} genRules={genRules} rotaPublished={rotaPublished} setRotaPublished={setRotaPublished} quarters={activeYearQuarters}/>}
           {view==="staff"      &&isAdmin&&<StaffMgmt staff={staff} setStaff={setStaff} addAudit={addAudit} currentUser={user}/>}
           {view==="reports"    &&<Reports user={user} staff={staff} rota={rota} leaveEntries={leaveEntries} requests={requests} quarters={activeYearQuarters} availability={availability}/>}
           {view==="conflicts"  &&isAdmin&&<ConflictsView rota={rota} leaveEntries={leaveEntries} availability={availability} staff={staff} quarters={activeYearQuarters} addAudit={addAudit} currentUser={user} constraintRules={constraintRules} setConstraintRules={setConstraintRules} sysRules={sysRules} setSysRules={setSysRules} genRules={genRules}/>}

@@ -24,6 +24,10 @@ body{font-family:'Inter',sans-serif;background:#f4f6fb;font-size:13px}
 .u-role{font-size:10px;color:#2d4a5e}
 .u-out{background:none;border:none;color:#2d4a5e;cursor:pointer;font-size:16px;transition:color .15s}
 .u-out:hover{color:#ef4444}
+.u-logout{display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:600;transition:all .15s;border:1px solid rgba(239,68,68,.3);background:rgba(239,68,68,.12);color:#fca5a5;white-space:nowrap;flex-shrink:0}
+.u-logout:hover{background:rgba(239,68,68,.28);color:white;border-color:rgba(239,68,68,.6)}
+.sb-collapse-btn{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:7px;cursor:pointer;color:#4a7a96;font-size:12px;font-weight:600;transition:all .15s;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.05);width:calc(100% - 16px);margin:6px 8px 4px;text-align:left}
+.sb-collapse-btn:hover{background:rgba(255,255,255,.12);color:#b8d4e0;border-color:rgba(255,255,255,.2)}
 .main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 .hdr{background:white;padding:14px 26px;border-bottom:1px solid #edf0f7;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:0 1px 4px rgba(0,0,0,.06)}
 .hdr h2{font-family:'Plus Jakarta Sans',sans-serif;font-size:19px;font-weight:700;color:#0d1b2a}
@@ -221,6 +225,7 @@ body{font-family:'Inter',sans-serif;background:#f4f6fb;font-size:13px}
   .sb.sb-col{width:260px}
   .sb-col-btn{display:none}
   .mob-hbg{display:block}
+  .sb-collapse-btn{display:none}
   .main{flex:1;min-height:0;width:100%;overflow:hidden;display:flex;flex-direction:column}
   .hdr{padding:10px 12px 10px 50px;min-height:52px;flex-shrink:0}
   .hdr h2{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:55vw}
