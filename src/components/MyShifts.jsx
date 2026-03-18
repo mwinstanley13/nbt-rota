@@ -4,6 +4,9 @@ import { LEAVE_T } from '../constants/leaveTypes'
 import { fmtISO } from '../utils/dates'
 import { generateICS, downloadICS } from '../utils/ical'
 
+// Christmas period: 21 Dec – 3 Jan
+const isXmasPeriod = d => { const mm=parseInt(d.slice(5,7)),dd=parseInt(d.slice(8,10)); return (mm===12&&dd>=21)||(mm===1&&dd<=3); };
+
 // Group label for display — shows category name, not specific slot
 const GRP_LABEL = {
   EARLY:"Early", MID:"Mid", LATE:"Late",
@@ -67,14 +70,17 @@ function MyShifts({user,rota,leaveEntries,dayNotes,shiftTimes,staffShiftTimes,st
           </div>
           <div className="cb" style={{maxHeight:380,overflowY:"auto"}}>
             {upcoming.length===0?<p style={{color:"#94a3b8",fontSize:12}}>No upcoming shifts assigned.</p>
-              :upcoming.map((x,i)=>{const dt=new Date(x.date+"T00:00:00"),note=dayNotes[x.date];return(
-                <div key={i} style={{display:"flex",alignItems:"center",gap:11,padding:"8px 0",borderBottom:"1px solid #f1f5f9"}}>
+              :upcoming.map((x,i)=>{const dt=new Date(x.date+"T00:00:00"),note=dayNotes[x.date],xmas=isXmasPeriod(x.date);return(
+                <div key={i} style={{display:"flex",alignItems:"center",gap:11,padding:"8px 0",borderBottom:"1px solid #f1f5f9",background:xmas?"#fff1f2":"transparent",marginLeft:xmas?-12:0,marginRight:xmas?-12:0,paddingLeft:xmas?12:0,paddingRight:xmas?12:0,borderLeft:xmas?"3px solid #fca5a5":"none"}}>
                   <div style={{textAlign:"center",width:36,flexShrink:0}}>
-                    <div style={{fontSize:17,fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif",color:"#0d1b2a"}}>{dt.getDate()}</div>
+                    <div style={{fontSize:17,fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif",color:xmas?"#be123c":"#0d1b2a"}}>{dt.getDate()}</div>
                     <div style={{fontSize:9,color:"#64748b"}}>{dt.toLocaleDateString("en-GB",{month:"short"})}</div>
                   </div>
                   <div style={{flex:1}}>
-                    <div style={{fontSize:12,fontWeight:600}}>{dt.toLocaleDateString("en-GB",{weekday:"long"})}</div>
+                    <div style={{fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:4}}>
+                      {dt.toLocaleDateString("en-GB",{weekday:"long"})}
+                      {xmas&&<span style={{fontSize:11}}>🎄</span>}
+                    </div>
                     <span className="chip" style={{background:x.slot.bg,color:x.slot.fg,borderColor:x.slot.bd,fontSize:10.5}}>{slotDisplayLabel(x.slot)}</span>
                     {note&&<div style={{fontSize:10,color:"#92400e",marginTop:2}}>📌 {note}</div>}
                   </div>

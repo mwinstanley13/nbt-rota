@@ -16,6 +16,12 @@ const LIST_GRP_LABEL = {
 const GRP_SHORT = {EARLY:"Early",MID:"Mid",LATE:"Late",WE_EARLY:"W/E Early",WE_LATE:"W/E Late",NIGHT1:"SDM Night 1",NIGHT2:"SDM Night 2",ST3_NIGHT:"ST3 Night",ACP_NIGHT:"ACP Night"};
 const slotCalLabel = sl => sl.grp ? (GRP_SHORT[sl.grp] || sl.key) : sl.key;
 
+// Christmas period: 21 Dec – 3 Jan (any year)
+const isXmasPeriod = date => {
+  const mm=parseInt(date.slice(5,7)), dd=parseInt(date.slice(8,10));
+  return (mm===12&&dd>=21)||(mm===1&&dd<=3);
+};
+
 function CalendarView({rota,leaveEntries,dayNotes,staff,viewMonth,setViewMonth,viewMode,setViewMode,trainingDays,quarters}) {
   const [fStaff,setFS]=useState(""), [dayModal,setDM]=useState(null);
   const [isList,setIsList]=useState(false);
@@ -105,9 +111,9 @@ function CalendarView({rota,leaveEntries,dayNotes,staff,viewMonth,setViewMonth,v
             </thead>
             <tbody>
               {quarterDays.map(date=>{
-                const isWE=isWeekend(date),isBH=!!BH[date],isToday=date===today;
-                const rowBg=isToday?"#f0fdf4":isBH?"#fffbeb":isWE?"#f8f7ff":"white";
-                const stickyBg=isToday?"#e8faf3":isBH?"#fef9e7":isWE?"#f4f3ff":"white";
+                const isWE=isWeekend(date),isBH=!!BH[date],isToday=date===today,isXmas=isXmasPeriod(date);
+                const rowBg=isToday?"#f0fdf4":isBH?"#fffbeb":isXmas?"#fff1f2":isWE?"#f8f7ff":"white";
+                const stickyBg=isToday?"#e8faf3":isBH?"#fef9e7":isXmas?"#ffe4e6":isWE?"#f4f3ff":"white";
                 const dayNum=new Date(date+"T00:00:00");
                 return (
                   <tr key={date} style={{background:rowBg}}>
@@ -116,6 +122,7 @@ function CalendarView({rota,leaveEntries,dayNotes,staff,viewMonth,setViewMonth,v
                         {dayNum.toLocaleDateString("en-GB",{day:"2-digit",month:"short"})}
                       </span>
                       {isBH&&<span className="bh-tag" style={{marginLeft:5}}>BH</span>}
+                      {isXmas&&<span style={{marginLeft:4,fontSize:10}}>🎄</span>}
                     </td>
                     <td className="list-td-day" style={{background:stickyBg,color:isWE?"#7c3aed":isToday?"#059669":"#64748b",fontWeight:isWE||isToday?700:500}}>
                       {getDayName(date).slice(0,3)}
@@ -144,11 +151,13 @@ function CalendarView({rota,leaveEntries,dayNotes,staff,viewMonth,setViewMonth,v
               const isBH=!!BH[date],isToday=date===today,we=isWeekend(date),items=getDateStaff(date),note=dayNotes[date],MAX=3;
               const td=tdMap[date];
               const tdBg=td?(td.type==="SpR"?"rgba(254,240,138,.55)":"rgba(243,232,255,.65)"):null;
+              const xmasBg=inMonth&&isXmasPeriod(date)?"#fff1f2":null;
               return (
-                <div key={date} className={`cc${!inMonth?" om":""}${isToday?" td":""}${isBH?" bh":!inMonth?"":we?" we":""}`} onClick={()=>inMonth&&setDM(date)} style={tdBg?{background:tdBg}:undefined}>
+                <div key={date} className={`cc${!inMonth?" om":""}${isToday?" td":""}${isBH?" bh":!inMonth?"":we?" we":""}`} onClick={()=>inMonth&&setDM(date)} style={{...(xmasBg&&!tdBg?{background:xmasBg,borderTop:"2px solid #fca5a5"}:{}), ...(tdBg?{background:tdBg}:{})}}>
                   <div className={`cdate${!inMonth?" om":""}`}>
                     <span className={isToday?"td-num":""}>{new Date(date+"T00:00:00").getDate()}</span>
                     {isBH&&<span className="bh-tag">BH</span>}
+                    {inMonth&&isXmasPeriod(date)&&<span style={{fontSize:8,marginLeft:2}}>🎄</span>}
                     {td&&<span style={{fontSize:7.5,fontWeight:700,padding:"0px 3px",borderRadius:2,background:td.type==="SpR"?"#fef08a":"#e9d5ff",color:td.type==="SpR"?"#713f12":"#6b21a8",marginLeft:2}}>{td.type}</span>}
                   </div>
                   {note&&<div style={{fontSize:8,color:"#92400e",background:"#fef9c3",padding:"1px 3px",borderRadius:3,marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>📌</div>}
@@ -172,11 +181,13 @@ function CalendarView({rota,leaveEntries,dayNotes,staff,viewMonth,setViewMonth,v
                 const isBH=!!BH[date],isToday=date===today,we=isWeekend(date),isSel=date===selectedDate;
                 const items=inMonth?getDateStaff(date):[];
                 const dots=items.slice(0,4).map(x=>x.slot.bg||"#94a3b8");
+                const isXmas=inMonth&&isXmasPeriod(date);
                 let cellBg = "white";
                 if(!inMonth) cellBg="#fafafa";
                 else if(isSel) cellBg="#dbeafe";
                 else if(isToday) cellBg="#f0fdf4";
                 else if(isBH) cellBg="#fffbeb";
+                else if(isXmas) cellBg="#fff1f2";
                 else if(we) cellBg="#fafaff";
                 return (
                   <div key={date}
