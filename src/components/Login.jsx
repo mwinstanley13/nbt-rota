@@ -4,7 +4,16 @@ import { INIT_STAFF } from '../constants/staff'
 
 function Login({staff,onLogin}) {
   const [u,setU]=useState(IS_DEMO?"ADM":""); const [p,setP]=useState(IS_DEMO?"demo2026":""); const [err,setErr]=useState("");
-  const go=()=>{const uTrim=u.toLowerCase().trim(),pTrim=p.trim();const f=staff.find(s=>s.init.toLowerCase()===uTrim);const pw=f?.pw||(INIT_STAFF.find(s=>s.init.toLowerCase()===uTrim)?.pw);(f&&pw===pTrim)?onLogin(f):setErr("Invalid username or password.");};
+  const go=()=>{
+    const uTrim=u.toLowerCase().trim(),pTrim=p.trim();
+    let f=staff.find(s=>s.init.toLowerCase()===uTrim);
+    const initRec=INIT_STAFF.find(s=>s.init.toLowerCase()===uTrim);
+    // In demo mode: always use demo passwords; fall back to INIT_STAFF record if staff not yet loaded
+    const isAdminRec=(f?.role||initRec?.role)==='admin';
+    const expectedPw=IS_DEMO?(isAdminRec?'demo2026':'rota2026'):(f?.pw||initRec?.pw);
+    if(!f&&IS_DEMO&&initRec) f={...initRec,pw:expectedPw};
+    (f&&expectedPw===pTrim)?onLogin(f):setErr("Invalid initials or password.");
+  };;
   return (
     <div className="login-wrap">
       <div className="login-card">
