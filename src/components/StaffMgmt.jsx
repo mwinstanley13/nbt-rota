@@ -106,7 +106,7 @@ function StaffMgmt({staff,setStaff,addAudit,currentUser}) {
           <div className="fg"><label className="fl">Full Name</label><input className="fi" value={form.name||""} onChange={e=>setForm(f=>({...f,name:e.target.value}))}/></div>
           <div className="fg"><label className="fl">Initials</label><input className="fi" value={form.init||""} onChange={e=>setForm(f=>({...f,init:e.target.value.toUpperCase()}))}/></div>
           {form.role!=="admin"&&<><div className="fg"><label className="fl">Grade</label><select className="fi" value={form.grade||"ST4+"} onChange={e=>setForm(f=>({...f,grade:e.target.value}))}>
-            <option>ST4+</option><option>ST3</option><option>ACP</option><option>tACP</option><option>PHEM Fellow</option><option>Research Fellow</option>
+            <option>ST4+</option><option>ST3</option><option>ACP</option><option>tACP</option>
           </select></div>
           <div className="fg"><label className="fl">Hours/Week</label><input type="number" className="fi" value={form.hrs||45.25} onChange={e=>setForm(f=>({...f,hrs:parseFloat(e.target.value)||0}))}/></div>
           <div className="fg"><label className="fl">SL Days Entitlement / yr</label><input type="number" className="fi" value={form.slDays??30} onChange={e=>setForm(f=>({...f,slDays:e.target.value}))}/></div>
