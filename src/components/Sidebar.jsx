@@ -5,7 +5,7 @@ function Sidebar({user,view,setView,onLogout,pendingCount,hasOpenQ,isOpen,onClos
   const items=[
     {id:"dashboard",icon:"📊",label:"Dashboard"},
     {id:"calendar", icon:"📅",label:"Rota Calendar"},
-    ...(!isAdmin?[{id:"myshifts",icon:"👤",label:"My Shifts"},{id:"myrecords",icon:"📒",label:"My Leave Records"}]:[]),
+    ...(!isAdmin?[{id:"myshifts",icon:"👤",label:"My Shifts"},{id:"myrecords",icon:"📒",label:"My Leave Records"},{id:"preferences",icon:"⚙️",label:"My Preferences"}]:[]),
     {id:"availability",icon:"📋",label:"Availability",badge:!isAdmin&&hasOpenQ?"!":null},
     {id:"requests",icon:"📝",label:isAdmin?"Requests":"My Requests",badge:isAdmin&&pendingCount>0?pendingCount:null},
     {id:"rotarules",icon:"📜",label:"Rota Rules"},

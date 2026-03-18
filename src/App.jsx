@@ -31,6 +31,7 @@ import AuditLog from './components/AuditLog'
 import HoursAdjustView from './components/HoursAdjustView'
 import YearSetupView from './components/YearSetupView'
 import AIRotaView from './components/AIRotaView'
+import MyPreferences from './components/MyPreferences'
 
 const appDoc = () => db.collection("state").doc(IS_DEMO ? "demo" : "app");
 
@@ -265,7 +266,7 @@ function App() {
   const hasOpenQ=activeYearQuarters.some(q=>quarterStatus[q.id]==="open");
   const isAdmin=user?.role==="admin";
 
-  const titles={dashboard:"Dashboard",calendar:"Rota Calendar",myshifts:"My Shifts",myrecords:"My Leave Records",availability:"Availability",requests:isAdmin?"Leave Requests":"My Requests",builder:"Rota Builder",adjustments:"Hour Adjustments",staff:"Staff Management",reports:isAdmin?"Reports":"My Summary",rotaconfig:"Rota Config",audit:"Audit Log",yearsetup:"Year Setup",airota:"AI Rota Builder",fixeddays:"Fixed Days Off",conflicts:"Conflicts & Rules",rotarules:"Rota Rules"};
+  const titles={dashboard:"Dashboard",calendar:"Rota Calendar",myshifts:"My Shifts",myrecords:"My Leave Records",preferences:"My Preferences",availability:"Availability",requests:isAdmin?"Leave Requests":"My Requests",builder:"Rota Builder",adjustments:"Hour Adjustments",staff:"Staff Management",reports:isAdmin?"Reports":"My Summary",rotaconfig:"Rota Config",audit:"Audit Log",yearsetup:"Year Setup",airota:"AI Rota Builder",fixeddays:"Fixed Days Off",conflicts:"Conflicts & Rules",rotarules:"Rota Rules"};
 
   if(!fsReady) return(
     <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100vh",gap:14,background:"#f0f4f8"}}>
@@ -308,6 +309,7 @@ function App() {
           {view==="calendar"   &&<CalendarView rota={rota} leaveEntries={leaveEntries} dayNotes={dayNotes} staff={staff} viewMonth={viewMonth} setViewMonth={setVM} viewMode="month" setViewMode={()=>{}} trainingDays={trainingDays} quarters={activeYearQuarters}/>}
           {view==="myshifts"   &&!isAdmin&&<MyShifts user={user} rota={rota} leaveEntries={leaveEntries} dayNotes={dayNotes}/>}
           {view==="myrecords"  &&!isAdmin&&<MyLeaveRecords user={user} leaveEntries={leaveEntries} requests={requests} availability={availability}/>}
+          {view==="preferences"&&!isAdmin&&<MyPreferences currentUser={user} staff={staff} setStaff={setStaff} fixedDaysOff={fixedDaysOff} setFixedDaysOff={setFixedDaysOff} addAudit={addAudit}/>}
           {view==="availability"&&(<AvailabilityView
                 user={user}
                 staff={staff}
