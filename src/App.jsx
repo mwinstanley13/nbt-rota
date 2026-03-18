@@ -307,7 +307,7 @@ function App() {
         <div className="body">
           {view==="dashboard"  &&<Dashboard user={user} staff={staff} rota={rota} requests={requests} dayNotes={dayNotes} availability={availability} quarterStatus={quarterStatus} quarters={activeYearQuarters} demoMode={demoMode} loadDemoData={loadDemoData} resetToFresh={resetToFresh} isAdmin={isAdmin} swaps={swaps} setView={setView}/>}
           {view==="calendar"   &&<CalendarView rota={rota} leaveEntries={leaveEntries} dayNotes={dayNotes} staff={staff} viewMonth={viewMonth} setViewMonth={setVM} viewMode="month" setViewMode={()=>{}} trainingDays={trainingDays} quarters={activeYearQuarters}/>}
-          {view==="myshifts"   &&!isAdmin&&<MyShifts user={user} rota={rota} leaveEntries={leaveEntries} dayNotes={dayNotes}/>}
+          {view==="myshifts"   &&!isAdmin&&<MyShifts user={user} rota={rota} leaveEntries={leaveEntries} dayNotes={dayNotes} shiftTimes={shiftTimes} staffShiftTimes={staffShiftTimes} staff={staff}/>}
           {view==="myrecords"  &&!isAdmin&&<MyLeaveRecords user={user} leaveEntries={leaveEntries} requests={requests} availability={availability}/>}
           {view==="preferences"&&!isAdmin&&<MyPreferences currentUser={user} staff={staff} setStaff={setStaff} fixedDaysOff={fixedDaysOff} setFixedDaysOff={setFixedDaysOff} addAudit={addAudit}/>}
           {view==="availability"&&(<AvailabilityView

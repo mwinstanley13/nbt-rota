@@ -2,6 +2,7 @@ import React, { useMemo } from 'react'
 import { SLOTS } from '../constants/slots'
 import { LEAVE_T } from '../constants/leaveTypes'
 import { fmtISO } from '../utils/dates'
+import { generateICS, downloadICS } from '../utils/ical'
 
 // Group label for display — shows category name, not specific slot
 const GRP_LABEL = {
@@ -15,7 +16,7 @@ const GRP_LABEL = {
 const GRP_REP = {};
 SLOTS.forEach(s => { if(!GRP_REP[s.grp]) GRP_REP[s.grp] = s; });
 
-function MyShifts({user,rota,leaveEntries,dayNotes}) {
+function MyShifts({user,rota,leaveEntries,dayNotes,shiftTimes,staffShiftTimes,staff}) {
   const today=fmtISO(new Date());
   const mySlots=useMemo(()=>{
     const res=[];
@@ -45,6 +46,12 @@ function MyShifts({user,rota,leaveEntries,dayNotes}) {
   // Get the display label for a slot in the upcoming list
   const slotDisplayLabel = sl => sl.grp ? (GRP_LABEL[sl.grp] || sl.label) : sl.label;
 
+  const handleExport = () => {
+    const ics = generateICS({user, rota, leaveEntries, shiftTimes, staffShiftTimes, staff: staff||[]});
+    const name = (staff||[]).find(s=>s.init===user.init)?.name || user.init;
+    downloadICS(`NBT-Rota-${name.replace(/\s+/g,'-')}.ics`, ics);
+  };
+
   return (
     <div>
       <div className="sg" style={{gridTemplateColumns:"repeat(3,1fr)",marginBottom:18}}>
@@ -54,7 +61,10 @@ function MyShifts({user,rota,leaveEntries,dayNotes}) {
       </div>
       <div className="dg2">
         <div className="card">
-          <div className="ch"><span className="ct">Upcoming Shifts</span></div>
+          <div className="ch">
+            <span className="ct">Upcoming Shifts</span>
+            <button className="btn bs bsm" onClick={handleExport} title="Download as .ics to import into Apple/Google Calendar">📅 Export .ics</button>
+          </div>
           <div className="cb" style={{maxHeight:380,overflowY:"auto"}}>
             {upcoming.length===0?<p style={{color:"#94a3b8",fontSize:12}}>No upcoming shifts assigned.</p>
               :upcoming.map((x,i)=>{const dt=new Date(x.date+"T00:00:00"),note=dayNotes[x.date];return(
