@@ -35,16 +35,13 @@ function Sidebar({user,view,setView,onLogout,pendingCount,hasOpenQ,isOpen,onClos
         ))}
         {/* Collapse toggle — desktop only */}
         <button className="sb-collapse-btn" onClick={onToggleCollapse} title={collapsed?"Expand sidebar":"Collapse sidebar"}>
-          <span className="ni">{collapsed?"▶":"◀"}</span>
-          {!collapsed&&<span>Collapse sidebar</span>}
+          {collapsed?"▶":"◀"}
         </button>
       </div>
       <div className="sb-user">
         <div className="u-av">{user.init.slice(0,2)}</div>
         {!collapsed&&<div className="u-info"><div className="u-name">{user.name}</div><div className="u-role">{isAdmin?"Administrator":user.grade}</div></div>}
-        <button className="u-logout" onClick={onLogout} title="Sign out">
-          <span>⏻</span>{!collapsed&&<span>Sign out</span>}
-        </button>
+        <button className="u-logout" onClick={onLogout} title="Sign out">⏻</button>
       </div>
     </div>
   );
