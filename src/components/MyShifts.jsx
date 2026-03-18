@@ -3,6 +3,18 @@ import { SLOTS } from '../constants/slots'
 import { LEAVE_T } from '../constants/leaveTypes'
 import { fmtISO } from '../utils/dates'
 
+// Group label for display — shows category name, not specific slot
+const GRP_LABEL = {
+  EARLY:"Early", MID:"Mid", LATE:"Late",
+  WE_EARLY:"W/E Early", WE_LATE:"W/E Late",
+  NIGHT1:"Night (SDM 1)", NIGHT2:"Night (SDM 2)",
+  ST3_NIGHT:"Night (ST3)", ACP_NIGHT:"Night (ACP)"
+};
+
+// Representative slot per group (for colour chips in breakdown)
+const GRP_REP = {};
+SLOTS.forEach(s => { if(!GRP_REP[s.grp]) GRP_REP[s.grp] = s; });
+
 function MyShifts({user,rota,leaveEntries,dayNotes}) {
   const today=fmtISO(new Date());
   const mySlots=useMemo(()=>{
@@ -17,7 +29,21 @@ function MyShifts({user,rota,leaveEntries,dayNotes}) {
   },[rota,leaveEntries,user]);
 
   const upcoming=mySlots.filter(x=>x.date>=today), past=mySlots.filter(x=>x.date<today);
-  const counts=mySlots.reduce((a,x)=>{a[x.slot.key]=(a[x.slot.key]||0)+1;return a;},{});
+
+  // Group shift breakdown by category (grp), not individual slot key
+  const groupCounts = useMemo(()=>{
+    const counts = {};
+    mySlots.forEach(x => {
+      // Leave types don't have grp — keep them by key
+      const groupKey = x.slot.grp || x.slot.key;
+      if(!counts[groupKey]) counts[groupKey] = {count:0, slot:x.slot};
+      counts[groupKey].count++;
+    });
+    return counts;
+  }, [mySlots]);
+
+  // Get the display label for a slot in the upcoming list
+  const slotDisplayLabel = sl => sl.grp ? (GRP_LABEL[sl.grp] || sl.label) : sl.label;
 
   return (
     <div>
@@ -39,7 +65,7 @@ function MyShifts({user,rota,leaveEntries,dayNotes}) {
                   </div>
                   <div style={{flex:1}}>
                     <div style={{fontSize:12,fontWeight:600}}>{dt.toLocaleDateString("en-GB",{weekday:"long"})}</div>
-                    <span className="chip" style={{background:x.slot.bg,color:x.slot.fg,borderColor:x.slot.bd,fontSize:10.5}}>{x.slot.label}</span>
+                    <span className="chip" style={{background:x.slot.bg,color:x.slot.fg,borderColor:x.slot.bd,fontSize:10.5}}>{slotDisplayLabel(x.slot)}</span>
                     {note&&<div style={{fontSize:10,color:"#92400e",marginTop:2}}>📌 {note}</div>}
                   </div>
                 </div>
@@ -50,13 +76,19 @@ function MyShifts({user,rota,leaveEntries,dayNotes}) {
           <div className="ch"><span className="ct">Shift Breakdown</span></div>
           <div className="cb">
             {mySlots.length===0?<p style={{color:"#94a3b8",fontSize:12}}>No shifts assigned yet.</p>
-              :Object.entries(counts).map(([k,c])=>{const sl=SLOTS.find(s=>s.key===k)||LEAVE_T[k];if(!sl)return null;const tot=mySlots.length;return(
-                <div key={k} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:"1px solid #f1f5f9"}}>
-                  <span className="chip" style={{background:sl.bg,color:sl.fg,borderColor:sl.bd,fontSize:10,width:85,textAlign:"center"}}>{sl.label||k}</span>
-                  <div className="rt"><div className="rf" style={{width:`${(c/tot)*100}%`,background:sl.fg}}/></div>
-                  <span style={{fontSize:11,color:"#64748b",width:22,textAlign:"right"}}>{c}</span>
-                </div>
-              );})}
+              :Object.entries(groupCounts).map(([groupKey,{count,slot}])=>{
+                // Use representative slot for the group for colours
+                const rep = slot.grp ? (GRP_REP[slot.grp]||slot) : slot;
+                const displayLabel = slot.grp ? (GRP_LABEL[slot.grp]||slot.label) : (slot.label||groupKey);
+                const tot = mySlots.length;
+                return(
+                  <div key={groupKey} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:"1px solid #f1f5f9"}}>
+                    <span className="chip" style={{background:rep.bg,color:rep.fg,borderColor:rep.bd,fontSize:10,width:95,textAlign:"center"}}>{displayLabel}</span>
+                    <div className="rt"><div className="rf" style={{width:`${(count/tot)*100}%`,background:rep.fg}}/></div>
+                    <span style={{fontSize:11,color:"#64748b",width:22,textAlign:"right"}}>{count}</span>
+                  </div>
+                );
+              })}
           </div>
         </div>
       </div>
